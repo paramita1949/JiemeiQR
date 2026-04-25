@@ -2,7 +2,21 @@ name: Flutter Android Build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish APK to GitHub Releases'
+        required: true
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Optional tag for release (example: v1.0.0)'
+        required: false
+        type: string
   push:
+    branches:
+      - main
+    tags:
+      - 'v*'
     paths:
       - 'flutter_app/**'
       - '.github/workflows/flutter-android-build.yml'
@@ -10,6 +24,8 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: flutter_app
@@ -45,9 +61,50 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Resolve release metadata
+        id: release_meta
+        working-directory: .
+        run: |
+          set -e
+          publish_release="false"
+          release_tag=""
+          release_name=""
+          prerelease="true"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            publish_release="true"
+            release_tag="${GITHUB_REF_NAME}"
+            release_name="Release ${GITHUB_REF_NAME}"
+            prerelease="false"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_release }}" = "true" ]; then
+            publish_release="true"
+            if [ -n "${{ inputs.release_tag }}" ]; then
+              release_tag="${{ inputs.release_tag }}"
+              release_name="Release ${{ inputs.release_tag }}"
+              prerelease="false"
+            else
+              release_tag="build-${GITHUB_RUN_NUMBER}"
+              release_name="Build ${GITHUB_RUN_NUMBER}"
+              prerelease="true"
+            fi
+          fi
+          echo "publish_release=${publish_release}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: qrscan-android-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Publish to GitHub Releases
+        if: steps.release_meta.outputs.publish_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.release_tag }}
+          name: ${{ steps.release_meta.outputs.release_name }}
+          prerelease: ${{ steps.release_meta.outputs.prerelease }}
+          target_commitish: ${{ github.sha }}
+          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
