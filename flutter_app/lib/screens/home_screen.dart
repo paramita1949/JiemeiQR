@@ -12,6 +12,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const String _defaultCode = '00208540089567279FAYAUEZ32';
+  static const List<int> _quickCounts = [10, 20, 50, 100];
 
   int _groupCount = 20;
   double _autoSlideSeconds = 1.0;
@@ -200,6 +201,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 18),
+              Text(
+                '生成数量快捷设置',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: _quickCounts
+                    .map(
+                      (count) => ChoiceChip(
+                        label: Text('$count'),
+                        selected: _groupCount == count,
+                        onSelected: (_) {
+                          setState(() {
+                            _groupCount = count;
+                          });
+                        },
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
@@ -216,6 +239,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '当前每组 $_groupCount 张，扫码后按此数量生成预览',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
               ),
               const Spacer(),
               SizedBox(
