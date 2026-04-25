@@ -46,7 +46,7 @@ class QrParser {
     int count = defaultCount,
     int? startSerial,
   }) {
-    final start = startSerial ?? _centeredStart(serialInt, count);
+    final start = startSerial ?? serialInt;
 
     var scanIndex = 0;
     final records = <QrRecord>[];
@@ -79,9 +79,4 @@ class QrParser {
     );
   }
 
-  static int _centeredStart(int serialInt, int count) {
-    final half = count ~/ 2;
-    final centered = serialInt - half;
-    return centered < 0 ? 0 : centered;
-  }
 }

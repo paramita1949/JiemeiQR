@@ -11,7 +11,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _defaultCode = '00208540089567279FAYAUEZ32';
   static const List<int> _quickCounts = [10, 20, 50, 100];
 
   int _groupCount = 20;
@@ -37,10 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _openPreviewFromContent(result);
-  }
-
-  void _useDefault() {
-    _openPreviewFromContent(_defaultCode);
   }
 
   Future<void> _setGroupCount() async {
@@ -259,14 +254,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: FilledButton.tonal(
                   onPressed: _startFromGallery,
                   child: const Text('本地图片识别'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _useDefault,
-                  child: const Text('跳过，使用默认配置'),
                 ),
               ),
               const SizedBox(height: 8),

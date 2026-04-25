@@ -34,7 +34,7 @@ void main() {
   });
 
   group('QrParser.buildRecords', () {
-    test('creates 20 records centered around scanned serial', () {
+    test('creates records starting from scanned serial', () {
       final result = QrParser.buildRecords(
         prefix: '0020854',
         serialInt: 100,
@@ -43,15 +43,15 @@ void main() {
       );
 
       expect(result.records, hasLength(20));
-      expect(result.scanIndex, 10);
+      expect(result.scanIndex, 0);
       expect(result.group.count, 20);
-      expect(result.group.startSerial, 90);
-      expect(result.records.first.serial, '0000000090');
+      expect(result.group.startSerial, 100);
+      expect(result.records.first.serial, '0000000100');
       expect(result.records[result.scanIndex].serial, '0000000100');
-      expect(result.records.last.serial, '0000000109');
+      expect(result.records.last.serial, '0000000119');
     });
 
-    test('clips start at zero when serial is small', () {
+    test('starts exactly at scanned serial when serial is small', () {
       final result = QrParser.buildRecords(
         prefix: '0020854',
         serialInt: 3,
@@ -60,8 +60,8 @@ void main() {
       );
 
       expect(result.records, hasLength(20));
-      expect(result.records.first.serial, '0000000000');
-      expect(result.scanIndex, 3);
+      expect(result.records.first.serial, '0000000003');
+      expect(result.scanIndex, 0);
       expect(result.records[result.scanIndex].serial, '0000000003');
     });
 
