@@ -44,9 +44,9 @@ class QrParser {
     required String batch,
     required String suffix,
     int count = defaultCount,
+    int? startSerial,
   }) {
-    final half = count ~/ 2;
-    final start = serialInt - half < 0 ? 0 : serialInt - half;
+    final start = startSerial ?? _centeredStart(serialInt, count);
 
     var scanIndex = 0;
     final records = <QrRecord>[];
@@ -62,6 +62,26 @@ class QrParser {
       }
     }
 
-    return QrBuildResult(records: records, scanIndex: scanIndex);
+    if (startSerial != null) {
+      scanIndex = 0;
+    }
+
+    return QrBuildResult(
+      records: records,
+      scanIndex: scanIndex,
+      group: QrGroup(
+        prefix: prefix,
+        batch: batch,
+        suffix: suffix,
+        startSerial: start,
+        count: count,
+      ),
+    );
+  }
+
+  static int _centeredStart(int serialInt, int count) {
+    final half = count ~/ 2;
+    final centered = serialInt - half;
+    return centered < 0 ? 0 : centered;
   }
 }

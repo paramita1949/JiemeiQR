@@ -28,8 +28,26 @@ class QrBuildResult {
   const QrBuildResult({
     required this.records,
     required this.scanIndex,
+    required this.group,
   });
 
   final List<QrRecord> records;
   final int scanIndex;
+  final QrGroup group;
+}
+
+class QrGroup {
+  const QrGroup({
+    required this.prefix,
+    required this.batch,
+    required this.suffix,
+    required this.startSerial,
+    required this.count,
+  });
+
+  final String prefix;
+  final String batch;
+  final String suffix;
+  final int startSerial;
+  final int count;
 }

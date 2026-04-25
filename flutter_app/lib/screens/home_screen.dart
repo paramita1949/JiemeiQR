@@ -13,6 +13,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const String _defaultCode = '00208540089567279FAYAUEZ32';
 
+  int _groupCount = 20;
+  double _autoSlideSeconds = 1.0;
+
   Future<void> _startScan() async {
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
@@ -31,6 +34,111 @@ class _HomeScreenState extends State<HomeScreen> {
     _openPreviewFromContent(_defaultCode);
   }
 
+  Future<void> _setGroupCount() async {
+    final controller = TextEditingController(text: _groupCount.toString());
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('设置生成数量'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: '每组张数（如 10、100）',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final count = int.tryParse(controller.text.trim());
+                if (count == null || count <= 0) {
+                  return;
+                }
+                Navigator.of(context).pop(count);
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (value == null) {
+      return;
+    }
+
+    setState(() {
+      _groupCount = value;
+    });
+  }
+
+  Future<void> _setAutoSlideSeconds() async {
+    final presets = <double>[0.5, 1.0, 2.0];
+    final controller = TextEditingController(text: _autoSlideSeconds.toString());
+    final value = await showDialog<double>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('设置自动滑动时间'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                children: presets
+                    .map(
+                      (item) => ActionChip(
+                        label: Text('${item}s'),
+                        onPressed: () => Navigator.of(context).pop(item),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: '自定义秒数（例如 1.5）',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final seconds = double.tryParse(controller.text.trim());
+                if (seconds == null || seconds <= 0) {
+                  return;
+                }
+                Navigator.of(context).pop(seconds);
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (value == null) {
+      return;
+    }
+
+    setState(() {
+      _autoSlideSeconds = value;
+    });
+  }
+
   void _openPreviewFromContent(String content) {
     final parsed = QrParser.parse(content);
     if (parsed == null) {
@@ -45,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
       serialInt: parsed.serialInt,
       batch: parsed.batch,
       suffix: parsed.suffix,
+      count: _groupCount,
     );
 
     Navigator.of(context).push(
@@ -52,6 +161,8 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => PreviewScreen(
           records: buildResult.records,
           scanIndex: buildResult.scanIndex,
+          group: buildResult.group,
+          initialAutoSlideSeconds: _autoSlideSeconds,
         ),
       ),
     );
@@ -79,6 +190,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _setGroupCount,
+                      child: Text('数量: $_groupCount 张'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _setAutoSlideSeconds,
+                      child: Text('自动: ${_autoSlideSeconds}s'),
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               SizedBox(
