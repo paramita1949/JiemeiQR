@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:qrscan_flutter/models/qr_record.dart';
 
 class QrParser {
@@ -40,43 +42,69 @@ class QrParser {
 
   static QrBuildResult buildRecords({
     required String prefix,
-    required int serialInt,
+    required String serialSeed,
     required String batch,
     required String suffix,
     int count = defaultCount,
     int? startSerial,
+    bool randomTail3 = false,
+    Random? random,
   }) {
-    final start = startSerial ?? serialInt;
-
-    var scanIndex = 0;
-    final records = <QrRecord>[];
-
-    for (var i = 0; i < count; i++) {
-      final value = start + i;
-      final serial = value.toString().padLeft(serialLength, '0');
-      final content = '$prefix$serial$batch$suffix';
-      records.add(QrRecord(content: content, serial: serial));
-
-      if (value == serialInt) {
-        scanIndex = i;
-      }
+    if (count <= 0) {
+      throw ArgumentError.value(count, 'count', 'count must be > 0');
     }
 
-    if (startSerial != null) {
-      scanIndex = 0;
+    final serialInt = int.tryParse(serialSeed);
+    if (serialInt == null || serialSeed.length != serialLength) {
+      throw ArgumentError.value(
+        serialSeed,
+        'serialSeed',
+        'serialSeed must be 10-digit numeric string',
+      );
+    }
+
+    late final List<QrRecord> records;
+    late final int resolvedStart;
+
+    if (randomTail3) {
+      if (count > 1000) {
+        throw ArgumentError.value(
+          count,
+          'count',
+          'random tail mode supports up to 1000 records',
+        );
+      }
+      final rng = random ?? Random();
+      final serialHead = serialSeed.substring(0, 7);
+      final pool = List<int>.generate(1000, (i) => i)..shuffle(rng);
+      records = List<QrRecord>.generate(count, (index) {
+        final tail = pool[index].toString().padLeft(3, '0');
+        final serial = '$serialHead$tail';
+        return QrRecord(content: '$prefix$serial$batch$suffix', serial: serial);
+      });
+      resolvedStart = serialInt;
+    } else {
+      final start = startSerial ?? serialInt;
+      resolvedStart = start;
+      records = List<QrRecord>.generate(count, (index) {
+        final value = start + index;
+        final serial = value.toString().padLeft(serialLength, '0');
+        return QrRecord(content: '$prefix$serial$batch$suffix', serial: serial);
+      });
     }
 
     return QrBuildResult(
       records: records,
-      scanIndex: scanIndex,
+      scanIndex: 0,
       group: QrGroup(
         prefix: prefix,
         batch: batch,
         suffix: suffix,
-        startSerial: start,
+        sourceSerial: serialSeed,
+        startSerial: resolvedStart,
         count: count,
+        randomTail3: randomTail3,
       ),
     );
   }
-
 }

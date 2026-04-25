@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
 
@@ -37,7 +39,7 @@ void main() {
     test('creates records starting from scanned serial', () {
       final result = QrParser.buildRecords(
         prefix: '0020854',
-        serialInt: 100,
+        serialSeed: '0000000100',
         batch: 'FAYAUEZ',
         suffix: '32',
       );
@@ -51,24 +53,10 @@ void main() {
       expect(result.records.last.serial, '0000000119');
     });
 
-    test('starts exactly at scanned serial when serial is small', () {
-      final result = QrParser.buildRecords(
-        prefix: '0020854',
-        serialInt: 3,
-        batch: 'FAYAUEZ',
-        suffix: '32',
-      );
-
-      expect(result.records, hasLength(20));
-      expect(result.records.first.serial, '0000000003');
-      expect(result.scanIndex, 0);
-      expect(result.records[result.scanIndex].serial, '0000000003');
-    });
-
     test('supports explicit start serial for next group generation', () {
       final result = QrParser.buildRecords(
         prefix: '0020854',
-        serialInt: 0,
+        serialSeed: '0000000500',
         batch: 'FAYAUEZ',
         suffix: '32',
         count: 10,
@@ -80,6 +68,26 @@ void main() {
       expect(result.scanIndex, 0);
       expect(result.records.first.serial, '0000000500');
       expect(result.records.last.serial, '0000000509');
+    });
+
+    test('random mode only randomizes last three digits', () {
+      final result = QrParser.buildRecords(
+        prefix: '0020854',
+        serialSeed: '0089567279',
+        batch: 'FAYAUEZ',
+        suffix: '32',
+        count: 10,
+        randomTail3: true,
+        random: Random(42),
+      );
+
+      expect(result.records, hasLength(10));
+      expect(result.group.randomTail3, isTrue);
+      final serials = result.records.map((e) => e.serial).toList();
+      for (final serial in serials) {
+        expect(serial.startsWith('0089567'), isTrue);
+      }
+      expect(serials.toSet().length, serials.length);
     });
   });
 }

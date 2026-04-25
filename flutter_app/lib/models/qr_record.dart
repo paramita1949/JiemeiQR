@@ -41,13 +41,17 @@ class QrGroup {
     required this.prefix,
     required this.batch,
     required this.suffix,
+    required this.sourceSerial,
     required this.startSerial,
     required this.count,
+    required this.randomTail3,
   });
 
   final String prefix;
   final String batch;
   final String suffix;
+  final String sourceSerial;
   final int startSerial;
   final int count;
+  final bool randomTail3;
 }

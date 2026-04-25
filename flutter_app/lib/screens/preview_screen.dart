@@ -168,15 +168,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   void _generateNextGroup() {
-    final nextStart = _group.startSerial + _group.count;
-    final next = QrParser.buildRecords(
-      prefix: _group.prefix,
-      serialInt: nextStart,
-      batch: _group.batch,
-      suffix: _group.suffix,
-      count: _group.count,
-      startSerial: nextStart,
-    );
+    final next = _group.randomTail3
+        ? QrParser.buildRecords(
+            prefix: _group.prefix,
+            serialSeed: _group.sourceSerial,
+            batch: _group.batch,
+            suffix: _group.suffix,
+            count: _group.count,
+            randomTail3: true,
+          )
+        : () {
+            final nextStart = _group.startSerial + _group.count;
+            return QrParser.buildRecords(
+              prefix: _group.prefix,
+              serialSeed: nextStart.toString().padLeft(10, '0'),
+              batch: _group.batch,
+              suffix: _group.suffix,
+              count: _group.count,
+              startSerial: nextStart,
+            );
+          }();
 
     _autoSlideTimer?.cancel();
     setState(() {
@@ -216,7 +227,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s',
+                    '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTail3 ? '末三位随机' : '顺序递增'}',
                     style: const TextStyle(color: Colors.white70),
                   ),
                 ),

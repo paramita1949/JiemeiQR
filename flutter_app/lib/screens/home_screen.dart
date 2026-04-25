@@ -15,6 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _groupCount = 20;
   double _autoSlideSeconds = 1.0;
+  bool _randomTail3 = false;
 
   Future<void> _startScan() async {
     await _openScannerAndPreview(startFromGallery: false);
@@ -154,10 +155,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final buildResult = QrParser.buildRecords(
       prefix: parsed.prefix,
-      serialInt: parsed.serialInt,
+      serialSeed: parsed.serial,
       batch: parsed.batch,
       suffix: parsed.suffix,
       count: _groupCount,
+      randomTail3: _randomTail3,
     );
 
     Navigator.of(context).push(
@@ -234,6 +236,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonal(
+                  onPressed: () {
+                    setState(() {
+                      _randomTail3 = !_randomTail3;
+                    });
+                  },
+                  child: Text(_randomTail3 ? '随机模式: 开（末三位随机）' : '随机模式: 关（顺序递增）'),
+                ),
               ),
               const SizedBox(height: 6),
               Text(
