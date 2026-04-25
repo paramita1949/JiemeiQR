@@ -7,8 +7,8 @@ class QrParser {
   static const int defaultCount = 20;
 
   static ParsedQr? parse(String content) {
-    final tailLength = batchLength + suffixLength;
-    final variableLength = serialLength + tailLength;
+    const tailLength = batchLength + suffixLength;
+    const variableLength = serialLength + tailLength;
     if (content.length < variableLength + 1) {
       return null;
     }
