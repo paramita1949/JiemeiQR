@@ -17,9 +17,6 @@ on:
       - main
     tags:
       - 'v*'
-    paths:
-      - 'flutter_app/**'
-      - '.github/workflows/flutter-android-build.yml'
 
 jobs:
   build-android:
@@ -75,6 +72,11 @@ jobs:
             release_tag="${GITHUB_REF_NAME}"
             release_name="Release ${GITHUB_REF_NAME}"
             prerelease="false"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF_NAME}" = "main" ]; then
+            publish_release="true"
+            release_tag="main-build-${GITHUB_RUN_NUMBER}"
+            release_name="Main Build ${GITHUB_RUN_NUMBER}"
+            prerelease="true"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_release }}" = "true" ]; then
             publish_release="true"
             if [ -n "${{ inputs.release_tag }}" ]; then
