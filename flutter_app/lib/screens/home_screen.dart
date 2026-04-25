@@ -17,9 +17,17 @@ class _HomeScreenState extends State<HomeScreen> {
   double _autoSlideSeconds = 1.0;
 
   Future<void> _startScan() async {
+    await _openScannerAndPreview(startFromGallery: false);
+  }
+
+  Future<void> _startFromGallery() async {
+    await _openScannerAndPreview(startFromGallery: true);
+  }
+
+  Future<void> _openScannerAndPreview({required bool startFromGallery}) async {
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => const ScannerScreen(),
+        builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
       ),
     );
 
@@ -186,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '扫描箱贴码，自动生成序列预览',
+                '支持相机扫描与本地图片识别',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
@@ -214,7 +222,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _startScan,
-                  child: const Text('开始扫描'),
+                  child: const Text('开始扫描（相机）'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonal(
+                  onPressed: _startFromGallery,
+                  child: const Text('本地图片识别'),
                 ),
               ),
               const SizedBox(height: 12),
