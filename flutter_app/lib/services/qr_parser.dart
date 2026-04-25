@@ -47,7 +47,8 @@ class QrParser {
     required String suffix,
     int count = defaultCount,
     int? startSerial,
-    bool randomTail3 = false,
+    bool randomTailEnabled = false,
+    int randomTailDigits = 3,
     Random? random,
   }) {
     if (count <= 0) {
@@ -66,19 +67,30 @@ class QrParser {
     late final List<QrRecord> records;
     late final int resolvedStart;
 
-    if (randomTail3) {
-      if (count > 1000) {
+    if (randomTailEnabled) {
+      if (randomTailDigits <= 0 || randomTailDigits >= serialLength) {
+        throw ArgumentError.value(
+          randomTailDigits,
+          'randomTailDigits',
+          'randomTailDigits must be in range 1..9',
+        );
+      }
+
+      final combinations = pow(10, randomTailDigits).toInt();
+      if (count > combinations) {
         throw ArgumentError.value(
           count,
           'count',
-          'random tail mode supports up to 1000 records',
+          'random tail mode supports up to $combinations records for $randomTailDigits digits',
         );
       }
+
       final rng = random ?? Random();
-      final serialHead = serialSeed.substring(0, 7);
-      final pool = List<int>.generate(1000, (i) => i)..shuffle(rng);
+      final serialHead = serialSeed.substring(0, serialLength - randomTailDigits);
+      final pool = List<int>.generate(combinations, (i) => i)..shuffle(rng);
+
       records = List<QrRecord>.generate(count, (index) {
-        final tail = pool[index].toString().padLeft(3, '0');
+        final tail = pool[index].toString().padLeft(randomTailDigits, '0');
         final serial = '$serialHead$tail';
         return QrRecord(content: '$prefix$serial$batch$suffix', serial: serial);
       });
@@ -103,7 +115,8 @@ class QrParser {
         sourceSerial: serialSeed,
         startSerial: resolvedStart,
         count: count,
-        randomTail3: randomTail3,
+        randomTailEnabled: randomTailEnabled,
+        randomTailDigits: randomTailDigits,
       ),
     );
   }

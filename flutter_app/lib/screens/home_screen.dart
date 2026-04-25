@@ -15,7 +15,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _groupCount = 20;
   double _autoSlideSeconds = 1.0;
-  bool _randomTail3 = false;
+  bool _randomTailEnabled = false;
+  int _randomTailDigits = 3;
 
   Future<void> _startScan() async {
     await _openScannerAndPreview(startFromGallery: false);
@@ -159,7 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
       batch: parsed.batch,
       suffix: parsed.suffix,
       count: _groupCount,
-      randomTail3: _randomTail3,
+      randomTailEnabled: _randomTailEnabled,
+      randomTailDigits: _randomTailDigits,
     );
 
     Navigator.of(context).push(
@@ -243,12 +245,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: FilledButton.tonal(
                   onPressed: () {
                     setState(() {
-                      _randomTail3 = !_randomTail3;
+                      _randomTailEnabled = !_randomTailEnabled;
                     });
                   },
-                  child: Text(_randomTail3 ? '随机模式: 开（末三位随机）' : '随机模式: 关（顺序递增）'),
+                  child: Text(_randomTailEnabled ? '随机模式: 开（末$_randomTailDigits位随机）' : '随机模式: 关（顺序递增）'),
                 ),
               ),
+              const SizedBox(height: 8),
+              if (_randomTailEnabled)
+                Row(
+                  children: [
+                    const Text('随机位数:'),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('最后3位'),
+                      selected: _randomTailDigits == 3,
+                      onSelected: (_) {
+                        setState(() {
+                          _randomTailDigits = 3;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('最后4位'),
+                      selected: _randomTailDigits == 4,
+                      onSelected: (_) {
+                        setState(() {
+                          _randomTailDigits = 4;
+                        });
+                      },
+                    ),
+                  ],
+                ),
               const SizedBox(height: 6),
               Text(
                 '当前每组 $_groupCount 张，扫码后按此数量生成预览',

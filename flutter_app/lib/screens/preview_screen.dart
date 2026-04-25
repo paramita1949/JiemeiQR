@@ -168,14 +168,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   void _generateNextGroup() {
-    final next = _group.randomTail3
+    final next = _group.randomTailEnabled
         ? QrParser.buildRecords(
             prefix: _group.prefix,
             serialSeed: _group.sourceSerial,
             batch: _group.batch,
             suffix: _group.suffix,
             count: _group.count,
-            randomTail3: true,
+            randomTailEnabled: true,
+            randomTailDigits: _group.randomTailDigits,
           )
         : () {
             final nextStart = _group.startSerial + _group.count;
@@ -227,7 +228,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTail3 ? '末三位随机' : '顺序递增'}',
+                    '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
                     style: const TextStyle(color: Colors.white70),
                   ),
                 ),

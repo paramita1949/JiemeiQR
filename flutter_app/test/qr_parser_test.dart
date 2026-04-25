@@ -70,22 +70,45 @@ void main() {
       expect(result.records.last.serial, '0000000509');
     });
 
-    test('random mode only randomizes last three digits', () {
+    test('random mode with 3 digits randomizes only last 3 digits', () {
       final result = QrParser.buildRecords(
         prefix: '0020854',
         serialSeed: '0089567279',
         batch: 'FAYAUEZ',
         suffix: '32',
         count: 10,
-        randomTail3: true,
+        randomTailEnabled: true,
+        randomTailDigits: 3,
         random: Random(42),
       );
 
       expect(result.records, hasLength(10));
-      expect(result.group.randomTail3, isTrue);
+      expect(result.group.randomTailEnabled, isTrue);
+      expect(result.group.randomTailDigits, 3);
       final serials = result.records.map((e) => e.serial).toList();
       for (final serial in serials) {
         expect(serial.startsWith('0089567'), isTrue);
+      }
+      expect(serials.toSet().length, serials.length);
+    });
+
+    test('random mode with 4 digits randomizes only last 4 digits', () {
+      final result = QrParser.buildRecords(
+        prefix: '0020854',
+        serialSeed: '0089567279',
+        batch: 'FAYAUEZ',
+        suffix: '32',
+        count: 10,
+        randomTailEnabled: true,
+        randomTailDigits: 4,
+        random: Random(7),
+      );
+
+      expect(result.records, hasLength(10));
+      expect(result.group.randomTailDigits, 4);
+      final serials = result.records.map((e) => e.serial).toList();
+      for (final serial in serials) {
+        expect(serial.startsWith('008956'), isTrue);
       }
       expect(serials.toSet().length, serials.length);
     });

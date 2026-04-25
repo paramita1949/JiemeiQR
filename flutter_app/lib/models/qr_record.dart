@@ -44,7 +44,8 @@ class QrGroup {
     required this.sourceSerial,
     required this.startSerial,
     required this.count,
-    required this.randomTail3,
+    required this.randomTailEnabled,
+    required this.randomTailDigits,
   });
 
   final String prefix;
@@ -53,5 +54,6 @@ class QrGroup {
   final String sourceSerial;
   final int startSerial;
   final int count;
-  final bool randomTail3;
+  final bool randomTailEnabled;
+  final int randomTailDigits;
 }
