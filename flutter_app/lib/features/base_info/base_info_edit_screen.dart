@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
+import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -39,6 +40,8 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   int? _savedBatchId;
   bool _saving = false;
   bool _loadingEditData = false;
+  bool _tsRequired = false;
+  int _productLookupVersion = 0;
 
   bool get _isEditing => widget.editingBatchId != null;
 
@@ -82,6 +85,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
         ),
       );
     }
+    final summary = _calculateSummary();
     return Scaffold(
       body: SafeArea(
         child: Form(
@@ -100,109 +104,193 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
                   ),
                   IconButton.filled(
                     tooltip: '扫码快速录入',
-                    onPressed: _showQuickQrDialog,
+                    onPressed: _showQuickScanActions,
                     icon: const Icon(Icons.qr_code_scanner_outlined),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
-              _SectionCard(
-                title: '产品信息',
-                children: [
-                  _TextField(
-                    key: const Key('productCodeField'),
-                    controller: _productCodeController,
-                    label: '产品编号',
-                    hintText: '72067',
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TextField(
+                            key: const Key('productCodeField'),
+                            controller: _productCodeController,
+                            label: '产品编号',
+                            onChanged: _onProductCodeChanged,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _TextField(
+                      key: const Key('productNameField'),
+                      controller: _productNameController,
+                      label: '产品名称',
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TextField(
+                            key: const Key('actualBatchField'),
+                            controller: _actualBatchController,
+                            label: '批号',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _TextField(
+                            key: const Key('dateBatchField'),
+                            controller: _dateBatchController,
+                            label: '日期',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _TextField(
+                      key: const Key('stockPiecesField'),
+                      controller: _stockPiecesController,
+                      label: '数量',
+                      keyboardType: TextInputType.number,
+                      validator: _validateStockPieces,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TextField(
+                            key: const Key('boxesPerBoardField'),
+                            controller: _boxesPerBoardController,
+                            label: '每板箱数',
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _TextField(
+                            key: const Key('piecesPerBoxField'),
+                            controller: _piecesPerBoxController,
+                            label: '每箱件数',
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _TextField(
+                      key: const Key('locationField'),
+                      controller: _locationController,
+                      label: '库位',
+                      requiredField: false,
+                    ),
+                    const SizedBox(height: 10),
+                    _TextField(
+                      key: const Key('remarkField'),
+                      controller: _remarkController,
+                      label: '备注',
+                      maxLines: 2,
+                      requiredField: false,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Text(
+                          'TS扫码',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment(value: false, label: Text('否')),
+                            ButtonSegment(value: true, label: Text('是')),
+                          ],
+                          selected: {_tsRequired},
+                          onSelectionChanged: (values) {
+                            setState(() => _tsRequired = values.single);
+                          },
+                          showSelectedIcon: false,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (summary != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-                  _TextField(
-                    key: const Key('productNameField'),
-                    controller: _productNameController,
-                    label: '产品名称',
-                    hintText: '六神花露水195ML',
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  Row(
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: _TextField(
-                          key: const Key('boxesPerBoardField'),
-                          controller: _boxesPerBoardController,
-                          label: '每板箱数',
-                          hintText: '40',
-                          keyboardType: TextInputType.number,
+                      const Text(
+                        '箱数',
+                        style: TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _TextField(
-                          key: const Key('piecesPerBoxField'),
-                          controller: _piecesPerBoxController,
-                          label: '每箱件数',
-                          hintText: '30',
-                          keyboardType: TextInputType.number,
+                      const SizedBox(width: 6),
+                      Text(
+                        '${summary.totalBoxes}箱',
+                        style: const TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Text(
+                        '板数',
+                        style: TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${summary.fullBoards}板+${summary.remainingBoxes}箱',
+                        style: const TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _SectionCard(
-                title: '批号库存',
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _TextField(
-                          key: const Key('actualBatchField'),
-                          controller: _actualBatchController,
-                          label: '实际批号',
-                          hintText: 'FCHBLEZ',
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _TextField(
-                          key: const Key('dateBatchField'),
-                          controller: _dateBatchController,
-                          label: '日期批号',
-                          hintText: '2029.9.7',
-                        ),
-                      ),
-                    ],
-                  ),
-                  _TextField(
-                    key: const Key('stockPiecesField'),
-                    controller: _stockPiecesController,
-                    label: '库存件数',
-                    hintText: '104310',
-                    keyboardType: TextInputType.number,
-                    validator: _validateStockPieces,
-                  ),
-                  _TextField(
-                    key: const Key('locationField'),
-                    controller: _locationController,
-                    label: '库位',
-                    hintText: '4楼-后-右',
-                    requiredField: false,
-                  ),
-                  _TextField(
-                    key: const Key('remarkField'),
-                    controller: _remarkController,
-                    label: '备注',
-                    hintText: '可在库存明细中随时修改',
-                    maxLines: 3,
-                    requiredField: false,
-                  ),
-                ],
-              ),
+                ),
+              ],
               const SizedBox(height: 14),
               if (_isEditing)
                 FilledButton(
                   key: const Key('saveBaseInfoButton'),
-                  onPressed: _saving
-                      ? null
-                      : () => _save(continueSameProduct: false),
+                  onPressed:
+                      _saving ? null : () => _save(continueSameProduct: false),
                   child: Text(_saving ? '保存中' : '保存修改'),
                 )
               else
@@ -214,7 +302,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
                         onPressed: _saving
                             ? null
                             : () => _save(continueSameProduct: true),
-                        child: const Text('保存并继续同产品'),
+                        child: const Text('继续录入'),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -247,6 +335,55 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
         ),
       ),
     );
+  }
+
+  _CalculatedSummary? _calculateSummary() {
+    final stockPieces = int.tryParse(_stockPiecesController.text.trim());
+    final piecesPerBox = int.tryParse(_piecesPerBoxController.text.trim());
+    final boxesPerBoard = int.tryParse(_boxesPerBoardController.text.trim());
+    if (stockPieces == null ||
+        boxesPerBoard == null ||
+        piecesPerBox == null ||
+        stockPieces <= 0 ||
+        boxesPerBoard <= 0 ||
+        piecesPerBox <= 0) {
+      return null;
+    }
+    if (stockPieces % piecesPerBox != 0) {
+      return null;
+    }
+    final totalBoxes = stockPieces ~/ piecesPerBox;
+    final fullBoards = totalBoxes ~/ boxesPerBoard;
+    final remainingBoxes = totalBoxes % boxesPerBoard;
+    return _CalculatedSummary(
+      totalBoxes: totalBoxes,
+      fullBoards: fullBoards,
+      remainingBoxes: remainingBoxes,
+    );
+  }
+
+  Future<void> _onProductCodeChanged(String value) async {
+    final code = value.trim();
+    if (code.isEmpty) {
+      return;
+    }
+    final currentVersion = ++_productLookupVersion;
+    final product = await _productDao.productByCode(code);
+    if (!mounted ||
+        currentVersion != _productLookupVersion ||
+        product == null) {
+      return;
+    }
+    if (_productNameController.text.trim().isEmpty) {
+      _productNameController.text = product.name;
+    }
+    final hasTsRequired = await _productDao.hasTsRequiredBatches(product.id);
+    if (!mounted || currentVersion != _productLookupVersion) {
+      return;
+    }
+    if (hasTsRequired && !_tsRequired) {
+      setState(() => _tsRequired = true);
+    }
   }
 
   Future<void> _save({required bool continueSameProduct}) async {
@@ -284,6 +421,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
           currentBoxes: initialBoxes,
           boxesPerBoard: int.parse(_boxesPerBoardController.text),
           piecesPerBox: piecesPerBox,
+          tsRequired: _tsRequired,
           location: _emptyAsNull(_locationController.text),
           remark: _emptyAsNull(_remarkController.text),
         );
@@ -300,6 +438,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
           dateBatch: dateBatch,
           initialBoxes: initialBoxes,
           boxesPerBoard: int.parse(_boxesPerBoardController.text),
+          tsRequired: _tsRequired,
           location: _emptyAsNull(_locationController.text),
           remark: _emptyAsNull(_remarkController.text),
         );
@@ -330,7 +469,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('库存件数或规格不合法，请检查后重试')),
+        const SnackBar(content: Text('数量或规格不合法，请检查后重试')),
       );
     } finally {
       if (mounted) {
@@ -391,6 +530,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _piecesPerBoxController.text = entry.product.piecesPerBox.toString();
     _locationController.text = entry.batch.location ?? '';
     _remarkController.text = entry.batch.remark ?? '';
+    _tsRequired = entry.batch.tsRequired;
     _savedProductId = entry.product.id;
     _savedBatchId = entry.batch.id;
     setState(() => _loadingEditData = false);
@@ -424,6 +564,10 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     if (!mounted) {
       return;
     }
+    if (_isEditing) {
+      Navigator.of(context).pop(true);
+      return;
+    }
     setState(() {
       _savedBatchId = null;
       _savedProductId = null;
@@ -433,37 +577,53 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     );
   }
 
-  Future<void> _showQuickQrDialog() async {
-    final controller = TextEditingController();
-    final content = await showDialog<String>(
+  Future<void> _showQuickScanActions() async {
+    final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('扫码快速录入'),
-        content: TextField(
-          key: const Key('quickQrContentField'),
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'QR内容',
-            hintText: '扫描或粘贴箱码内容',
-          ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('相机扫码'),
+              onTap: () => Navigator.of(context).pop('camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('图片识别'),
+              onTap: () => Navigator.of(context).pop('gallery'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('填入'),
-          ),
-        ],
       ),
     );
-
-    if (content == null) {
+    if (!mounted || action == null) {
       return;
     }
+    switch (action) {
+      case 'camera':
+        await _scanActualBatch(startFromGallery: false);
+        break;
+      case 'gallery':
+        await _scanActualBatch(startFromGallery: true);
+        break;
+    }
+  }
+
+  Future<void> _scanActualBatch({required bool startFromGallery}) async {
+    final content = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
+      ),
+    );
+    if (!mounted || content == null) {
+      return;
+    }
+    _applyScannedContent(content);
+  }
+
+  void _applyScannedContent(String content) {
     final parsed = QrParser.parse(content.trim());
     if (parsed == null) {
       if (!mounted) {
@@ -495,6 +655,9 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _locationController.clear();
     _remarkController.clear();
     _boxesPerBoardController.clear();
+    if (!continueSameProduct) {
+      _tsRequired = false;
+    }
     _savedBatchId = null;
     _savedProductId = null;
   }
@@ -516,44 +679,22 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
       return null;
     }
     if (stockPieces % piecesPerBox != 0) {
-      return '库存件数必须是整箱';
+      return '数量必须是整箱';
     }
     return null;
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.children,
+class _CalculatedSummary {
+  const _CalculatedSummary({
+    required this.totalBoxes,
+    required this.fullBoards,
+    required this.remainingBoxes,
   });
 
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 10),
-          ...children.map(
-            (child) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: child,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  final int totalBoxes;
+  final int fullBoards;
+  final int remainingBoxes;
 }
 
 class _TextField extends StatelessWidget {
@@ -561,20 +702,20 @@ class _TextField extends StatelessWidget {
     super.key,
     required this.controller,
     required this.label,
-    this.hintText,
     this.keyboardType,
     this.maxLines = 1,
     this.requiredField = true,
     this.validator,
+    this.onChanged,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? hintText;
   final TextInputType? keyboardType;
   final int maxLines;
   final bool requiredField;
   final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -582,6 +723,7 @@ class _TextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      onChanged: onChanged,
       validator: (value) {
         final customError = validator?.call(value);
         if (customError != null) {
@@ -604,7 +746,6 @@ class _TextField extends StatelessWidget {
       },
       decoration: InputDecoration(
         labelText: label,
-        hintText: hintText,
         filled: true,
         fillColor: const Color(0xFFF7F9FC),
         border: OutlineInputBorder(

@@ -1,8 +1,10 @@
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
+import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/main.dart';
 
 void main() {
@@ -53,6 +55,7 @@ void main() {
 
     expect(find.text('洁美'), findsOneWidget);
     expect(find.text('浙江仓订单与库存工作台'), findsOneWidget);
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('总库存'), findsOneWidget);
     expect(find.text('300 件'), findsOneWidget);
     expect(find.text('总订单 2 单 · 今日新增 2 单 · 未完成 1 单'), findsOneWidget);
@@ -64,6 +67,28 @@ void main() {
     expect(find.text('局域网迁移'), findsOneWidget);
     expect(find.text('基础资料'), findsOneWidget);
     expect(find.text('备份导入'), findsNothing);
+  });
+
+  testWidgets('home stats update after stock changes without re-enter',
+      (tester) async {
+    await seedHomeData();
+    final stockDao = StockDao(database);
+    final batch = await database.select(database.batches).getSingle();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    expect(find.text('300 件'), findsOneWidget);
+
+    await stockDao.addMovement(
+      batchId: batch.id,
+      movementDate: DateTime(2026, 4, 26),
+      type: StockMovementType.inAdjust,
+      boxes: 5,
+    );
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.text('450 件'), findsOneWidget);
   });
 
   testWidgets('home action opens LAN transfer page', (tester) async {
@@ -98,7 +123,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('基础资料'), findsWidgets);
-    expect(find.text('产品信息'), findsOneWidget);
+    expect(find.text('产品信息'), findsNothing);
+    expect(find.text('板数'), findsNothing);
     expect(find.byTooltip('扫码快速录入'), findsOneWidget);
   });
 

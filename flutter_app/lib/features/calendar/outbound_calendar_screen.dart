@@ -141,7 +141,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     if (movements.isEmpty) {
       return const <_OutboundRow>[];
     }
-    final batchIds = movements.map((movement) => movement.batchId).toSet().toList();
+    final batchIds =
+        movements.map((movement) => movement.batchId).toSet().toList();
     final batches = await (_database.select(_database.batches)
           ..where((table) => table.id.isIn(batchIds)))
         .get();
@@ -188,6 +189,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   Future<void> _pickCustomRange() async {
     final picked = await showDateRangePicker(
       context: context,
+      locale: const Locale('zh', 'CN'),
       firstDate: DateTime(2020),
       lastDate: DateTime(DateTime.now().year + 5),
       initialDateRange: _range,

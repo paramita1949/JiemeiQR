@@ -147,6 +147,35 @@ class BackupService {
     }
   }
 
+  Future<ResetDatabaseResult> resetDatabase() async {
+    final now = (nowProvider ?? DateTime.now)();
+    final documentsDir = await (documentsDirectoryProvider ??
+        getApplicationDocumentsDirectory)();
+    final target = File(p.join(documentsDir.path, databaseFileName));
+    if (!await target.exists()) {
+      throw BackupSourceMissingException(target.path);
+    }
+
+    final backup = await createLocalBackup();
+    final sidecars = <String>[
+      '${target.path}-wal',
+      '${target.path}-shm',
+      '${target.path}-journal',
+    ];
+    for (final sidecar in sidecars) {
+      final file = File(sidecar);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+    await target.delete();
+
+    return ResetDatabaseResult(
+      backupFileName: backup.fileName,
+      resetAt: now,
+    );
+  }
+
   String _fileStamp(DateTime value) {
     String pad2(int n) => n.toString().padLeft(2, '0');
     return '${value.year}${pad2(value.month)}${pad2(value.day)}-${pad2(value.hour)}${pad2(value.minute)}${pad2(value.second)}';
@@ -290,4 +319,14 @@ class ImportResult {
   final String importedFromPath;
   final String backupFilePath;
   final String backupFileName;
+}
+
+class ResetDatabaseResult {
+  const ResetDatabaseResult({
+    required this.backupFileName,
+    required this.resetAt,
+  });
+
+  final String backupFileName;
+  final DateTime resetAt;
 }

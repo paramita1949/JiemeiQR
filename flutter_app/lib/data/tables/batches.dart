@@ -13,6 +13,7 @@ class Batches extends Table {
   TextColumn get stackingPattern => text().nullable()();
   TextColumn get location => text().nullable()();
   BoolColumn get hasShipped => boolean().withDefault(const Constant(false))();
+  BoolColumn get tsRequired => boolean().withDefault(const Constant(false))();
   TextColumn get remark => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().nullable()();

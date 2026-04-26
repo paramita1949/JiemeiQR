@@ -111,9 +111,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   key: const Key('orderLoadMoreButton'),
                   onPressed: _loadingMore ? null : _loadMoreOrders,
                   child: Text(
-                    _loadingMore
-                        ? '加载中...'
-                        : '加载更多（${_orders.length}/$_total）',
+                    _loadingMore ? '加载中...' : '加载更多（${_orders.length}/$_total）',
                   ),
                 ),
               ),
@@ -175,8 +173,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (range == null) {
       return '全部日期';
     }
-    final start = _formatDate(range.start);
-    final end = _formatDate(range.end);
+    final startDate =
+        DateTime(range.start.year, range.start.month, range.start.day);
+    final endDate = DateTime(range.end.year, range.end.month, range.end.day);
+    final start = '${_formatDate(startDate)} ${_weekdayLabel(startDate)}';
+    final end = '${_formatDate(endDate)} ${_weekdayLabel(endDate)}';
     return start == end ? start : '$start - $end';
   }
 
@@ -184,6 +185,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
+      locale: const Locale('zh', 'CN'),
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 5),
       initialDateRange: _dateRange ??
@@ -225,6 +227,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
     _refreshOrders();
   }
+}
+
+String _weekdayLabel(DateTime date) {
+  const labels = <int, String>{
+    DateTime.monday: '周一',
+    DateTime.tuesday: '周二',
+    DateTime.wednesday: '周三',
+    DateTime.thursday: '周四',
+    DateTime.friday: '周五',
+    DateTime.saturday: '周六',
+    DateTime.sunday: '周日',
+  };
+  return labels[date.weekday] ?? '';
 }
 
 class _StatusTabs extends StatelessWidget {
@@ -377,13 +392,21 @@ class _OrderCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 7),
-            Text(
-              '${order.dateText} · ${order.itemCount}个产品 · ${order.totalBoxes}箱',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '${order.dateText} · ${order.itemCount}个产品 · ${order.totalBoxes}箱',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (order.hasTsRequired) const _TsPill(),
+              ],
             ),
           ],
         ),
@@ -406,6 +429,29 @@ class _EmptyOrders extends StatelessWidget {
             color: AppTheme.textSecondary,
             fontWeight: FontWeight.w700,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TsPill extends StatelessWidget {
+  const _TsPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Text(
+        'TS',
+        style: TextStyle(
+          color: Color(0xFFDC2626),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

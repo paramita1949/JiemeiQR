@@ -26,6 +26,9 @@ void main() {
 
   testWidgets('saves product and batch information', (tester) async {
     await tester.pumpWidget(buildScreen());
+    expect(find.text('基础资料'), findsOneWidget);
+    expect(find.text('板数'), findsNothing);
+    expect(find.text('产品信息'), findsNothing);
 
     await tester.enterText(find.byKey(const Key('productCodeField')), '72067');
     await tester.enterText(
@@ -35,11 +38,12 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('actualBatchField')), 'FCHBLEZ');
     await tester.enterText(find.byKey(const Key('dateBatchField')), '2029.9.7');
-    expect(find.text('库存件数'), findsOneWidget);
-    expect(find.text('库存箱数'), findsNothing);
+    expect(find.text('数量'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '104310');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '40');
     await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '30');
+    await tester.tap(find.text('是'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('locationField')), '4楼-后-右');
     await tester.enterText(find.byKey(const Key('remarkField')), '首批录入');
 
@@ -60,6 +64,7 @@ void main() {
     expect(batch.initialBoxes, 3477);
     expect(batch.boxesPerBoard, 40);
     expect(batch.dateBatch, '2029.9.7');
+    expect(batch.tsRequired, isTrue);
     expect(batch.remark, '首批录入');
     expect(find.text('已保存基础资料'), findsOneWidget);
     expect(find.byKey(const Key('deleteBaseInfoButton')), findsNothing);
@@ -70,19 +75,22 @@ void main() {
     expect(_fieldText(tester, const Key('piecesPerBoxField')), isEmpty);
   });
 
-  testWidgets('scan icon parses QR content into actual batch', (tester) async {
+  testWidgets('scan icon shows camera and gallery only', (tester) async {
     await tester.pumpWidget(buildScreen());
 
     await tester.tap(find.byTooltip('扫码快速录入'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('quickQrContentField')),
-      'JM720670000000001FCHBLEZ01',
-    );
-    await tester.tap(find.text('填入'));
-    await tester.pumpAndSettle();
+    expect(find.text('相机扫码'), findsOneWidget);
+    expect(find.text('图片识别'), findsOneWidget);
+    expect(find.text('手动输入'), findsNothing);
+  });
 
-    expect(find.text('FCHBLEZ'), findsWidgets);
+  testWidgets('uses 批号 and 日期 field labels', (tester) async {
+    await tester.pumpWidget(buildScreen());
+    expect(find.text('批号'), findsOneWidget);
+    expect(find.text('日期'), findsOneWidget);
+    expect(find.text('实际批号'), findsNothing);
+    expect(find.text('日期批号'), findsNothing);
   });
 
   testWidgets('rejects nonpositive inventory and spec numbers', (tester) async {
@@ -112,6 +120,52 @@ void main() {
     expect(await database.select(database.batches).get(), isEmpty);
   });
 
+  testWidgets('shows summary only when quantity is divisible', (tester) async {
+    await tester.pumpWidget(buildScreen());
+
+    expect(find.text('箱数'), findsNothing);
+    expect(find.text('板数'), findsNothing);
+    expect(find.textContaining('板+'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('stockPiecesField')), '101');
+    await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '40');
+    await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '30');
+    await tester.pumpAndSettle();
+
+    expect(find.text('箱数'), findsNothing);
+    expect(find.textContaining('板+'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('stockPiecesField')), '104310');
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('3477箱'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('箱数'), findsOneWidget);
+    expect(find.text('3477箱'), findsOneWidget);
+    expect(find.text('86板+37箱'), findsOneWidget);
+  });
+
+  testWidgets('fills product name automatically when code exists',
+      (tester) async {
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '72067',
+            name: '六神花露水195ML',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.enterText(find.byKey(const Key('productCodeField')), '72067');
+    await tester.pumpAndSettle();
+
+    expect(_fieldText(tester, const Key('productNameField')), '六神花露水195ML');
+  });
+
   testWidgets('rejects stock pieces that are not whole boxes', (tester) async {
     await tester.pumpWidget(buildScreen());
 
@@ -133,7 +187,7 @@ void main() {
     await tester.tap(find.byKey(const Key('saveBaseInfoButton')));
     await tester.pumpAndSettle();
 
-    expect(find.text('库存件数必须是整箱'), findsOneWidget);
+    expect(find.text('数量必须是整箱'), findsOneWidget);
     expect(await database.select(database.products).get(), isEmpty);
     expect(await database.select(database.batches).get(), isEmpty);
   });
@@ -198,6 +252,7 @@ void main() {
             dateBatch: '2029.9.7',
             initialBoxes: 100,
             boxesPerBoard: 40,
+            tsRequired: const Value(true),
             remark: const Value('旧备注'),
           ),
         );
@@ -216,13 +271,23 @@ void main() {
     expect(_fieldText(tester, const Key('productCodeField')), '72067');
     expect(_fieldText(tester, const Key('actualBatchField')), 'BATCH-A');
     expect(_fieldText(tester, const Key('stockPiecesField')), '3000');
+    expect(
+      tester
+          .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+          .selected,
+      {true},
+    );
 
-    await tester.enterText(find.byKey(const Key('productNameField')), '六神花露水新版');
-    await tester.enterText(find.byKey(const Key('actualBatchField')), 'BATCH-B');
+    await tester.enterText(
+        find.byKey(const Key('productNameField')), '六神花露水新版');
+    await tester.enterText(
+        find.byKey(const Key('actualBatchField')), 'BATCH-B');
     await tester.enterText(find.byKey(const Key('dateBatchField')), '2029.9.8');
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '3600');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '36');
     await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '24');
+    await tester.tap(find.text('否'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('locationField')), '新库位');
     await tester.enterText(find.byKey(const Key('remarkField')), '新备注');
 
@@ -248,6 +313,7 @@ void main() {
     expect(batches.single.dateBatch, '2029.9.8');
     expect(batches.single.initialBoxes, 150);
     expect(batches.single.boxesPerBoard, 36);
+    expect(batches.single.tsRequired, isFalse);
     expect(batches.single.location, '新库位');
     expect(batches.single.remark, '新备注');
   });
@@ -274,7 +340,8 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.enterText(find.byKey(const Key('productCodeField')), '72067');
     await tester.enterText(find.byKey(const Key('productNameField')), '六神花露水');
-    await tester.enterText(find.byKey(const Key('actualBatchField')), 'FCHBLEZ');
+    await tester.enterText(
+        find.byKey(const Key('actualBatchField')), 'FCHBLEZ');
     await tester.enterText(find.byKey(const Key('dateBatchField')), '2029.9.7');
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '3000');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '40');
@@ -317,7 +384,8 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.enterText(find.byKey(const Key('productCodeField')), '72067');
     await tester.enterText(find.byKey(const Key('productNameField')), '六神花露水');
-    await tester.enterText(find.byKey(const Key('actualBatchField')), 'FCHBLEZ');
+    await tester.enterText(
+        find.byKey(const Key('actualBatchField')), 'FCHBLEZ');
     await tester.enterText(find.byKey(const Key('dateBatchField')), '2029.9.7');
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '3000');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '40');
@@ -336,6 +404,66 @@ void main() {
 
     final batches = await database.select(database.batches).get();
     expect(batches, hasLength(2));
+  });
+
+  testWidgets('deleting in edit mode pops and returns true', (tester) async {
+    final productId = await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '72067',
+            name: '六神花露水',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+    final batchId = await database.into(database.batches).insert(
+          BatchesCompanion.insert(
+            productId: productId,
+            actualBatch: 'FCHBLEZ',
+            dateBatch: '2029.9.7',
+            initialBoxes: 100,
+            boxesPerBoard: 40,
+          ),
+        );
+
+    bool? popResult;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              popResult = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => BaseInfoEditScreen(
+                    database: database,
+                    editingBatchId: batchId,
+                  ),
+                ),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('deleteBaseInfoButton')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.byKey(const Key('deleteBaseInfoButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('deleteBaseInfoButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(popResult, isTrue);
+    expect(await database.select(database.products).get(), isEmpty);
+    expect(await database.select(database.batches).get(), isEmpty);
   });
 }
 

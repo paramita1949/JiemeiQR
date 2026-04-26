@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
+import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
 void main() {
   late AppDatabase database;
   late OrderDao orderDao;
+  late ProductDao productDao;
 
   setUp(() {
     database = AppDatabase.forTesting(NativeDatabase.memory());
     orderDao = OrderDao(database);
+    productDao = ProductDao(database);
   });
 
   tearDown(() async {
@@ -81,7 +84,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2026.4.25'), findsOneWidget);
+    expect(find.textContaining('2026.4.25'), findsWidgets);
     expect(find.text('RANGE-1'), findsOneWidget);
     expect(find.text('RANGE-2'), findsNothing);
   });
@@ -114,4 +117,55 @@ void main() {
     expect(find.text('DETAIL-1'), findsOneWidget);
   });
 
+  testWidgets('shows TS badge only for TS-required orders', (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final tsBatchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'TS-A',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+      tsRequired: true,
+    );
+    final normalBatchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'NO-TS',
+      dateBatch: '2029.9.8',
+      initialBoxes: 10,
+      tsRequired: false,
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'TS-ORDER',
+      merchantName: '洁美TS',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: tsBatchId,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'NORMAL-ORDER',
+      merchantName: '洁美普通',
+      orderDate: DateTime(2026, 4, 25),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: normalBatchId,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('TS'), findsOneWidget);
+  });
 }

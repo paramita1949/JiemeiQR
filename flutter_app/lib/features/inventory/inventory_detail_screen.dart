@@ -30,14 +30,17 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   late final bool _ownsDatabase;
 
   final _filterController = TextEditingController();
-  _StockFilter _stockFilter = _StockFilter.all;
+  _StockFilter _stockFilter = _StockFilter.inStock;
   List<InventoryDetailRow> _rows = const [];
   int _total = 0;
   int? _totalPieces;
+  Map<String, InventoryGroupSummary> _groupSummaries = const {};
+  final Set<String> _collapsedProductCodes = <String>{};
   bool _loading = true;
   bool _loadingMore = false;
   int _queryVersion = 0;
   Timer? _filterDebounce;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
@@ -47,11 +50,16 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     _stockDao = StockDao(_database);
     _productDao = ProductDao(_database);
     _refreshRows(refreshTotals: true);
+    _autoRefreshTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _refreshRows(refreshTotals: true),
+    );
   }
 
   @override
   void dispose() {
     _filterDebounce?.cancel();
+    _autoRefreshTimer?.cancel();
     _filterController.dispose();
     if (_ownsDatabase) {
       _database.close();
@@ -106,25 +114,14 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             else if (_rows.isEmpty)
               const _EmptyState()
             else
-              ..._rows.map(
-                (row) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _InventoryRowCard(
-                    row: row,
-                    onEditRemark: () => _editRemark(row),
-                    onEditBaseInfo: () => _editBaseInfo(row),
-                  ),
-                ),
-              ),
+              ..._buildGroupedRows(_rows),
             if (!_loading && _rows.length < _total)
               Center(
                 child: TextButton(
                   key: const Key('inventoryLoadMoreButton'),
                   onPressed: _loadingMore ? null : _loadMore,
                   child: Text(
-                    _loadingMore
-                        ? '加载中...'
-                        : '加载更多（${_rows.length}/$_total）',
+                    _loadingMore ? '加载中...' : '加载更多（${_rows.length}/$_total）',
                   ),
                 ),
               ),
@@ -149,6 +146,10 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       queryText: _filterController.text,
       stockFilter: filter,
     );
+    final groupSummaries = await _stockDao.inventoryGroupSummaries(
+      queryText: _filterController.text,
+      stockFilter: filter,
+    );
     final shouldRefreshTotals = refreshTotals || _totalPieces == null;
     final totalPieces = shouldRefreshTotals
         ? await _stockDao.totalInventoryPieces()
@@ -160,6 +161,9 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       _rows = result.rows;
       _total = result.total;
       _totalPieces = totalPieces;
+      _groupSummaries = {
+        for (final summary in groupSummaries) summary.productCode: summary,
+      };
       _loading = false;
     });
   }
@@ -270,6 +274,54 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       const SnackBar(content: Text('已更新基础资料')),
     );
   }
+
+  List<Widget> _buildGroupedRows(List<InventoryDetailRow> rows) {
+    final widgets = <Widget>[];
+    String? currentProductCode;
+    var currentGroupCollapsed = false;
+    for (final row in rows) {
+      if (row.product.code != currentProductCode) {
+        currentProductCode = row.product.code;
+        final code = currentProductCode;
+        final summary = _groupSummaries[code];
+        currentGroupCollapsed = _collapsedProductCodes.contains(code);
+        final collapsedAtBuild = currentGroupCollapsed;
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, top: 2),
+            child: _ProductGroupHeader(
+              productCode: code,
+              summary: summary,
+              collapsed: collapsedAtBuild,
+              onTap: () {
+                setState(() {
+                  if (collapsedAtBuild) {
+                    _collapsedProductCodes.remove(code);
+                  } else {
+                    _collapsedProductCodes.add(code);
+                  }
+                });
+              },
+            ),
+          ),
+        );
+      }
+      if (currentGroupCollapsed) {
+        continue;
+      }
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _InventoryRowCard(
+            row: row,
+            onEditRemark: () => _editRemark(row),
+            onEditBaseInfo: () => _editBaseInfo(row),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
 }
 
 enum _StockFilter { all, inStock, zero }
@@ -368,6 +420,62 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
+class _ProductGroupHeader extends StatelessWidget {
+  const _ProductGroupHeader({
+    required this.productCode,
+    required this.summary,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final String productCode;
+  final InventoryGroupSummary? summary;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalPieces = summary?.totalPieces ?? 0;
+    final totalBoxes = summary?.totalBoxes ?? 0;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: Row(
+          children: [
+            Icon(
+              collapsed ? Icons.chevron_right : Icons.expand_more,
+              size: 17,
+              color: AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 2),
+            Text(
+              productCode,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${_formatNumber(totalPieces)}件 · ${_formatNumber(totalBoxes)}箱',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InventoryRowCard extends StatelessWidget {
   const _InventoryRowCard({
     required this.row,
@@ -403,13 +511,27 @@ class _InventoryRowCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '${row.product.code} · ${row.batch.actualBatch} · ${row.batch.dateBatch}',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      '${row.product.code} · ${row.batch.actualBatch}',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      row.batch.dateBatch,
+                      style: const TextStyle(
+                        color: Color(0xFFB91C1C),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               _StatusPill(
@@ -429,7 +551,21 @@ class _InventoryRowCard extends StatelessWidget {
                 text:
                     '${row.batch.boxesPerBoard}箱/板 · ${row.product.piecesPerBox}件/箱',
               ),
-              _MetricChip(text: row.batch.hasShipped ? '已发过' : '未发过'),
+              if (row.batch.tsRequired)
+                const _MetricChip(
+                  text: 'TS',
+                  textColor: Color(0xFFB91C1C),
+                  backgroundColor: Color(0xFFFEE2E2),
+                ),
+              _MetricChip(
+                text: row.batch.hasShipped ? '已发过' : '未发过',
+                textColor: row.batch.hasShipped
+                    ? const Color(0xFFB91C1C)
+                    : AppTheme.primary,
+                backgroundColor: row.batch.hasShipped
+                    ? const Color(0xFFFEE2E2)
+                    : const Color(0xFFF3F6FB),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -466,22 +602,28 @@ class _InventoryRowCard extends StatelessWidget {
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.text});
+  const _MetricChip({
+    required this.text,
+    this.textColor = AppTheme.primary,
+    this.backgroundColor = const Color(0xFFF3F6FB),
+  });
 
   final String text;
+  final Color textColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FB),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppTheme.primary,
+        style: TextStyle(
+          color: textColor,
           fontSize: 13,
           fontWeight: FontWeight.w800,
         ),

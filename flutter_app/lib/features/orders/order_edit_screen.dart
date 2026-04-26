@@ -172,6 +172,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                         availableBoxes: _selectedBatch?.currentBoxes,
                         boardText: _boardText(),
                         specText: _specText(),
+                        tsRequired: _selectedBatch?.batch.tsRequired ?? false,
                       ),
                     ],
                   ),
@@ -234,6 +235,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   Future<void> _pickOrderDate() async {
     final picked = await showDatePicker(
       context: context,
+      locale: const Locale('zh', 'CN'),
       initialDate: _orderDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(DateTime.now().year + 5),
@@ -374,11 +376,13 @@ class _ProductMeta extends StatelessWidget {
     required this.availableBoxes,
     required this.boardText,
     required this.specText,
+    required this.tsRequired,
   });
 
   final int? availableBoxes;
   final String? boardText;
   final String specText;
+  final bool tsRequired;
 
   @override
   Widget build(BuildContext context) {
@@ -389,28 +393,40 @@ class _ProductMeta extends StatelessWidget {
         _MetaChip(text: '可用 ${availableBoxes ?? 0}箱'),
         if (boardText != null) _MetaChip(text: '需 $boardText'),
         _MetaChip(text: specText),
+        if (tsRequired)
+          const _MetaChip(
+            text: 'TS',
+            textColor: Color(0xFFDC2626),
+            backgroundColor: Color(0xFFFEE2E2),
+          ),
       ],
     );
   }
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.text});
+  const _MetaChip({
+    required this.text,
+    this.textColor = AppTheme.primary,
+    this.backgroundColor = const Color(0xFFF3F6FB),
+  });
 
   final String text;
+  final Color textColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FB),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppTheme.primary,
+        style: TextStyle(
+          color: textColor,
           fontSize: 13,
           fontWeight: FontWeight.w800,
         ),

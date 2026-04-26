@@ -107,6 +107,29 @@ void main() {
     expect(await currentDb.readAsString(), 'current-db');
   });
 
+  test('backup service resets database with auto backup', () async {
+    final tempDir = await Directory.systemTemp.createTemp('jiemei-reset-test-');
+    final db = File('${tempDir.path}/jiemei.sqlite');
+    final wal = File('${tempDir.path}/jiemei.sqlite-wal');
+    final shm = File('${tempDir.path}/jiemei.sqlite-shm');
+    await db.writeAsString('current-db');
+    await wal.writeAsString('wal');
+    await shm.writeAsString('shm');
+
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => DateTime(2026, 4, 26, 12, 0, 0),
+    );
+
+    final result = await service.resetDatabase();
+
+    expect(result.backupFileName, 'jiemei-backup-20260426-120000.sqlite');
+    expect(await db.exists(), isFalse);
+    expect(await wal.exists(), isFalse);
+    expect(await shm.exists(), isFalse);
+  });
+
   testWidgets('shows send receive and backup boundary', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

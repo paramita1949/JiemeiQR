@@ -320,6 +320,12 @@ class _LineCard extends StatelessWidget {
                 text:
                     '${line.item.boxesPerBoard}箱/板 · ${line.item.piecesPerBox}件/箱',
               ),
+              if (line.batch.tsRequired)
+                const _MetricChip(
+                  text: 'TS',
+                  textColor: Color(0xFFDC2626),
+                  backgroundColor: Color(0xFFFEE2E2),
+                ),
             ],
           ),
         ],
@@ -329,22 +335,28 @@ class _LineCard extends StatelessWidget {
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.text});
+  const _MetricChip({
+    required this.text,
+    this.textColor = AppTheme.primary,
+    this.backgroundColor = const Color(0xFFF3F6FB),
+  });
 
   final String text;
+  final Color textColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FB),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppTheme.primary,
+        style: TextStyle(
+          color: textColor,
           fontSize: 13,
           fontWeight: FontWeight.w800,
         ),

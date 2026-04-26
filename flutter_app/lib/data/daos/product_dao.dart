@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
+import '../data_change_notifier.dart';
 
 class ProductDao {
   ProductDao(this._database);
@@ -29,9 +30,10 @@ class ProductDao {
           updatedAt: Value(DateTime.now()),
         ),
       );
+      DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
       return existing.id;
     }
-    return _database.into(_database.products).insert(
+    final id = await _database.into(_database.products).insert(
           ProductsCompanion.insert(
             code: code,
             name: name,
@@ -39,6 +41,8 @@ class ProductDao {
             piecesPerBox: piecesPerBox,
           ),
         );
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
+    return id;
   }
 
   Future<int> createBatch({
@@ -47,6 +51,7 @@ class ProductDao {
     required String dateBatch,
     required int initialBoxes,
     int? boxesPerBoard,
+    bool tsRequired = false,
     String? location,
     String? remark,
   }) async {
@@ -56,17 +61,23 @@ class ProductDao {
         .getSingle();
     final batchBoxesPerBoard = boxesPerBoard ?? product.boxesPerBoard;
     _validatePositive(batchBoxesPerBoard, 'boxesPerBoard');
-    return _database.into(_database.batches).insert(
+    final batchId = await _database.into(_database.batches).insert(
           BatchesCompanion.insert(
             productId: productId,
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             initialBoxes: initialBoxes,
             boxesPerBoard: batchBoxesPerBoard,
+            tsRequired: Value(tsRequired),
             location: Value.absentIfNull(location),
             remark: Value.absentIfNull(remark),
           ),
         );
+    if (tsRequired) {
+      await _syncProductTsRequired(productId: productId, tsRequired: true);
+    }
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
+    return batchId;
   }
 
   Future<List<Product>> allProducts() {
@@ -124,12 +135,14 @@ class ProductDao {
     await (_database.delete(_database.batches)
           ..where((table) => table.id.equals(batchId)))
         .go();
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   Future<void> deleteProduct(int productId) async {
     await (_database.delete(_database.products)
           ..where((table) => table.id.equals(productId)))
         .go();
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   Future<void> updateBatchRemark(int batchId, String? remark) async {
@@ -141,6 +154,20 @@ class ProductDao {
         updatedAt: Value(DateTime.now()),
       ),
     );
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
+  }
+
+  Future<bool> hasTsRequiredBatches(int productId) async {
+    final row = await _database.customSelect(
+      '''
+      SELECT COUNT(*) AS c
+      FROM batches
+      WHERE product_id = ? AND ts_required = 1
+      ''',
+      variables: [Variable.withInt(productId)],
+      readsFrom: {_database.batches},
+    ).getSingleOrNull();
+    return ((row?.data['c'] as int?) ?? 0) > 0;
   }
 
   Future<bool> hasDuplicateActualBatch({
@@ -191,6 +218,7 @@ class ProductDao {
     required int currentBoxes,
     required int boxesPerBoard,
     required int piecesPerBox,
+    required bool tsRequired,
     String? location,
     String? remark,
   }) async {
@@ -239,12 +267,20 @@ class ProductDao {
           dateBatch: Value(dateBatch),
           initialBoxes: Value(initialBoxes),
           boxesPerBoard: Value(boxesPerBoard),
+          tsRequired: Value(tsRequired),
           location: Value(location),
           remark: Value(remark),
           updatedAt: Value(DateTime.now()),
-        ),
-      );
+          ),
+        );
+      if (tsRequired) {
+        await _syncProductTsRequired(
+          productId: entry.product.id,
+          tsRequired: true,
+        );
+      }
     });
+    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   int _movementDelta(StockMovement movement) {
@@ -261,6 +297,20 @@ class ProductDao {
     if (value <= 0 || value > 1000000000) {
       throw InvalidProductQuantityException(fieldName: fieldName, value: value);
     }
+  }
+
+  Future<void> _syncProductTsRequired({
+    required int productId,
+    required bool tsRequired,
+  }) async {
+    await (_database.update(_database.batches)
+          ..where((table) => table.productId.equals(productId)))
+        .write(
+      BatchesCompanion(
+        tsRequired: Value(tsRequired),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 }
 

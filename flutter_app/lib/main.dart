@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/seed/embedded_stock_seed_service.dart';
 import 'package:qrscan_flutter/features/home/home_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
@@ -27,6 +31,9 @@ class _QrScanAppState extends State<QrScanApp> {
   void initState() {
     super.initState();
     _database = widget.database ?? AppDatabase();
+    if (widget.database == null) {
+      unawaited(_seedInBackground());
+    }
   }
 
   @override
@@ -37,12 +44,31 @@ class _QrScanAppState extends State<QrScanApp> {
     super.dispose();
   }
 
+  Future<void> _seedInBackground() async {
+    final seeded =
+        await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+    if (!mounted || !seeded) {
+      return;
+    }
+    setState(() => _databaseVersion += 1);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '洁美',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [
+        Locale('zh', 'CN'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: HomeScreen(
         key: ValueKey(_databaseVersion),
         database: _database,

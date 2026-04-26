@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/data_change_notifier.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
@@ -28,21 +31,32 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final AppDatabase _database;
   late final bool _ownsDatabase;
-  late final Future<_HomeStats> _statsFuture;
+  _HomeStats? _stats;
+  bool _loadingStats = true;
+  StreamSubscription<DataChangeKind>? _changeSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
-    _statsFuture = _loadStats();
+    _refreshStats();
+    _changeSubscription = DataChangeNotifier.instance.stream.listen((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_refreshStats());
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _changeSubscription?.cancel();
     if (_ownsDatabase) {
       _database.close();
     }
@@ -50,13 +64,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshStats());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: RefreshIndicator(
+          onRefresh: _refreshStats,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(18),
             children: [
               const PageTitle(
                 icon: Icons.warehouse_outlined,
@@ -64,11 +86,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: '浙江仓订单与库存工作台',
               ),
               const SizedBox(height: 10),
-              FutureBuilder<_HomeStats>(
-                future: _statsFuture,
-                builder: (context, snapshot) {
-                  return _InventorySummaryCard(stats: snapshot.data);
-                },
+              _InventorySummaryCard(
+                stats: _stats,
+                loading: _loadingStats,
               ),
               const SizedBox(height: 10),
               Text(
@@ -77,7 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 9),
               _ActionGrid(
-                  onOpenAction: (title) => _openHomeAction(context, title)),
+                onOpenAction: (title) => _openHomeAction(context, title),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -85,47 +107,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openHomeAction(BuildContext context, String title) {
+  Future<void> _openHomeAction(BuildContext context, String title) async {
     if (title == 'QR箱码') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const QrEntryScreen()),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
     if (title == '基础资料') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => BaseInfoEditScreen(database: database),
         ),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
     if (title == '库存明细') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => InventoryDetailScreen(database: database),
         ),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
     if (title == '订单信息') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => OrderListScreen(database: database),
         ),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
     if (title == '出库日历') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => OutboundCalendarScreen(database: database),
         ),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
     if (title == '局域网迁移') {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => LanTransferScreen(
             onPrepareImport: widget.onPrepareImport,
@@ -133,6 +170,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       );
+      if (mounted) {
+        unawaited(_refreshStats());
+      }
       return;
     }
   }
@@ -145,23 +185,24 @@ class _HomeScreenState extends State<HomeScreen> {
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
-    final totalCountRow = await _database
-        .customSelect('SELECT COUNT(*) AS c FROM orders')
-        .getSingle();
-    final pendingCountRow = await _database.customSelect(
-      'SELECT COUNT(*) AS c FROM orders WHERE status = ?',
-      variables: [Variable.withInt(OrderStatus.pending.index)],
-    ).getSingle();
-    final todayCountRow = await _database.customSelect(
-      'SELECT COUNT(*) AS c FROM orders WHERE created_at BETWEEN ? AND ?',
+    final countsRow = await _database.customSelect(
+      '''
+      SELECT
+        COUNT(*) AS total_count,
+        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS today_new_count
+      FROM orders
+      ''',
       variables: [
+        Variable.withInt(OrderStatus.pending.index),
         Variable.withDateTime(todayStart),
         Variable.withDateTime(todayEnd),
       ],
-    ).getSingle();
-    final totalOrders = (totalCountRow.data['c'] as int?) ?? 0;
-    final pendingOrders = (pendingCountRow.data['c'] as int?) ?? 0;
-    final todayNew = (todayCountRow.data['c'] as int?) ?? 0;
+    ).getSingleOrNull();
+    final countsData = countsRow?.data ?? const <String, Object?>{};
+    final totalOrders = (countsData['total_count'] as int?) ?? 0;
+    final pendingOrders = (countsData['pending_count'] as int?) ?? 0;
+    final todayNew = (countsData['today_new_count'] as int?) ?? 0;
 
     return _HomeStats(
       totalPieces: totalPieces,
@@ -170,12 +211,27 @@ class _HomeScreenState extends State<HomeScreen> {
       pendingOrders: pendingOrders,
     );
   }
+
+  Future<void> _refreshStats() async {
+    final stats = await _loadStats();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _stats = stats;
+      _loadingStats = false;
+    });
+  }
 }
 
 class _InventorySummaryCard extends StatelessWidget {
-  const _InventorySummaryCard({required this.stats});
+  const _InventorySummaryCard({
+    required this.stats,
+    required this.loading,
+  });
 
   final _HomeStats? stats;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +264,7 @@ class _InventorySummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            stats == null
+            loading || stats == null
                 ? '总订单 -- 单 · 今日新增 -- 单 · 未完成 -- 单'
                 : '总订单 ${stats!.totalOrders} 单 · 今日新增 ${stats!.todayNewOrders} 单 · 未完成 ${stats!.pendingOrders} 单',
             style: const TextStyle(
@@ -241,7 +297,7 @@ class _ActionGrid extends StatelessWidget {
     required this.onOpenAction,
   });
 
-  final ValueChanged<String> onOpenAction;
+  final Future<void> Function(String) onOpenAction;
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +357,7 @@ class _ActionGrid extends StatelessWidget {
           title: action.title,
           subtitle: action.subtitle,
           backgroundColor: action.color,
-          onTap: () => onOpenAction(action.title),
+          onTap: () => unawaited(onOpenAction(action.title)),
         );
       },
     );

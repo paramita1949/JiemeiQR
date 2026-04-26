@@ -31,6 +31,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   late BackupDraft _backupDraft;
   bool _creatingBackup = false;
   bool _importingBackup = false;
+  bool _resettingDatabase = false;
   bool _sendingServer = false;
   SendSession? _sendSession;
   _ReceiveInput? _lastReceiveInput;
@@ -103,6 +104,14 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               footer: '${_backupDraft.fileName}\n${_backupDraft.note}',
               actionText: _creatingBackup ? '生成中...' : '生成备份',
               onAction: _creatingBackup ? null : () => _createBackup(),
+            ),
+            const SizedBox(height: 10),
+            _ModeCard(
+              icon: Icons.restart_alt_outlined,
+              title: '重置数据库',
+              description: '清空当前数据并重新开始，执行前自动生成备份。',
+              actionText: _resettingDatabase ? '重置中...' : '重置并重新开始',
+              onAction: _resettingDatabase ? null : _confirmAndResetDatabase,
             ),
             const SizedBox(height: 12),
             const Text(
@@ -437,6 +446,70 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     messenger.showSnackBar(
       const SnackBar(content: Text('连接码已复制')),
     );
+  }
+
+  Future<void> _confirmAndResetDatabase() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认重置数据库'),
+        content: const Text('此操作会清空当前所有订单和库存数据，并从零开始。是否继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认重置'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _resettingDatabase = true);
+    var prepared = false;
+    try {
+      await widget.onPrepareImport?.call();
+      prepared = true;
+      final result = await _backupService.resetDatabase();
+      await widget.onImportCompleted?.call();
+      prepared = false;
+      if (!mounted) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(content: Text('数据库已重置，备份：${result.backupFileName}')),
+      );
+      Navigator.of(context).pop();
+    } on BackupSourceMissingException {
+      if (!mounted) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('未找到数据库文件，无法重置')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('重置失败，请稍后重试')),
+      );
+    } finally {
+      if (prepared) {
+        await widget.onImportCompleted?.call();
+      }
+      if (mounted) {
+        setState(() => _resettingDatabase = false);
+      }
+    }
   }
 }
 

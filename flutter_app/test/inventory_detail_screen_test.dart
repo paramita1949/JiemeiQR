@@ -34,6 +34,7 @@ void main() {
     required String batch,
     required String dateBatch,
     required int initialBoxes,
+    bool tsRequired = false,
     int shippedBoxes = 0,
     String? remark,
   }) async {
@@ -48,6 +49,7 @@ void main() {
       actualBatch: batch,
       dateBatch: dateBatch,
       initialBoxes: initialBoxes,
+      tsRequired: tsRequired,
       remark: remark,
     );
     if (shippedBoxes > 0) {
@@ -68,6 +70,7 @@ void main() {
       batch: 'FCHBLEZ',
       dateBatch: '2029.9.7',
       initialBoxes: 100,
+      tsRequired: true,
       shippedBoxes: 20,
       remark: '随时修改',
     );
@@ -78,12 +81,22 @@ void main() {
     expect(find.text('库存明细'), findsWidgets);
     expect(find.text('总库存'), findsOneWidget);
     expect(find.text('2,400 件'), findsOneWidget);
-    expect(find.text('72067 · FCHBLEZ · 2029.9.7'), findsOneWidget);
+    expect(find.text('72067 · FCHBLEZ'), findsOneWidget);
+    expect(find.text('2029.9.7'), findsOneWidget);
     expect(find.text('80箱'), findsOneWidget);
     expect(find.text('2板'), findsOneWidget);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
+    expect(find.text('TS'), findsOneWidget);
     expect(find.text('已发过'), findsOneWidget);
     expect(find.text('随时修改'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('2029.9.7')).style?.color,
+      const Color(0xFFB91C1C),
+    );
+    expect(
+      tester.widget<Text>(find.text('已发过')).style?.color,
+      const Color(0xFFB91C1C),
+    );
   });
 
   testWidgets('filters zero stock rows and edits remark inline',
@@ -102,7 +115,8 @@ void main() {
     await tester.tap(find.text('零库存'));
     await tester.pumpAndSettle();
 
-    expect(find.text('20380 · ELMAXEZ · 2029.6.14'), findsOneWidget);
+    expect(find.text('20380 · ELMAXEZ'), findsOneWidget);
+    expect(find.text('2029.6.14'), findsOneWidget);
     expect(find.text('已空'), findsOneWidget);
 
     await tester.tap(find.byTooltip('编辑备注').first);
@@ -116,6 +130,106 @@ void main() {
           ..where((table) => table.id.equals(batchId)))
         .getSingle();
     expect(batchRecord.remark, '临时备注');
+  });
+
+  testWidgets('sorts same product by earlier date first', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-LATE',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-EARLY',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    final earlyY = tester.getTopLeft(find.text('2029.9.6')).dy;
+    final lateY = tester.getTopLeft(find.text('2029.9.7')).dy;
+    expect(earlyY, lessThan(lateY));
+  });
+
+  testWidgets('groups rows by product code', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'A-BATCH',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '20380',
+      batch: 'B-BATCH',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('20380'), findsOneWidget);
+    expect(find.text('72067'), findsOneWidget);
+    final y20380 = tester.getTopLeft(find.text('20380')).dy;
+    final y72067 = tester.getTopLeft(find.text('72067')).dy;
+    expect(y20380, lessThan(y72067));
+    expect(find.text('TS'), findsNothing);
+  });
+
+  testWidgets('group header shows aggregated pieces and boxes', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-A',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-B',
+      dateBatch: '2029.9.7',
+      initialBoxes: 5,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('450件 · 15箱'), findsOneWidget);
+  });
+
+  testWidgets('group header collapses and expands rows', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-A',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '72067',
+      batch: 'BATCH-B',
+      dateBatch: '2029.9.7',
+      initialBoxes: 5,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('BATCH-A'), findsOneWidget);
+    expect(find.textContaining('BATCH-B'), findsOneWidget);
+
+    await tester.tap(find.text('72067').first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('BATCH-A'), findsNothing);
+    expect(find.textContaining('BATCH-B'), findsNothing);
+
+    await tester.tap(find.text('72067').first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('BATCH-A'), findsOneWidget);
+    expect(find.textContaining('BATCH-B'), findsOneWidget);
   });
 
   testWidgets('opens base info edit from inventory row', (tester) async {
@@ -136,5 +250,4 @@ void main() {
     expect(find.text('72067'), findsWidgets);
     expect(find.text('FCHBLEZ'), findsWidgets);
   });
-
 }

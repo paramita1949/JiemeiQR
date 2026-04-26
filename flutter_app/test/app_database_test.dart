@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
@@ -18,8 +19,8 @@ void main() {
     await database.close();
   });
 
-  test('database starts at schema version 3', () {
-    expect(database.schemaVersion, 3);
+  test('database starts at schema version 4', () {
+    expect(database.schemaVersion, 4);
   });
 
   test('creates product and batch records', () async {
@@ -112,7 +113,40 @@ void main() {
     expect(movement.type, StockMovementType.orderOut);
   });
 
-  test('migrates v1 database to v3 without data loss', () async {
+  test('enabling TS on one batch cascades to all batches of the product',
+      () async {
+    final productDao = ProductDao(database);
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'A-001',
+      dateBatch: '2029.9.6',
+      initialBoxes: 100,
+      tsRequired: false,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'A-002',
+      dateBatch: '2029.9.7',
+      initialBoxes: 120,
+      tsRequired: true,
+    );
+
+    final rows = await (database.select(database.batches)
+          ..where((table) => table.id.isIn([batchA, batchB])))
+        .get();
+    expect(rows.length, 2);
+    expect(rows.every((row) => row.tsRequired), isTrue);
+    expect(await productDao.hasTsRequiredBatches(productId), isTrue);
+  });
+
+  test('migrates v1 database to v4 without data loss', () async {
     final oldWarnSetting = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() {
@@ -209,7 +243,13 @@ void main() {
 
     final versionRow =
         await migrated.customSelect('PRAGMA user_version;').getSingle();
-    expect(versionRow.data['user_version'], 3);
+    expect(versionRow.data['user_version'], 4);
+
+    final tsRequired = await migrated.customSelect(
+      'SELECT ts_required FROM batches WHERE id = ?',
+      variables: [Variable.withInt(batch.id)],
+    ).getSingle();
+    expect(tsRequired.data['ts_required'], 0);
 
     final orderIndexRows = await migrated.customSelect(
       "PRAGMA index_list('orders');",

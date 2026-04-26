@@ -453,6 +453,16 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("has_shipped" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _tsRequiredMeta =
+      const VerificationMeta('tsRequired');
+  @override
+  late final GeneratedColumn<bool> tsRequired = GeneratedColumn<bool>(
+      'ts_required', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("ts_required" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _remarkMeta = const VerificationMeta('remark');
   @override
   late final GeneratedColumn<String> remark = GeneratedColumn<String>(
@@ -483,6 +493,7 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
         stackingPattern,
         location,
         hasShipped,
+        tsRequired,
         remark,
         createdAt,
         updatedAt
@@ -552,6 +563,12 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
           hasShipped.isAcceptableOrUnknown(
               data['has_shipped']!, _hasShippedMeta));
     }
+    if (data.containsKey('ts_required')) {
+      context.handle(
+          _tsRequiredMeta,
+          tsRequired.isAcceptableOrUnknown(
+              data['ts_required']!, _tsRequiredMeta));
+    }
     if (data.containsKey('remark')) {
       context.handle(_remarkMeta,
           remark.isAcceptableOrUnknown(data['remark']!, _remarkMeta));
@@ -591,6 +608,8 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
           .read(DriftSqlType.string, data['${effectivePrefix}location']),
       hasShipped: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}has_shipped'])!,
+      tsRequired: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}ts_required'])!,
       remark: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}remark']),
       createdAt: attachedDatabase.typeMapping
@@ -616,6 +635,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
   final String? stackingPattern;
   final String? location;
   final bool hasShipped;
+  final bool tsRequired;
   final String? remark;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -629,6 +649,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       this.stackingPattern,
       this.location,
       required this.hasShipped,
+      required this.tsRequired,
       this.remark,
       required this.createdAt,
       this.updatedAt});
@@ -648,6 +669,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       map['location'] = Variable<String>(location);
     }
     map['has_shipped'] = Variable<bool>(hasShipped);
+    map['ts_required'] = Variable<bool>(tsRequired);
     if (!nullToAbsent || remark != null) {
       map['remark'] = Variable<String>(remark);
     }
@@ -673,6 +695,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           ? const Value.absent()
           : Value(location),
       hasShipped: Value(hasShipped),
+      tsRequired: Value(tsRequired),
       remark:
           remark == null && nullToAbsent ? const Value.absent() : Value(remark),
       createdAt: Value(createdAt),
@@ -695,6 +718,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       stackingPattern: serializer.fromJson<String?>(json['stackingPattern']),
       location: serializer.fromJson<String?>(json['location']),
       hasShipped: serializer.fromJson<bool>(json['hasShipped']),
+      tsRequired: serializer.fromJson<bool>(json['tsRequired']),
       remark: serializer.fromJson<String?>(json['remark']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
@@ -713,6 +737,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       'stackingPattern': serializer.toJson<String?>(stackingPattern),
       'location': serializer.toJson<String?>(location),
       'hasShipped': serializer.toJson<bool>(hasShipped),
+      'tsRequired': serializer.toJson<bool>(tsRequired),
       'remark': serializer.toJson<String?>(remark),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime?>(updatedAt),
@@ -729,6 +754,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           Value<String?> stackingPattern = const Value.absent(),
           Value<String?> location = const Value.absent(),
           bool? hasShipped,
+          bool? tsRequired,
           Value<String?> remark = const Value.absent(),
           DateTime? createdAt,
           Value<DateTime?> updatedAt = const Value.absent()}) =>
@@ -744,6 +770,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
             : this.stackingPattern,
         location: location.present ? location.value : this.location,
         hasShipped: hasShipped ?? this.hasShipped,
+        tsRequired: tsRequired ?? this.tsRequired,
         remark: remark.present ? remark.value : this.remark,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
@@ -767,6 +794,8 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       location: data.location.present ? data.location.value : this.location,
       hasShipped:
           data.hasShipped.present ? data.hasShipped.value : this.hasShipped,
+      tsRequired:
+          data.tsRequired.present ? data.tsRequired.value : this.tsRequired,
       remark: data.remark.present ? data.remark.value : this.remark,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -785,6 +814,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           ..write('stackingPattern: $stackingPattern, ')
           ..write('location: $location, ')
           ..write('hasShipped: $hasShipped, ')
+          ..write('tsRequired: $tsRequired, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -803,6 +833,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       stackingPattern,
       location,
       hasShipped,
+      tsRequired,
       remark,
       createdAt,
       updatedAt);
@@ -819,6 +850,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           other.stackingPattern == this.stackingPattern &&
           other.location == this.location &&
           other.hasShipped == this.hasShipped &&
+          other.tsRequired == this.tsRequired &&
           other.remark == this.remark &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -834,6 +866,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
   final Value<String?> stackingPattern;
   final Value<String?> location;
   final Value<bool> hasShipped;
+  final Value<bool> tsRequired;
   final Value<String?> remark;
   final Value<DateTime> createdAt;
   final Value<DateTime?> updatedAt;
@@ -847,6 +880,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     this.stackingPattern = const Value.absent(),
     this.location = const Value.absent(),
     this.hasShipped = const Value.absent(),
+    this.tsRequired = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -861,6 +895,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     this.stackingPattern = const Value.absent(),
     this.location = const Value.absent(),
     this.hasShipped = const Value.absent(),
+    this.tsRequired = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -879,6 +914,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     Expression<String>? stackingPattern,
     Expression<String>? location,
     Expression<bool>? hasShipped,
+    Expression<bool>? tsRequired,
     Expression<String>? remark,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -893,6 +929,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       if (stackingPattern != null) 'stacking_pattern': stackingPattern,
       if (location != null) 'location': location,
       if (hasShipped != null) 'has_shipped': hasShipped,
+      if (tsRequired != null) 'ts_required': tsRequired,
       if (remark != null) 'remark': remark,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -909,6 +946,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       Value<String?>? stackingPattern,
       Value<String?>? location,
       Value<bool>? hasShipped,
+      Value<bool>? tsRequired,
       Value<String?>? remark,
       Value<DateTime>? createdAt,
       Value<DateTime?>? updatedAt}) {
@@ -922,6 +960,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       stackingPattern: stackingPattern ?? this.stackingPattern,
       location: location ?? this.location,
       hasShipped: hasShipped ?? this.hasShipped,
+      tsRequired: tsRequired ?? this.tsRequired,
       remark: remark ?? this.remark,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -958,6 +997,9 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     if (hasShipped.present) {
       map['has_shipped'] = Variable<bool>(hasShipped.value);
     }
+    if (tsRequired.present) {
+      map['ts_required'] = Variable<bool>(tsRequired.value);
+    }
     if (remark.present) {
       map['remark'] = Variable<String>(remark.value);
     }
@@ -982,6 +1024,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
           ..write('stackingPattern: $stackingPattern, ')
           ..write('location: $location, ')
           ..write('hasShipped: $hasShipped, ')
+          ..write('tsRequired: $tsRequired, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -2648,6 +2691,7 @@ typedef $$BatchesTableCreateCompanionBuilder = BatchesCompanion Function({
   Value<String?> stackingPattern,
   Value<String?> location,
   Value<bool> hasShipped,
+  Value<bool> tsRequired,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -2662,6 +2706,7 @@ typedef $$BatchesTableUpdateCompanionBuilder = BatchesCompanion Function({
   Value<String?> stackingPattern,
   Value<String?> location,
   Value<bool> hasShipped,
+  Value<bool> tsRequired,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -2749,6 +2794,9 @@ class $$BatchesTableFilterComposer
 
   ColumnFilters<bool> get hasShipped => $composableBuilder(
       column: $table.hasShipped, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get tsRequired => $composableBuilder(
+      column: $table.tsRequired, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnFilters(column));
@@ -2858,6 +2906,9 @@ class $$BatchesTableOrderingComposer
   ColumnOrderings<bool> get hasShipped => $composableBuilder(
       column: $table.hasShipped, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get tsRequired => $composableBuilder(
+      column: $table.tsRequired, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnOrderings(column));
 
@@ -2920,6 +2971,9 @@ class $$BatchesTableAnnotationComposer
 
   GeneratedColumn<bool> get hasShipped => $composableBuilder(
       column: $table.hasShipped, builder: (column) => column);
+
+  GeneratedColumn<bool> get tsRequired => $composableBuilder(
+      column: $table.tsRequired, builder: (column) => column);
 
   GeneratedColumn<String> get remark =>
       $composableBuilder(column: $table.remark, builder: (column) => column);
@@ -3026,6 +3080,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             Value<String?> stackingPattern = const Value.absent(),
             Value<String?> location = const Value.absent(),
             Value<bool> hasShipped = const Value.absent(),
+            Value<bool> tsRequired = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -3040,6 +3095,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             stackingPattern: stackingPattern,
             location: location,
             hasShipped: hasShipped,
+            tsRequired: tsRequired,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -3054,6 +3110,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             Value<String?> stackingPattern = const Value.absent(),
             Value<String?> location = const Value.absent(),
             Value<bool> hasShipped = const Value.absent(),
+            Value<bool> tsRequired = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -3068,6 +3125,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             stackingPattern: stackingPattern,
             location: location,
             hasShipped: hasShipped,
+            tsRequired: tsRequired,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,

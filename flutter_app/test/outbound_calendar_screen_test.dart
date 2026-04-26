@@ -103,7 +103,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('订单信息'), findsWidgets);
-    expect(find.text('2026.4.26'), findsWidgets);
+    expect(find.textContaining('2026.4.26'), findsWidgets);
     expect(find.text('168220019125'), findsOneWidget);
   });
 }

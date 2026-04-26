@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 
 import '../app_database.dart';
+import '../data_change_notifier.dart';
 import 'stock_dao.dart';
 
 class OrderDao {
@@ -14,8 +15,8 @@ class OrderDao {
     required String merchantName,
     required DateTime orderDate,
     String? remark,
-  }) {
-    return _database.into(_database.orders).insert(
+  }) async {
+    final id = await _database.into(_database.orders).insert(
           OrdersCompanion.insert(
             waybillNo: waybillNo,
             merchantName: merchantName,
@@ -23,6 +24,8 @@ class OrderDao {
             remark: Value.absentIfNull(remark),
           ),
         );
+    DataChangeNotifier.instance.emit(DataChangeKind.orders);
+    return id;
   }
 
   Future<int> addOrderItem({
@@ -89,8 +92,9 @@ class OrderDao {
       OrdersCompanion(
         status: Value(status),
         updatedAt: Value(DateTime.now()),
-      ),
-    );
+        ),
+      );
+    DataChangeNotifier.instance.emit(DataChangeKind.orders);
   }
 
   Future<List<String>> recentMerchantNames({int limit = 10}) async {
@@ -191,12 +195,22 @@ class OrderDao {
     final items = await (_database.select(_database.orderItems)
           ..where((table) => table.orderId.isIn(orderIds)))
         .get();
+    final batchIds = items.map((item) => item.batchId).toSet().toList();
+    final batches = batchIds.isEmpty
+        ? const <BatchRecord>[]
+        : await (_database.select(_database.batches)
+              ..where((table) => table.id.isIn(batchIds)))
+            .get();
+    final batchTsById = {
+      for (final batch in batches) batch.id: batch.tsRequired
+    };
     final statByOrderId = <int, _OrderItemStats>{};
     for (final item in items) {
+      final tsRequired = batchTsById[item.batchId] ?? false;
       statByOrderId.update(
         item.orderId,
-        (value) => value.add(item.boxes),
-        ifAbsent: () => _OrderItemStats(item.boxes),
+        (value) => value.add(item.boxes, tsRequired: tsRequired),
+        ifAbsent: () => _OrderItemStats(item.boxes, tsRequired: tsRequired),
       );
     }
     final summaries = <OrderSummary>[];
@@ -211,6 +225,7 @@ class OrderDao {
           status: order.status,
           itemCount: stats?.count ?? 0,
           totalBoxes: stats?.totalBoxes ?? 0,
+          hasTsRequired: stats?.hasTsRequired ?? false,
         ),
       );
     }
@@ -283,6 +298,7 @@ class OrderSummary {
     required this.status,
     required this.itemCount,
     required this.totalBoxes,
+    required this.hasTsRequired,
   });
 
   final int id;
@@ -292,6 +308,7 @@ class OrderSummary {
   final OrderStatus status;
   final int itemCount;
   final int totalBoxes;
+  final bool hasTsRequired;
 
   String get dateText =>
       '${orderDate.year}.${orderDate.month}.${orderDate.day}';
@@ -330,14 +347,17 @@ class OrderDetailLine {
 }
 
 class _OrderItemStats {
-  _OrderItemStats(this.totalBoxes);
+  _OrderItemStats(this.totalBoxes, {required bool tsRequired})
+      : hasTsRequired = tsRequired;
 
   int count = 1;
   int totalBoxes;
+  bool hasTsRequired;
 
-  _OrderItemStats add(int boxes) {
+  _OrderItemStats add(int boxes, {required bool tsRequired}) {
     count += 1;
     totalBoxes += boxes;
+    hasTsRequired = hasTsRequired || tsRequired;
     return this;
   }
 }

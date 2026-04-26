@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
+import '../data_change_notifier.dart';
 
 class StockDao {
   StockDao(this._database);
@@ -47,6 +48,7 @@ class StockDao {
         ),
       );
     }
+    DataChangeNotifier.instance.emit(DataChangeKind.inventory);
     return movementId;
   }
 
@@ -65,25 +67,31 @@ class StockDao {
   }
 
   Future<int> totalInventoryPieces() async {
-    final batches = await _database.select(_database.batches).get();
-    if (batches.isEmpty) {
-      return 0;
-    }
-    final batchIds = batches.map((batch) => batch.id).toList();
-    final productIds = batches.map((batch) => batch.productId).toSet().toList();
-    final productsById = await _productsByIds(productIds);
-    final deltas = await _movementDeltasByBatchIds(batchIds);
-
-    var total = 0;
-    for (final batch in batches) {
-      final product = productsById[batch.productId];
-      if (product == null) {
-        continue;
-      }
-      final boxes = batch.initialBoxes + (deltas[batch.id] ?? 0);
-      total += boxes * product.piecesPerBox;
-    }
-    return total;
+    final movementDeltaSql = '''
+      COALESCE(SUM(CASE
+        WHEN type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+          THEN boxes
+        ELSE -boxes
+      END), 0)
+    ''';
+    final row = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM((b.initial_boxes + COALESCE(m.delta_boxes, 0)) * p.pieces_per_box), 0) AS total_pieces
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      LEFT JOIN (
+        SELECT batch_id, $movementDeltaSql AS delta_boxes
+        FROM stock_movements
+        GROUP BY batch_id
+      ) m ON m.batch_id = b.id
+      ''',
+      readsFrom: {
+        _database.batches,
+        _database.products,
+        _database.stockMovements,
+      },
+    ).getSingleOrNull();
+    return (row?.data['total_pieces'] as int?) ?? 0;
   }
 
   Future<List<InventoryDetailRow>> inventoryDetailRows() async {
@@ -116,6 +124,7 @@ class StockDao {
       );
     }
 
+    rows.sort(_compareRowsByProductAndDate);
     return rows;
   }
 
@@ -150,6 +159,28 @@ class StockDao {
       END), 0)
     ''';
     final currentBoxesSql = '(b.initial_boxes + $movementDeltaSql)';
+    const dateRestSql = "substr(b.date_batch, instr(b.date_batch, '.') + 1)";
+    const dateYearSql = '''
+      CASE
+        WHEN instr(b.date_batch, '.') > 0
+          THEN CAST(substr(b.date_batch, 1, instr(b.date_batch, '.') - 1) AS INTEGER)
+        ELSE 0
+      END
+    ''';
+    const dateMonthSql = '''
+      CASE
+        WHEN instr(b.date_batch, '.') > 0 AND instr($dateRestSql, '.') > 0
+          THEN CAST(substr($dateRestSql, 1, instr($dateRestSql, '.') - 1) AS INTEGER)
+        ELSE 0
+      END
+    ''';
+    const dateDaySql = '''
+      CASE
+        WHEN instr(b.date_batch, '.') > 0 AND instr($dateRestSql, '.') > 0
+          THEN CAST(substr($dateRestSql, instr($dateRestSql, '.') + 1) AS INTEGER)
+        ELSE 0
+      END
+    ''';
 
     switch (stockFilter) {
       case InventoryStockFilter.all:
@@ -162,12 +193,14 @@ class StockDao {
         break;
     }
 
-    final whereSql = whereParts.isEmpty ? '' : 'WHERE ${whereParts.join(' AND ')}';
+    final whereSql =
+        whereParts.isEmpty ? '' : 'WHERE ${whereParts.join(' AND ')}';
     final havingSql =
         havingParts.isEmpty ? '' : 'HAVING ${havingParts.join(' AND ')}';
 
-    final countRows = await _database.customSelect(
-      '''
+    final countRows = await _database
+        .customSelect(
+          '''
       SELECT COUNT(*) AS c
       FROM (
         SELECT b.id
@@ -175,26 +208,29 @@ class StockDao {
         INNER JOIN products p ON p.id = b.product_id
         LEFT JOIN stock_movements m ON m.batch_id = b.id
         $whereSql
-        GROUP BY b.id, b.initial_boxes, b.created_at
+        GROUP BY b.id, b.initial_boxes, b.created_at, p.code, b.date_batch
         $havingSql
       ) t
       ''',
-      variables: countVars,
-      readsFrom: {
-        _database.batches,
-        _database.products,
-        _database.stockMovements,
-      },
-    ).getSingle();
+          variables: countVars,
+          readsFrom: {
+            _database.batches,
+            _database.products,
+            _database.stockMovements,
+          },
+        )
+        .getSingle();
     final total = (countRows.data['c'] as int?) ?? 0;
     if (total == 0) {
-      return const PagedInventoryDetailRows(rows: <InventoryDetailRow>[], total: 0);
+      return const PagedInventoryDetailRows(
+          rows: <InventoryDetailRow>[], total: 0);
     }
 
     vars.add(Variable.withInt(limit));
     vars.add(Variable.withInt(offset));
-    final pageRows = await _database.customSelect(
-      '''
+    final pageRows = await _database
+        .customSelect(
+          '''
       SELECT
         b.id AS batch_id,
         $currentBoxesSql AS current_boxes
@@ -202,20 +238,27 @@ class StockDao {
       INNER JOIN products p ON p.id = b.product_id
       LEFT JOIN stock_movements m ON m.batch_id = b.id
       $whereSql
-      GROUP BY b.id, b.initial_boxes, b.created_at
+      GROUP BY b.id, b.initial_boxes, b.created_at, p.code, b.date_batch
       $havingSql
-      ORDER BY b.created_at DESC
+      ORDER BY
+        p.code ASC,
+        $dateYearSql ASC,
+        $dateMonthSql ASC,
+        $dateDaySql ASC,
+        b.created_at ASC
       LIMIT ? OFFSET ?
       ''',
-      variables: vars,
-      readsFrom: {
-        _database.batches,
-        _database.products,
-        _database.stockMovements,
-      },
-    ).get();
+          variables: vars,
+          readsFrom: {
+            _database.batches,
+            _database.products,
+            _database.stockMovements,
+          },
+        )
+        .get();
     if (pageRows.isEmpty) {
-      return PagedInventoryDetailRows(rows: const <InventoryDetailRow>[], total: total);
+      return PagedInventoryDetailRows(
+          rows: const <InventoryDetailRow>[], total: total);
     }
 
     final orderedBatchIds = <int>[];
@@ -257,6 +300,121 @@ class StockDao {
     }
 
     return PagedInventoryDetailRows(rows: rows, total: total);
+  }
+
+  Future<List<InventoryGroupSummary>> inventoryGroupSummaries({
+    String queryText = '',
+    InventoryStockFilter stockFilter = InventoryStockFilter.all,
+  }) async {
+    final normalized = queryText.trim().toLowerCase();
+    final whereParts = <String>[];
+    final havingParts = <String>[];
+    final vars = <Variable<Object>>[];
+
+    if (normalized.isNotEmpty) {
+      whereParts.add(
+        '(LOWER(p.code) LIKE ? OR LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)',
+      );
+      final pattern = '%$normalized%';
+      for (var i = 0; i < 3; i += 1) {
+        vars.add(Variable.withString(pattern));
+      }
+    }
+
+    final movementDeltaSql = '''
+      COALESCE(SUM(CASE
+        WHEN m.type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+          THEN m.boxes
+        ELSE -m.boxes
+      END), 0)
+    ''';
+    final currentBoxesSql = '(b.initial_boxes + $movementDeltaSql)';
+
+    switch (stockFilter) {
+      case InventoryStockFilter.all:
+        break;
+      case InventoryStockFilter.inStock:
+        havingParts.add('$currentBoxesSql > 0');
+        break;
+      case InventoryStockFilter.zero:
+        havingParts.add('$currentBoxesSql = 0');
+        break;
+    }
+
+    final whereSql =
+        whereParts.isEmpty ? '' : 'WHERE ${whereParts.join(' AND ')}';
+    final havingSql =
+        havingParts.isEmpty ? '' : 'HAVING ${havingParts.join(' AND ')}';
+
+    final rows = await _database
+        .customSelect(
+          '''
+      SELECT
+        t.code AS product_code,
+        SUM(t.current_boxes) AS total_boxes,
+        SUM(t.current_boxes * t.pieces_per_box) AS total_pieces
+      FROM (
+        SELECT
+          b.id AS batch_id,
+          p.code AS code,
+          p.pieces_per_box AS pieces_per_box,
+          $currentBoxesSql AS current_boxes
+        FROM batches b
+        INNER JOIN products p ON p.id = b.product_id
+        LEFT JOIN stock_movements m ON m.batch_id = b.id
+        $whereSql
+        GROUP BY b.id, b.initial_boxes, p.code, p.pieces_per_box
+        $havingSql
+      ) t
+      GROUP BY t.code
+      ORDER BY t.code ASC
+      ''',
+          variables: vars,
+          readsFrom: {
+            _database.batches,
+            _database.products,
+            _database.stockMovements,
+          },
+        )
+        .get();
+
+    return rows
+        .map(
+          (row) => InventoryGroupSummary(
+            productCode: row.data['product_code'] as String? ?? '',
+            totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
+            totalPieces: (row.data['total_pieces'] as int?) ?? 0,
+          ),
+        )
+        .where((summary) => summary.productCode.isNotEmpty)
+        .toList();
+  }
+
+  int _compareRowsByProductAndDate(InventoryDetailRow a, InventoryDetailRow b) {
+    final codeCompare = a.product.code.compareTo(b.product.code);
+    if (codeCompare != 0) {
+      return codeCompare;
+    }
+    final aDate = _parseDateBatch(a.batch.dateBatch);
+    final bDate = _parseDateBatch(b.batch.dateBatch);
+    for (var i = 0; i < 3; i += 1) {
+      final compare = aDate[i].compareTo(bDate[i]);
+      if (compare != 0) {
+        return compare;
+      }
+    }
+    return a.batch.createdAt.compareTo(b.batch.createdAt);
+  }
+
+  List<int> _parseDateBatch(String dateBatch) {
+    final parts = dateBatch.split('.');
+    if (parts.length != 3) {
+      return const [9999, 99, 99];
+    }
+    final year = int.tryParse(parts[0]) ?? 9999;
+    final month = int.tryParse(parts[1]) ?? 99;
+    final day = int.tryParse(parts[2]) ?? 99;
+    return [year, month, day];
   }
 
   Future<Map<int, Product>> _productsByIds(List<int> productIds) async {
@@ -331,6 +489,18 @@ class PagedInventoryDetailRows {
 
   final List<InventoryDetailRow> rows;
   final int total;
+}
+
+class InventoryGroupSummary {
+  const InventoryGroupSummary({
+    required this.productCode,
+    required this.totalBoxes,
+    required this.totalPieces,
+  });
+
+  final String productCode;
+  final int totalBoxes;
+  final int totalPieces;
 }
 
 enum InventoryStockFilter { all, inStock, zero }

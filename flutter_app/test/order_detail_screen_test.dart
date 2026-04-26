@@ -44,6 +44,7 @@ void main() {
       actualBatch: 'FCHBLEZ',
       dateBatch: '2029.9.7',
       initialBoxes: 100,
+      tsRequired: true,
     );
     return orderDao.createPendingWaybill(
       waybillNo: '168220019125',
@@ -71,6 +72,7 @@ void main() {
     expect(find.text('72067 · FCHBLEZ · 2029.9.7'), findsOneWidget);
     expect(find.text('20箱'), findsWidgets);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
+    expect(find.text('TS'), findsOneWidget);
 
     await tester.tap(find.text('已拣货'));
     await tester.pumpAndSettle();
