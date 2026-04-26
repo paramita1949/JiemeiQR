@@ -26,14 +26,13 @@ class QrScanApp extends StatefulWidget {
 class _QrScanAppState extends State<QrScanApp> {
   late AppDatabase _database;
   int _databaseVersion = 0;
+  bool _bootReady = false;
 
   @override
   void initState() {
     super.initState();
     _database = widget.database ?? AppDatabase();
-    if (widget.database == null) {
-      unawaited(_seedInBackground());
-    }
+    unawaited(_bootstrap());
   }
 
   @override
@@ -42,6 +41,24 @@ class _QrScanAppState extends State<QrScanApp> {
       _database.close();
     }
     super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    await Future.wait([
+      Future<void>.delayed(const Duration(milliseconds: 420)),
+      _warmUpDatabase(),
+    ]);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _bootReady = true);
+    if (widget.database == null) {
+      unawaited(_seedInBackground());
+    }
+  }
+
+  Future<void> _warmUpDatabase() async {
+    await _database.customSelect('SELECT 1;').getSingleOrNull();
   }
 
   Future<void> _seedInBackground() async {
@@ -69,12 +86,14 @@ class _QrScanAppState extends State<QrScanApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: HomeScreen(
-        key: ValueKey(_databaseVersion),
-        database: _database,
-        onPrepareImport: _prepareImport,
-        onImportCompleted: _importCompleted,
-      ),
+      home: _bootReady
+          ? HomeScreen(
+              key: ValueKey(_databaseVersion),
+              database: _database,
+              onPrepareImport: _prepareImport,
+              onImportCompleted: _importCompleted,
+            )
+          : const _AppBootScreen(),
     );
   }
 
@@ -90,9 +109,38 @@ class _QrScanAppState extends State<QrScanApp> {
       return;
     }
     _database = AppDatabase();
+    await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
     if (!mounted) {
       return;
     }
     setState(() => _databaseVersion += 1);
+  }
+}
+
+class _AppBootScreen extends StatelessWidget {
+  const _AppBootScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFFF5F8FF),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(strokeWidth: 2.4),
+            SizedBox(height: 14),
+            Text(
+              '正在加载洁美…',
+              style: TextStyle(
+                color: Color(0xFF475569),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -37,6 +37,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: assets/icon/liushen-appicon-1024.png
-  adaptive_icon_background: "#0B8B64"
+  image_path: assets/icon/liushen-foreground-1024.png
+  adaptive_icon_background: "#00000000"
   adaptive_icon_foreground: assets/icon/liushen-foreground-1024.png

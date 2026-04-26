@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/data_change_notifier.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 
 class EmbeddedStockSeedService {
@@ -23,48 +25,54 @@ class EmbeddedStockSeedService {
     }
 
     final raw = await (assetBundle ?? rootBundle).loadString(seedAssetPath);
-    final payload = jsonDecode(raw);
-    if (payload is! List) {
-      return false;
-    }
-    final rows = payload
-        .whereType<Map<String, dynamic>>()
-        .map(EmbeddedSeedRow.fromJson)
-        .toList();
+    final rows = await compute(_parseSeedRows, raw);
     if (rows.isEmpty) {
       return false;
     }
 
     final productDao = ProductDao(_database);
-    await _database.transaction(() async {
-      final productIdByCode = <String, int>{};
-      for (final row in rows) {
-        if (row.currentBoxes <= 0) {
-          continue;
+    await DataChangeNotifier.instance.runInBatch(() async {
+      await _database.transaction(() async {
+        final productIdByCode = <String, int>{};
+        for (final row in rows) {
+          if (row.currentBoxes <= 0) {
+            continue;
+          }
+          final productId = productIdByCode[row.code] ??
+              await productDao.createProduct(
+                code: row.code,
+                name: row.name,
+                boxesPerBoard: row.boxesPerBoard,
+                piecesPerBox: row.piecesPerBox,
+              );
+          productIdByCode[row.code] = productId;
+          await productDao.createBatch(
+            productId: productId,
+            actualBatch: row.actualBatch,
+            dateBatch: row.dateBatch,
+            initialBoxes: row.currentBoxes,
+            boxesPerBoard: row.boxesPerBoard,
+            tsRequired: false,
+            location: '浙江仓',
+            remark: '内置库存',
+          );
         }
-        final productId = productIdByCode[row.code] ??
-            await productDao.createProduct(
-              code: row.code,
-              name: row.name,
-              boxesPerBoard: row.boxesPerBoard,
-              piecesPerBox: row.piecesPerBox,
-            );
-        productIdByCode[row.code] = productId;
-        await productDao.createBatch(
-          productId: productId,
-          actualBatch: row.actualBatch,
-          dateBatch: row.dateBatch,
-          initialBoxes: row.currentBoxes,
-          boxesPerBoard: row.boxesPerBoard,
-          tsRequired: false,
-          location: '浙江仓',
-          remark: '内置库存',
-        );
-      }
+      });
     });
 
     return true;
   }
+}
+
+List<EmbeddedSeedRow> _parseSeedRows(String raw) {
+  final payload = jsonDecode(raw);
+  if (payload is! List) {
+    return const <EmbeddedSeedRow>[];
+  }
+  return payload
+      .whereType<Map<String, dynamic>>()
+      .map(EmbeddedSeedRow.fromJson)
+      .toList();
 }
 
 class EmbeddedSeedRow {

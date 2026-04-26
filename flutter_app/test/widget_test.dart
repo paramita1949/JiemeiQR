@@ -93,6 +93,7 @@ void main() {
 
   testWidgets('home action opens LAN transfer page', (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('局域网迁移'));
     await tester.pumpAndSettle();
@@ -104,6 +105,7 @@ void main() {
 
   testWidgets('QR home action opens QR entry screen', (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('QR箱码'));
     await tester.pumpAndSettle();
@@ -118,6 +120,7 @@ void main() {
   testWidgets('base info home action opens base info entry screen',
       (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('基础资料'));
     await tester.pumpAndSettle();
@@ -131,6 +134,7 @@ void main() {
   testWidgets('inventory home action opens inventory detail screen',
       (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('库存明细'));
     await tester.pump();
@@ -142,6 +146,7 @@ void main() {
 
   testWidgets('orders home action opens order list screen', (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('订单信息'));
     await tester.pump();
@@ -155,6 +160,7 @@ void main() {
   testWidgets('calendar home action opens outbound calendar screen',
       (tester) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('出库日历'));
     await tester.pump();

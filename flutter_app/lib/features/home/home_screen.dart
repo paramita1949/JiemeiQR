@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   _HomeStats? _stats;
   bool _loadingStats = true;
   StreamSubscription<DataChangeKind>? _changeSubscription;
+  Timer? _refreshDebounce;
 
   @override
   void initState() {
@@ -49,7 +50,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      unawaited(_refreshStats());
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(const Duration(milliseconds: 120), () {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_refreshStats());
+      });
     });
   }
 
@@ -57,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _changeSubscription?.cancel();
+    _refreshDebounce?.cancel();
     if (_ownsDatabase) {
       _database.close();
     }
