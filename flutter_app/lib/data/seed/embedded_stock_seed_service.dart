@@ -2,9 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
-import 'package:qrscan_flutter/data/data_change_notifier.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
-import 'package:qrscan_flutter/shared/utils/startup_trace.dart';
 
 class EmbeddedStockSeedService {
   const EmbeddedStockSeedService(
@@ -18,59 +16,45 @@ class EmbeddedStockSeedService {
   static const String seedAssetPath = 'assets/seed/embedded_stock_seed.json';
 
   Future<bool> seedIfDatabaseEmpty() async {
-    StartupTrace.mark('seedIfDatabaseEmpty enter');
     final existingProduct =
         await _database.select(_database.products).getSingleOrNull();
     if (existingProduct != null) {
-      StartupTrace.mark('seedIfDatabaseEmpty skip (products already exist)');
       return false;
     }
 
-    final raw = await StartupTrace.time(
-      'seed.loadString',
-      () => (assetBundle ?? rootBundle).loadString(seedAssetPath),
-    );
-    final rows = await StartupTrace.time(
-      'seed.parse json',
-      () async => _parseSeedRows(raw),
-    );
+    final raw = await (assetBundle ?? rootBundle).loadString(seedAssetPath);
+    final rows = _parseSeedRows(raw);
     if (rows.isEmpty) {
-      StartupTrace.mark('seed rows empty');
       return false;
     }
 
     final productDao = ProductDao(_database);
-    await StartupTrace.time('seed.insert transaction', () async {
-      await DataChangeNotifier.instance.runInBatch(() async {
-        await _database.transaction(() async {
-          final productIdByCode = <String, int>{};
-          for (final row in rows) {
-            if (row.currentBoxes <= 0) {
-              continue;
-            }
-            final productId = productIdByCode[row.code] ??
-                await productDao.createProduct(
-                  code: row.code,
-                  name: row.name,
-                  boxesPerBoard: row.boxesPerBoard,
-                  piecesPerBox: row.piecesPerBox,
-                );
-            productIdByCode[row.code] = productId;
-            await productDao.createBatch(
-              productId: productId,
-              actualBatch: row.actualBatch,
-              dateBatch: row.dateBatch,
-              initialBoxes: row.currentBoxes,
+    await _database.transaction(() async {
+      final productIdByCode = <String, int>{};
+      for (final row in rows) {
+        if (row.currentBoxes <= 0) {
+          continue;
+        }
+        final productId = productIdByCode[row.code] ??
+            await productDao.createProduct(
+              code: row.code,
+              name: row.name,
               boxesPerBoard: row.boxesPerBoard,
-              tsRequired: false,
-              location: '浙江仓',
-              remark: '内置库存',
+              piecesPerBox: row.piecesPerBox,
             );
-          }
-        });
-      });
+        productIdByCode[row.code] = productId;
+        await productDao.createBatch(
+          productId: productId,
+          actualBatch: row.actualBatch,
+          dateBatch: row.dateBatch,
+          initialBoxes: row.currentBoxes,
+          boxesPerBoard: row.boxesPerBoard,
+          tsRequired: false,
+          location: '浙江仓',
+          remark: '内置库存',
+        );
+      }
     });
-    StartupTrace.mark('seed insert completed');
 
     return true;
   }

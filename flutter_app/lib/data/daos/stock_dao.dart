@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../data_change_notifier.dart';
 
 class StockDao {
   StockDao(this._database);
@@ -48,7 +47,6 @@ class StockDao {
         ),
       );
     }
-    DataChangeNotifier.instance.emit(DataChangeKind.inventory);
     return movementId;
   }
 

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
-import 'package:qrscan_flutter/data/data_change_notifier.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
@@ -12,7 +11,6 @@ import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
-import 'package:qrscan_flutter/shared/utils/startup_trace.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -37,42 +35,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final bool _ownsDatabase;
   _HomeStats? _stats;
   bool _loadingStats = true;
-  StreamSubscription<DataChangeKind>? _changeSubscription;
-  Timer? _refreshDebounce;
 
   @override
   void initState() {
     super.initState();
-    StartupTrace.mark('HomeScreen.initState');
     WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      StartupTrace.mark('HomeScreen first post-frame -> refresh stats');
-      unawaited(_refreshStats());
-    });
-    _changeSubscription = DataChangeNotifier.instance.stream.listen((_) {
-      if (!mounted) {
-        return;
-      }
-      _refreshDebounce?.cancel();
-      _refreshDebounce = Timer(const Duration(milliseconds: 120), () {
-        if (!mounted) {
-          return;
-        }
-        unawaited(_refreshStats());
-      });
-    });
+    unawaited(_refreshStats());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _changeSubscription?.cancel();
-    _refreshDebounce?.cancel();
     if (_ownsDatabase) {
       _database.close();
     }
@@ -196,16 +171,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   AppDatabase get database => _database;
 
   Future<_HomeStats> _loadStats() async {
-    final totalPieces = await StartupTrace.time('home.totalInventoryPieces', () {
-      final stockDao = StockDao(_database);
-      return stockDao.totalInventoryPieces();
-    });
+    final stockDao = StockDao(_database);
+    final totalPieces = await stockDao.totalInventoryPieces();
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
-    final countsRow = await StartupTrace.time(
-      'home.orderCountAggregateQuery',
-      () => _database.customSelect(
+    final countsRow = await _database.customSelect(
         '''
       SELECT
         COUNT(*) AS total_count,
@@ -218,8 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Variable.withDateTime(todayStart),
           Variable.withDateTime(todayEnd),
         ],
-      ).getSingleOrNull(),
-    );
+      ).getSingleOrNull();
     final countsData = countsRow?.data ?? const <String, Object?>{};
     final totalOrders = (countsData['total_count'] as int?) ?? 0;
     final pendingOrders = (countsData['pending_count'] as int?) ?? 0;
@@ -235,8 +205,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _refreshStats() async {
     try {
-      final stats =
-          await StartupTrace.time('HomeScreen._refreshStats', _loadStats);
+      final stats = await _loadStats();
       if (!mounted) {
         return;
       }
@@ -245,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _loadingStats = false;
       });
     } catch (error) {
-      StartupTrace.mark('HomeScreen._refreshStats failed: $error');
+      debugPrint('home refresh failed: $error');
       if (!mounted) {
         return;
       }

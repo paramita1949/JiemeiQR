@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../data_change_notifier.dart';
 
 class ProductDao {
   ProductDao(this._database);
@@ -30,7 +29,6 @@ class ProductDao {
           updatedAt: Value(DateTime.now()),
         ),
       );
-      DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
       return existing.id;
     }
     final id = await _database.into(_database.products).insert(
@@ -41,7 +39,6 @@ class ProductDao {
             piecesPerBox: piecesPerBox,
           ),
         );
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
     return id;
   }
 
@@ -76,7 +73,6 @@ class ProductDao {
     if (tsRequired) {
       await _syncProductTsRequired(productId: productId, tsRequired: true);
     }
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
     return batchId;
   }
 
@@ -135,14 +131,12 @@ class ProductDao {
     await (_database.delete(_database.batches)
           ..where((table) => table.id.equals(batchId)))
         .go();
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   Future<void> deleteProduct(int productId) async {
     await (_database.delete(_database.products)
           ..where((table) => table.id.equals(productId)))
         .go();
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   Future<void> updateBatchRemark(int batchId, String? remark) async {
@@ -154,7 +148,6 @@ class ProductDao {
         updatedAt: Value(DateTime.now()),
       ),
     );
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   Future<bool> hasTsRequiredBatches(int productId) async {
@@ -280,7 +273,6 @@ class ProductDao {
         );
       }
     });
-    DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
   }
 
   int _movementDelta(StockMovement movement) {

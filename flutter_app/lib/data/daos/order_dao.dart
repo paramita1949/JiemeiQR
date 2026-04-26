@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 
 import '../app_database.dart';
-import '../data_change_notifier.dart';
 import 'stock_dao.dart';
 
 class OrderDao {
@@ -24,7 +23,6 @@ class OrderDao {
             remark: Value.absentIfNull(remark),
           ),
         );
-    DataChangeNotifier.instance.emit(DataChangeKind.orders);
     return id;
   }
 
@@ -94,7 +92,6 @@ class OrderDao {
         updatedAt: Value(DateTime.now()),
         ),
       );
-    DataChangeNotifier.instance.emit(DataChangeKind.orders);
   }
 
   Future<List<String>> recentMerchantNames({int limit = 10}) async {
