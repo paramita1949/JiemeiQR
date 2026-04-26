@@ -40,7 +40,6 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   bool _loadingMore = false;
   int _queryVersion = 0;
   Timer? _filterDebounce;
-  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
@@ -50,16 +49,11 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     _stockDao = StockDao(_database);
     _productDao = ProductDao(_database);
     _refreshRows(refreshTotals: true);
-    _autoRefreshTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _refreshRows(refreshTotals: true),
-    );
   }
 
   @override
   void dispose() {
     _filterDebounce?.cancel();
-    _autoRefreshTimer?.cancel();
     _filterController.dispose();
     if (_ownsDatabase) {
       _database.close();

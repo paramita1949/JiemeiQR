@@ -12,6 +12,7 @@ import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/startup_trace.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -42,10 +43,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    StartupTrace.mark('HomeScreen.initState');
     WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
-    _refreshStats();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      StartupTrace.mark('HomeScreen first post-frame -> refresh stats');
+      unawaited(_refreshStats());
+    });
     _changeSubscription = DataChangeNotifier.instance.stream.listen((_) {
       if (!mounted) {
         return;
@@ -188,25 +196,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   AppDatabase get database => _database;
 
   Future<_HomeStats> _loadStats() async {
-    final stockDao = StockDao(_database);
-    final totalPieces = await stockDao.totalInventoryPieces();
+    final totalPieces = await StartupTrace.time('home.totalInventoryPieces', () {
+      final stockDao = StockDao(_database);
+      return stockDao.totalInventoryPieces();
+    });
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
-    final countsRow = await _database.customSelect(
-      '''
+    final countsRow = await StartupTrace.time(
+      'home.orderCountAggregateQuery',
+      () => _database.customSelect(
+        '''
       SELECT
         COUNT(*) AS total_count,
         SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending_count,
         SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS today_new_count
       FROM orders
       ''',
-      variables: [
-        Variable.withInt(OrderStatus.pending.index),
-        Variable.withDateTime(todayStart),
-        Variable.withDateTime(todayEnd),
-      ],
-    ).getSingleOrNull();
+        variables: [
+          Variable.withInt(OrderStatus.pending.index),
+          Variable.withDateTime(todayStart),
+          Variable.withDateTime(todayEnd),
+        ],
+      ).getSingleOrNull(),
+    );
     final countsData = countsRow?.data ?? const <String, Object?>{};
     final totalOrders = (countsData['total_count'] as int?) ?? 0;
     final pendingOrders = (countsData['pending_count'] as int?) ?? 0;
@@ -221,14 +234,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshStats() async {
-    final stats = await _loadStats();
-    if (!mounted) {
-      return;
+    try {
+      final stats =
+          await StartupTrace.time('HomeScreen._refreshStats', _loadStats);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _stats = stats;
+        _loadingStats = false;
+      });
+    } catch (error) {
+      StartupTrace.mark('HomeScreen._refreshStats failed: $error');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingStats = false;
+      });
     }
-    setState(() {
-      _stats = stats;
-      _loadingStats = false;
-    });
   }
 }
 

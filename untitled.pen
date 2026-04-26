@@ -3605,7 +3605,7 @@
     },
     {
       "type": "frame",
-      "id": "no4UP",
+      "id": "r0tia",
       "x": 370,
       "y": 4854,
       "name": "JIEMEI V5 基础信息录入",
@@ -3619,7 +3619,7 @@
       "children": [
         {
           "type": "frame",
-          "id": "456PE",
+          "id": "z997C",
           "name": "top",
           "width": "fill_container",
           "justifyContent": "space_between",
@@ -3627,48 +3627,16 @@
           "children": [
             {
               "type": "text",
-              "id": "BHZQi",
+              "id": "peCEu",
               "fill": "#111827",
-              "content": "基础信息录入",
+              "content": "基础资料",
               "fontFamily": "Inter",
               "fontSize": 22,
               "fontWeight": "800"
             },
             {
               "type": "frame",
-              "id": "veXAM",
-              "fill": "#E5E7EB",
-              "cornerRadius": 8,
-              "gap": 4,
-              "padding": [
-                6,
-                10
-              ],
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "3Y1Qt",
-                  "width": 14,
-                  "height": 14,
-                  "iconFontName": "inventory_2",
-                  "iconFontFamily": "Material Symbols Rounded",
-                  "fill": "#4B5563"
-                },
-                {
-                  "type": "text",
-                  "id": "0CUww",
-                  "fill": "#4B5563",
-                  "content": "浙江仓",
-                  "fontFamily": "Inter",
-                  "fontSize": 11,
-                  "fontWeight": "700"
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "NiDSQ",
+              "id": "tAjCe",
               "name": "scanQuickIcon",
               "fill": "#DBEAFE",
               "cornerRadius": 8,
@@ -3682,7 +3650,7 @@
               "children": [
                 {
                   "type": "icon_font",
-                  "id": "xmydR",
+                  "id": "5wWr8",
                   "width": 16,
                   "height": 16,
                   "iconFontName": "qr_code_scanner",
@@ -3695,7 +3663,7 @@
         },
         {
           "type": "frame",
-          "id": "7OrQT",
+          "id": "VILcU",
           "name": "form",
           "width": "fill_container",
           "fill": "#FFFFFF",
@@ -3706,7 +3674,7 @@
           "children": [
             {
               "type": "frame",
-              "id": "jBTak",
+              "id": "pnN4l",
               "name": "section1",
               "width": "fill_container",
               "layout": "vertical",
@@ -3714,7 +3682,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "LDKt4",
+                  "id": "MGctO",
                   "fill": "#6B7280",
                   "content": "产品",
                   "fontFamily": "Inter",
@@ -3723,13 +3691,13 @@
                 },
                 {
                   "type": "frame",
-                  "id": "xrAyh",
+                  "id": "356bk",
                   "width": "fill_container",
                   "gap": 6,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "TJH9Q",
+                      "id": "uxjYo",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3740,7 +3708,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "56e7K",
+                          "id": "oXNVT",
                           "fill": "#111827",
                           "content": "编号 72067",
                           "fontFamily": "Inter",
@@ -3751,7 +3719,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "kcQg4",
+                      "id": "jma4B",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3762,7 +3730,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "lDfo6",
+                          "id": "LNnWu",
                           "fill": "#111827",
                           "content": "六神195ML",
                           "fontFamily": "Inter",
@@ -3777,7 +3745,7 @@
             },
             {
               "type": "frame",
-              "id": "KFwJK",
+              "id": "B7cis",
               "name": "section2",
               "width": "fill_container",
               "layout": "vertical",
@@ -3785,7 +3753,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "JHanj",
+                  "id": "bqq8m",
                   "fill": "#6B7280",
                   "content": "批号",
                   "fontFamily": "Inter",
@@ -3794,13 +3762,13 @@
                 },
                 {
                   "type": "frame",
-                  "id": "xQaRf",
+                  "id": "CqN1f",
                   "width": "fill_container",
                   "gap": 6,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "rsYnM",
+                      "id": "zwVVD",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3811,7 +3779,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "LnKg3",
+                          "id": "SYmRE",
                           "fill": "#111827",
                           "content": "FCGBKEZ",
                           "fontFamily": "Inter",
@@ -3822,7 +3790,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "sDepH",
+                      "id": "SZfsj",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3833,7 +3801,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "N5phY",
+                          "id": "b7uab",
                           "fill": "#111827",
                           "content": "2029-09-06",
                           "fontFamily": "Inter",
@@ -3848,7 +3816,7 @@
             },
             {
               "type": "frame",
-              "id": "jdAe8",
+              "id": "8zq7b",
               "name": "section3",
               "width": "fill_container",
               "layout": "vertical",
@@ -3856,7 +3824,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "MxtGk",
+                  "id": "aij3S",
                   "fill": "#6B7280",
                   "content": "库存与规格",
                   "fontFamily": "Inter",
@@ -3865,13 +3833,13 @@
                 },
                 {
                   "type": "frame",
-                  "id": "IaDUo",
+                  "id": "LiCyB",
                   "width": "fill_container",
                   "gap": 6,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "LO90G",
+                      "id": "e5Hb5",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3882,9 +3850,9 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "yI3IO",
+                          "id": "xLVpo",
                           "fill": "#111827",
-                          "content": "数量 55740",
+                          "content": "件数 55740",
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "700"
@@ -3893,7 +3861,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "5oYBl",
+                      "id": "26kg4",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3904,7 +3872,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "MVUJh",
+                          "id": "CNQOE",
                           "fill": "#111827",
                           "content": "箱数 1858",
                           "fontFamily": "Inter",
@@ -3917,13 +3885,13 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Az6Nx",
+                  "id": "rxMxe",
                   "width": "fill_container",
                   "gap": 6,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "2c6m7",
+                      "id": "Z03Af",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3934,7 +3902,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "JNVKc",
+                          "id": "38Q7G",
                           "fill": "#111827",
                           "content": "每板 40箱",
                           "fontFamily": "Inter",
@@ -3945,7 +3913,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "CRo2Y",
+                      "id": "4jv7S",
                       "width": "fill_container",
                       "fill": "#F9FAFB",
                       "cornerRadius": 7,
@@ -3956,7 +3924,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "sQf4H",
+                          "id": "5U4xE",
                           "fill": "#111827",
                           "content": "每箱 30件",
                           "fontFamily": "Inter",
@@ -3971,7 +3939,7 @@
             },
             {
               "type": "frame",
-              "id": "TbZsx",
+              "id": "W6OC1",
               "name": "section4",
               "width": "fill_container",
               "layout": "vertical",
@@ -3979,7 +3947,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "pCJCV",
+                  "id": "Th28a",
                   "fill": "#6B7280",
                   "content": "库位",
                   "fontFamily": "Inter",
@@ -3988,7 +3956,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "PbouG",
+                  "id": "RpIu9",
                   "width": "fill_container",
                   "fill": "#F9FAFB",
                   "cornerRadius": 7,
@@ -3999,9 +3967,50 @@
                   "children": [
                     {
                       "type": "text",
-                      "id": "gK70T",
+                      "id": "vG8MJ",
                       "fill": "#111827",
                       "content": "4楼-后-右",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YU4k2",
+              "name": "sectionRemark",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "0NaxR",
+                  "fill": "#6B7280",
+                  "content": "备注",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "frame",
+                  "id": "AZ0kB",
+                  "width": "fill_container",
+                  "fill": "#F9FAFB",
+                  "cornerRadius": 7,
+                  "padding": [
+                    8,
+                    9
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cNO9a",
+                      "fill": "#6B7280",
+                      "content": "可在库存明细中随时修改",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "700"
@@ -4014,7 +4023,7 @@
         },
         {
           "type": "frame",
-          "id": "TKn5X",
+          "id": "rGvgF",
           "name": "calc",
           "width": "fill_container",
           "fill": "#EFF6FF",
@@ -4025,7 +4034,7 @@
           "children": [
             {
               "type": "text",
-              "id": "cBrnL",
+              "id": "YQcdN",
               "fill": "#1D4ED8",
               "content": "板数",
               "fontFamily": "Inter",
@@ -4034,7 +4043,7 @@
             },
             {
               "type": "text",
-              "id": "WPV7J",
+              "id": "u1d9U",
               "fill": "#1D4ED8",
               "content": "139板+18箱",
               "fontFamily": "Inter",
@@ -4045,14 +4054,14 @@
         },
         {
           "type": "frame",
-          "id": "iMZMC",
+          "id": "La061",
           "name": "ops",
           "width": "fill_container",
           "gap": 8,
           "children": [
             {
               "type": "frame",
-              "id": "t7Er6",
+              "id": "q13Kp",
               "width": "fill_container",
               "fill": "#2563EB",
               "cornerRadius": 9,
@@ -4063,7 +4072,7 @@
               "children": [
                 {
                   "type": "icon_font",
-                  "id": "QFXjV",
+                  "id": "qkbXC",
                   "width": 16,
                   "height": 16,
                   "iconFontName": "save",
@@ -4072,7 +4081,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "WeH9F",
+                  "id": "YjGId",
                   "fill": "#FFFFFF",
                   "content": "保存",
                   "fontFamily": "Inter",
@@ -4083,7 +4092,41 @@
             },
             {
               "type": "frame",
-              "id": "G2nfY",
+              "id": "aeqpn",
+              "name": "continueBtn",
+              "width": "fill_container",
+              "fill": "#DBEAFE",
+              "cornerRadius": 9,
+              "gap": 6,
+              "padding": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "zuXPf",
+                  "name": "continueIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "keyboard_double_arrow_right",
+                  "iconFontFamily": "Material Symbols Rounded",
+                  "fill": "#1D4ED8"
+                },
+                {
+                  "type": "text",
+                  "id": "B5RZu",
+                  "name": "continueText",
+                  "fill": "#1D4ED8",
+                  "content": "继续录入",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "800"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "d7zzH",
               "width": "fill_container",
               "fill": "#FEE2E2",
               "cornerRadius": 9,
@@ -4094,7 +4137,7 @@
               "children": [
                 {
                   "type": "icon_font",
-                  "id": "rwx8D",
+                  "id": "AecfZ",
                   "width": 16,
                   "height": 16,
                   "iconFontName": "delete",
@@ -4103,7 +4146,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "kfC3p",
+                  "id": "ptFvq",
                   "fill": "#B91C1C",
                   "content": "删除",
                   "fontFamily": "Inter",

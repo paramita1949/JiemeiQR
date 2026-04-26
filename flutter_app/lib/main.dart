@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/seed/embedded_stock_seed_service.dart';
+import 'package:qrscan_flutter/data/data_change_notifier.dart';
 import 'package:qrscan_flutter/features/home/home_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/startup_trace.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  StartupTrace.mark('main() start');
   runApp(const QrScanApp());
+  StartupTrace.mark('runApp completed');
 }
 
 class QrScanApp extends StatefulWidget {
@@ -26,13 +31,19 @@ class QrScanApp extends StatefulWidget {
 class _QrScanAppState extends State<QrScanApp> {
   late AppDatabase _database;
   int _databaseVersion = 0;
-  bool _bootReady = false;
 
   @override
   void initState() {
     super.initState();
+    StartupTrace.mark('QrScanApp.initState');
     _database = widget.database ?? AppDatabase();
-    unawaited(_bootstrap());
+    StartupTrace.mark('AppDatabase allocated');
+    if (widget.database == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        StartupTrace.mark('first frame callback -> start seed check');
+        unawaited(_seedInBackground());
+      });
+    }
   }
 
   @override
@@ -43,35 +54,26 @@ class _QrScanAppState extends State<QrScanApp> {
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    await Future.wait([
-      Future<void>.delayed(const Duration(milliseconds: 420)),
-      _warmUpDatabase(),
-    ]);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _bootReady = true);
-    if (widget.database == null) {
-      unawaited(_seedInBackground());
-    }
-  }
-
-  Future<void> _warmUpDatabase() async {
-    await _database.customSelect('SELECT 1;').getSingleOrNull();
-  }
-
   Future<void> _seedInBackground() async {
-    final seeded =
-        await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
-    if (!mounted || !seeded) {
-      return;
+    try {
+      final seeded = await StartupTrace.time(
+        'EmbeddedStockSeedService.seedIfDatabaseEmpty',
+        () => EmbeddedStockSeedService(_database).seedIfDatabaseEmpty(),
+      );
+      if (!mounted || !seeded) {
+        StartupTrace.mark('seed skipped or widget disposed');
+        return;
+      }
+      StartupTrace.mark('seed applied -> emit data change only (no app rebuild)');
+      DataChangeNotifier.instance.emit(DataChangeKind.baseInfo);
+    } catch (error) {
+      StartupTrace.mark('seed failed: $error');
     }
-    setState(() => _databaseVersion += 1);
   }
 
   @override
   Widget build(BuildContext context) {
+    StartupTrace.mark('QrScanApp.build');
     return MaterialApp(
       title: '洁美',
       debugShowCheckedModeBanner: false,
@@ -86,14 +88,12 @@ class _QrScanAppState extends State<QrScanApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: _bootReady
-          ? HomeScreen(
-              key: ValueKey(_databaseVersion),
-              database: _database,
-              onPrepareImport: _prepareImport,
-              onImportCompleted: _importCompleted,
-            )
-          : const _AppBootScreen(),
+      home: HomeScreen(
+        key: ValueKey(_databaseVersion),
+        database: _database,
+        onPrepareImport: _prepareImport,
+        onImportCompleted: _importCompleted,
+      ),
     );
   }
 
@@ -101,6 +101,7 @@ class _QrScanAppState extends State<QrScanApp> {
     if (widget.database != null) {
       return;
     }
+    StartupTrace.mark('prepare import -> close database');
     await _database.close();
   }
 
@@ -108,39 +109,15 @@ class _QrScanAppState extends State<QrScanApp> {
     if (widget.database != null) {
       return;
     }
+    StartupTrace.mark('import completed -> recreate database');
     _database = AppDatabase();
-    await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+    await StartupTrace.time(
+      'seed after importCompleted',
+      () => EmbeddedStockSeedService(_database).seedIfDatabaseEmpty(),
+    );
     if (!mounted) {
       return;
     }
     setState(() => _databaseVersion += 1);
-  }
-}
-
-class _AppBootScreen extends StatelessWidget {
-  const _AppBootScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFFF5F8FF),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(strokeWidth: 2.4),
-            SizedBox(height: 14),
-            Text(
-              '正在加载洁美…',
-              style: TextStyle(
-                color: Color(0xFF475569),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

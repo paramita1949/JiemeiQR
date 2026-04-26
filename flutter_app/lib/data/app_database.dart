@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:drift_sqflite/drift_sqflite.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:qrscan_flutter/shared/utils/startup_trace.dart';
 
 import 'database_enums.dart';
 import 'tables/batches.dart';
@@ -84,9 +86,24 @@ class AppDatabase extends _$AppDatabase {
 }
 
 LazyDatabase _openConnection() {
+  if (Platform.isAndroid || Platform.isIOS) {
+    StartupTrace.mark('using SqfliteQueryExecutor for mobile');
+    return LazyDatabase(
+      () async => SqfliteQueryExecutor.inDatabaseFolder(
+        path: 'jiemei.sqlite',
+        singleInstance: true,
+      ),
+    );
+  }
   return LazyDatabase(() async {
-    final directory = await getApplicationDocumentsDirectory();
+    StartupTrace.mark('DB open connection callback entered');
+    final directory = await StartupTrace.time(
+      'getApplicationDocumentsDirectory',
+      getApplicationDocumentsDirectory,
+    );
     final file = File(p.join(directory.path, 'jiemei.sqlite'));
+    StartupTrace.mark('DB file path: ${file.path}');
+    StartupTrace.mark('NativeDatabase(file) create');
     return NativeDatabase(file);
   });
 }
