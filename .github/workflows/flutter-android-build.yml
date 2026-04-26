@@ -1,25 +1,24 @@
-name: Flutter Android Build
+name: JIEMEI Android CI & Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      publish_release:
-        description: 'Publish APK to GitHub Releases'
-        required: true
-        default: true
-        type: boolean
-      release_tag:
-        description: 'Optional tag for release (example: v1.0.0)'
-        required: false
-        type: string
   push:
     branches:
       - main
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Mark manually triggered release as pre-release'
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: jiemei-android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-android:
+  android-build:
+    name: Build Android APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -28,14 +27,16 @@ jobs:
         working-directory: flutter_app
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -43,102 +44,91 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create Android scaffold
-        run: flutter create --platforms=android --project-name qrscan_flutter --org com.qrscan .
-
-      - name: Set Android app name
-        run: |
-          cat > android/app/src/main/res/values/app_name.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">洁美QR</string>
-          </resources>
-          EOF
-          sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/' android/app/src/main/AndroidManifest.xml
-
-      - name: Get dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze
+      - name: Static analysis
         run: flutter analyze
 
-      - name: Test
+      - name: Unit and widget tests
         run: flutter test
 
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Extract app version
-        id: app_version
-        run: |
-          app_version="$(grep '^version:' pubspec.yaml | head -n 1 | awk '{print $2}')"
-          if [ -z "$app_version" ]; then
-            app_version="0.0.0+0"
-          fi
-          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
-
-      - name: Rename APK with version
-        id: apk_meta
+      - name: Resolve build metadata
+        id: meta
         working-directory: .
+        shell: bash
         run: |
-          set -e
-          src="flutter_app/build/app/outputs/flutter-apk/app-release.apk"
-          version="${{ steps.app_version.outputs.app_version }}"
+          set -euo pipefail
+          version="$(grep '^version:' flutter_app/pubspec.yaml | head -n 1 | awk '{print $2}')"
+          if [ -z "$version" ]; then
+            version="0.0.0+0"
+          fi
           safe_version="${version//+/-}"
-          dst="flutter_app/build/app/outputs/flutter-apk/洁美QR-v${safe_version}.apk"
-          cp "$src" "$dst"
-          echo "apk_path=$dst" >> "$GITHUB_OUTPUT"
-          echo "apk_name=$(basename "$dst")" >> "$GITHUB_OUTPUT"
+          short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          tag_name="auto-v${safe_version}-r${GITHUB_RUN_NUMBER}"
+          artifact_base="jiemei-android-v${safe_version}-${short_sha}"
+          apk_src="flutter_app/build/app/outputs/flutter-apk/app-release.apk"
+          apk_dst="flutter_app/build/app/outputs/flutter-apk/${artifact_base}.apk"
+          cp "${apk_src}" "${apk_dst}"
 
-      - name: Resolve release metadata
-        id: release_meta
-        working-directory: .
-        run: |
-          set -e
-          publish_release="false"
-          release_tag=""
-          release_name=""
-          prerelease="true"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            publish_release="true"
-            release_tag="${GITHUB_REF_NAME}"
-            release_name="洁美QR v${{ steps.app_version.outputs.app_version }} (${GITHUB_REF_NAME})"
-            prerelease="false"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF_NAME}" = "main" ]; then
-            publish_release="true"
-            release_tag="main-build-${GITHUB_RUN_NUMBER}"
-            release_name="洁美QR v${{ steps.app_version.outputs.app_version }} (main-build-${GITHUB_RUN_NUMBER})"
-            prerelease="true"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_release }}" = "true" ]; then
-            publish_release="true"
-            if [ -n "${{ inputs.release_tag }}" ]; then
-              release_tag="${{ inputs.release_tag }}"
-              release_name="洁美QR v${{ steps.app_version.outputs.app_version }} (${{ inputs.release_tag }})"
-              prerelease="false"
-            else
-              release_tag="build-${GITHUB_RUN_NUMBER}"
-              release_name="洁美QR v${{ steps.app_version.outputs.app_version }} (build-${GITHUB_RUN_NUMBER})"
-              prerelease="true"
-            fi
-          fi
-          echo "publish_release=${publish_release}" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          release_name="洁美 Android v${safe_version} (Build ${GITHUB_RUN_NUMBER})"
+          release_body_file="flutter_app/build/app/outputs/flutter-apk/release-notes.md"
+
+          cat > "${release_body_file}" <<EOF
+          ## ${release_name}
+
+          洁美仓储端 Android 发布包。
+
+          ### Build Information
+          - Version: \`${version}\`
+          - Commit: \`${GITHUB_SHA}\`
+          - Branch: \`${GITHUB_REF_NAME}\`
+          - Workflow Run: \`${GITHUB_RUN_NUMBER}\`
+          - Built At (UTC): \`${build_time}\`
+
+          ### Artifact
+          - File: \`${artifact_base}.apk\`
+          EOF
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "safe_version=${safe_version}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_base}" >> "$GITHUB_OUTPUT"
+          echo "apk_path=${apk_dst}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
           echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "release_body_file=${release_body_file}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.apk_meta.outputs.apk_name }}
-          path: ${{ steps.apk_meta.outputs.apk_path }}
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.meta.outputs.apk_path }}
           if-no-files-found: error
+          retention-days: 14
 
-      - name: Publish to GitHub Releases
-        if: steps.release_meta.outputs.publish_release == 'true'
+      - name: Publish GitHub release (auto on main push)
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_meta.outputs.release_tag }}
-          name: ${{ steps.release_meta.outputs.release_name }}
-          prerelease: ${{ steps.release_meta.outputs.prerelease }}
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body_path: ${{ steps.meta.outputs.release_body_file }}
+          prerelease: false
           target_commitish: ${{ github.sha }}
-          files: ${{ steps.apk_meta.outputs.apk_path }}
+          files: ${{ steps.meta.outputs.apk_path }}
+
+      - name: Publish GitHub release (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body_path: ${{ steps.meta.outputs.release_body_file }}
+          prerelease: ${{ inputs.prerelease }}
+          target_commitish: ${{ github.sha }}
+          files: ${{ steps.meta.outputs.apk_path }}
