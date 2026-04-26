@@ -42,7 +42,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _group = widget.group;
     _scanIndex = widget.scanIndex;
     _autoSlideSeconds = widget.initialAutoSlideSeconds;
-    _currentIndex = _records.isEmpty ? 0 : _scanIndex.clamp(0, _records.length - 1);
+    _currentIndex =
+        _records.isEmpty ? 0 : _scanIndex.clamp(0, _records.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -100,7 +101,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<void> _setAutoSlideSeconds() async {
     final presets = <double>[0.5, 1.0, 2.0];
-    final controller = TextEditingController(text: _autoSlideSeconds.toString());
+    final controller =
+        TextEditingController(text: _autoSlideSeconds.toString());
     final value = await showDialog<double>(
       context: context,
       builder: (context) {
@@ -124,7 +126,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: '自定义秒数'),
               ),
             ],
@@ -206,7 +209,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('第 ${_records.isEmpty ? 0 : _currentIndex + 1} / ${_records.length} 张'),
+        title: Text(
+            '第 ${_records.isEmpty ? 0 : _currentIndex + 1} / ${_records.length} 张'),
         actions: [
           IconButton(
             tooltip: '设置自动滑动',
@@ -302,7 +306,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
                             ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFF6C63FF)),
+                              border:
+                                  Border.all(color: const Color(0xFF6C63FF)),
                             ),
                             child: const Text('扫描号'),
                           ),
@@ -318,7 +323,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: _currentIndex > 0 ? () => _goTo(_currentIndex - 1) : null,
+                    onPressed: _currentIndex > 0
+                        ? () => _goTo(_currentIndex - 1)
+                        : null,
                     child: const Text('上一张'),
                   ),
                 ),

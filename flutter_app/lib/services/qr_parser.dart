@@ -86,7 +86,8 @@ class QrParser {
       }
 
       final rng = random ?? Random();
-      final serialHead = serialSeed.substring(0, serialLength - randomTailDigits);
+      final serialHead =
+          serialSeed.substring(0, serialLength - randomTailDigits);
       final pool = List<int>.generate(combinations, (i) => i)..shuffle(rng);
 
       records = List<QrRecord>.generate(count, (index) {
