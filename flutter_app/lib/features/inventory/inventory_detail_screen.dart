@@ -105,8 +105,17 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               quickProductCodes: _quickProductCodes,
               onTextChanged: _onFilterTextChanged,
               onFilterChanged: _onStockFilterChanged,
+              onClearTap: () {
+                _filterController.clear();
+                _refreshRows();
+              },
               onQuickProductTap: (code) {
-                _filterController.text = code;
+                final current = _filterController.text.trim();
+                final next = current == code ? '' : code;
+                _filterController.text = next;
+                if (next.isNotEmpty) {
+                  _collapsedProductCodes.remove(code);
+                }
                 _refreshRows();
               },
             ),
@@ -474,6 +483,7 @@ class _FilterBar extends StatelessWidget {
     required this.onTextChanged,
     required this.onFilterChanged,
     required this.onQuickProductTap,
+    required this.onClearTap,
   });
 
   final TextEditingController controller;
@@ -482,6 +492,7 @@ class _FilterBar extends StatelessWidget {
   final ValueChanged<String> onTextChanged;
   final ValueChanged<_StockFilter> onFilterChanged;
   final ValueChanged<String> onQuickProductTap;
+  final VoidCallback onClearTap;
 
   @override
   Widget build(BuildContext context) {
@@ -499,6 +510,14 @@ class _FilterBar extends StatelessWidget {
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
               hintText: '筛选产品 / 批号',
+              suffixIcon: controller.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      key: const Key('inventoryFilterClearButton'),
+                      tooltip: '清空筛选',
+                      onPressed: onClearTap,
+                      icon: const Icon(Icons.close),
+                    ),
               filled: true,
               fillColor: const Color(0xFFF7F9FC),
               border: OutlineInputBorder(
@@ -521,6 +540,7 @@ class _FilterBar extends StatelessWidget {
                   return GestureDetector(
                     onTap: () => onQuickProductTap(code),
                     child: Container(
+                      key: Key('inventoryQuick-$code'),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 6,
@@ -686,10 +706,11 @@ class _InventoryRowCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusPill(
-                text: row.isZeroStock ? '已空' : '有库存',
-                color: statusColor,
-              ),
+              if (row.isZeroStock)
+                _StatusPill(
+                  text: '已空',
+                  color: statusColor,
+                ),
             ],
           ),
           const SizedBox(height: 10),

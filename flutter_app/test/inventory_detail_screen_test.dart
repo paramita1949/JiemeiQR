@@ -292,4 +292,71 @@ void main() {
         .getSingleOrNull();
     expect(deleted, isNull);
   });
+
+  testWidgets('quick product tag supports toggle unselect', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'A-BATCH',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '20380',
+      batch: 'B-BATCH',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
+    expect(find.byKey(const Key('inventory-group-20380')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('inventoryQuick-72067')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
+    expect(find.byKey(const Key('inventory-group-20380')), findsNothing);
+    expect(find.textContaining('A-BATCH'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('inventoryQuick-72067')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
+    expect(find.byKey(const Key('inventory-group-20380')), findsOneWidget);
+    expect(find.byKey(const Key('inventoryFilterClearButton')), findsNothing);
+  });
+
+  testWidgets('clear button resets quick tag filter', (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'A-BATCH',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '20380',
+      batch: 'B-BATCH',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('inventoryQuick-72067')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('inventoryFilterClearButton')), findsOneWidget);
+    expect(find.byKey(const Key('inventory-group-20380')), findsNothing);
+    expect(find.textContaining('A-BATCH'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('inventoryFilterClearButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
+    expect(find.byKey(const Key('inventory-group-20380')), findsOneWidget);
+    expect(find.byKey(const Key('inventoryFilterClearButton')), findsNothing);
+  });
 }
