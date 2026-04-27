@@ -1,52 +1,57 @@
-# QRSCAN (Flutter)
+# QRSCAN
 
-纯 Flutter 单栈版本（不再包含 uni-app/HBuilderX/Python 旧实现）。
+面向仓库出入库与箱码管理的 Flutter 应用。
 
-## 当前版本
-- `3.0.1`（2026-04-28）
-- 更新日志：`CHANGELOG.md`
+## 项目状态
+- 技术栈：Flutter（单栈）
+- 当前版本：`3.0.1`
+- 变更记录：[CHANGELOG.md](C:/Users/Administrator/Desktop/QRSCAN/CHANGELOG.md)
 
-## 版本策略
-- 默认按补丁号快速递增：`x.y.z -> x.y.(z+1)`。
-- 版本示例：`2.0.1 -> 2.0.2`、`2.1.1 -> 2.1.2`。
-- 一键命令：`./scripts/bump_version.ps1`（默认 `patch`）。
-- 可选：`./scripts/bump_version.ps1 -Part minor`、`./scripts/bump_version.ps1 -Part major`。
+## 核心能力
+- QR 箱码扫描与图片识别
+- QR 批量生成与预览（支持随机尾号、自动翻页、尺寸调节）
+- 基础资料管理（产品、批号、TS 标识、库位、备注）
+- 库存明细与分组查看（快捷筛选、批号级维护）
+- 新增运单、订单状态管理、重复明细拦截
+- 出库日历与当日出库明细追溯（运单、商家、箱数）
 
-## 目录
+## 版本规则
+- 使用三段式版本：`x.y.z`
+- 默认补丁号递增：`2.0.1 -> 2.0.2`
+- 需要功能升级时手动使用 `minor`/`major`
+- 升版脚本：`./scripts/bump_version.ps1`
+- 示例：
+  - `./scripts/bump_version.ps1`（patch）
+  - `./scripts/bump_version.ps1 -Part minor`
+  - `./scripts/bump_version.ps1 -Part major`
+
+## 目录说明
 - 应用代码：`flutter_app/`
-- GitHub Actions：`.github/workflows/flutter-android-build.yml`
+- 版本脚本：`scripts/bump_version.ps1`
+- CI 构建：`.github/workflows/flutter-android-build.yml`
 - 云编译说明：`docs/FLUTTER_GITHUB_BUILD.md`
 
-## 核心功能
-- 相机扫描二维码
-- 本地图片识别二维码
-- 扫描框含上下移动扫描线
-- 解析格式：`prefix + serial(10) + batch(7) + suffix(2)`
-- 必须扫码/图片识别生成（不再内置默认配置）
-- 预览从扫码号开始，第一页固定 `1/N`
-- 新增随机按钮：可选最后3位或最后4位随机，其余高位保持不变
-- 自定义每组生成数量（例如 10、100）
-- 自动滑动时间可设置（例如 0.5s / 1s / 2s / 自定义）
-- 一组浏览完后可继续生成下一组
-- 左右翻页预览二维码
-- 二维码尺寸滑条调节并持久化
-
-## 本次更新摘要（2.1.0+4）
-- 出库日历增强：订单摘要、出库明细增加运单号与商家信息，支持按运单筛选明细。
-- 出库变化展示优化：仅在有出库变化时显示「库存变化 -X箱」。
-- 新增运单优化：产品按库存降序、重复产品批号拦截、TS 标签展示一致。
-- 订单信息页优化：新增「全部」状态与完成/未完成统计。
-
-## 无本地安卓环境的使用方式
-1. 推送仓库到 GitHub
-2. 打开 `Actions`
-3. 运行 `Flutter Android Build`
-4. 下载 artifact `qrscan-android-apk`
-
-## 本地开发（可选）
+## 本地开发
 ```bash
 cd flutter_app
 flutter pub get
 flutter run
 ```
+
+## 质量校验
+```bash
+cd flutter_app
+flutter test
+flutter analyze
+```
+
+## 无本地安卓环境发布
+1. 推送到 GitHub 仓库。
+2. 打开 `Actions`。
+3. 运行 `Flutter Android Build`。
+4. 下载产物 `qrscan-android-apk`。
+
+## 维护约定
+- 不做无必要工程化和过度优化。
+- 需求变更优先保持交互直观、修改轻量、可回归验证。
 
