@@ -3,7 +3,7 @@
 Jiemei warehouse order and inventory Flutter app.
 
 ## Version
-- `2.1.0+4` (2026-04-28)
+- `3.0.1` (2026-04-28)
 - Changelog: `../CHANGELOG.md`
 
 ## Quick Start

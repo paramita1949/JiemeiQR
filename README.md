@@ -3,8 +3,14 @@
 纯 Flutter 单栈版本（不再包含 uni-app/HBuilderX/Python 旧实现）。
 
 ## 当前版本
-- `2.1.0+4`（2026-04-28）
+- `3.0.1`（2026-04-28）
 - 更新日志：`CHANGELOG.md`
+
+## 版本策略
+- 默认按补丁号快速递增：`x.y.z -> x.y.(z+1)`。
+- 版本示例：`2.0.1 -> 2.0.2`、`2.1.1 -> 2.1.2`。
+- 一键命令：`./scripts/bump_version.ps1`（默认 `patch`）。
+- 可选：`./scripts/bump_version.ps1 -Part minor`、`./scripts/bump_version.ps1 -Part major`。
 
 ## 目录
 - 应用代码：`flutter_app/`
