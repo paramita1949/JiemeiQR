@@ -181,7 +181,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                         availableBoxes: _selectedBatch?.currentBoxes,
                         boardText: _boardText(),
                         specText: _specText(),
-                        tsRequired: _selectedBatch?.batch.tsRequired ?? false,
+                        tsRequired: _currentSelectionNeedsScan(),
                       ),
                     ],
                   ),
@@ -259,6 +259,15 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         tsRequired: false,
       ),
     );
+  }
+
+  bool _currentSelectionNeedsScan() {
+    final batchRequiresScan =
+        _selectedBatch == null ? false : _batchNeedsScan(_selectedBatch!.batch);
+    final productRequiresScan = _selectedProduct == null
+        ? false
+        : _productOptionFor(_selectedProduct!).tsRequired;
+    return batchRequiresScan || productRequiresScan;
   }
 
   Future<void> _pickOrderDate() async {
@@ -624,14 +633,6 @@ class _ProductOptionLabel extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        if (option.tsRequired) ...[
-          const SizedBox(width: 6),
-          const _MetaChip(
-            text: 'TS',
-            textColor: Color(0xFFDC2626),
-            backgroundColor: Color(0xFFFEE2E2),
-          ),
-        ],
       ],
     );
   }
@@ -734,7 +735,7 @@ class _DraftLinesCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${line.product.code} · ${line.batch.dateBatch} · ${line.batch.actualBatch} · ${line.item.boxes}箱${line.batch.tsRequired ? ' · TS' : ''}',
+                      '${line.product.code} · ${line.batch.dateBatch} · ${line.batch.actualBatch} · ${line.item.boxes}箱${_batchNeedsScan(line.batch) ? ' · TS' : ''}',
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 13,
@@ -770,3 +771,7 @@ InputDecoration _inputDecoration(String label) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+bool _batchNeedsScan(BatchRecord batch) {
+  return batch.tsRequired;
+}

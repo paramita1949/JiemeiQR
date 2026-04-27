@@ -47,11 +47,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('订单信息'), findsWidgets);
+    expect(find.text('全部'), findsOneWidget);
     expect(find.text('未完成'), findsWidgets);
     expect(find.text('已拣货'), findsWidgets);
     expect(find.text('完成'), findsWidgets);
+    expect(find.text('完成 0单 · 未完成 2单'), findsOneWidget);
     expect(find.text('新增运单'), findsOneWidget);
     expect(find.byTooltip('日期筛选'), findsOneWidget);
+    expect(find.text('168220019125'), findsOneWidget);
     expect(find.text('168220019126'), findsOneWidget);
     expect(find.text('洁美B'), findsOneWidget);
 

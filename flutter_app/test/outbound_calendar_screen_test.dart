@@ -98,9 +98,60 @@ void main() {
     expect(find.text('一周'), findsOneWidget);
     expect(find.text('一月'), findsOneWidget);
     expect(find.byTooltip('自定义范围'), findsOneWidget);
+    expect(find.text('库存变化 -20箱'), findsOneWidget);
+    expect(find.text('订单 1单 · 20箱'), findsOneWidget);
+    expect(find.text('168220019125'), findsOneWidget);
+    expect(find.text('洁美A'), findsOneWidget);
     expect(find.text('72067 · 2029.9.7'), findsOneWidget);
+    expect(find.text('运单 168220019125 · 商家 洁美A'), findsOneWidget);
     expect(find.text('20箱'), findsOneWidget);
-    expect(find.text('订单 1单'), findsOneWidget);
+  });
+
+  testWidgets('selects one order to show only that outbound detail',
+      (tester) async {
+    await seedOutbound();
+    final productId = await productDao.createProduct(
+      code: '20584',
+      name: '六神花露水',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'OTHER',
+      dateBatch: '2029.8.1',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: '168220019126',
+      merchantName: '洁美B',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchId,
+        boxes: 5,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await stockDao.addMovement(
+      batchId: batchId,
+      orderId: Value(orderId),
+      movementDate: DateTime(2026, 4, 26),
+      type: StockMovementType.orderOut,
+      boxes: 5,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('20584 · 2029.8.1'), findsOneWidget);
+    await tester.tap(find.text('168220019126'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('运单 168220019126 出库明细'), findsOneWidget);
+    expect(find.text('20584 · 2029.8.1'), findsOneWidget);
+    expect(find.text('72067 · 2029.9.7'), findsNothing);
   });
 
   testWidgets('total inventory uses end-date snapshot instead of realtime',
@@ -124,5 +175,27 @@ void main() {
     expect(find.text('订单信息'), findsWidgets);
     expect(find.textContaining('2026.4.26'), findsWidgets);
     expect(find.text('168220019125'), findsOneWidget);
+  });
+
+  testWidgets('does not show inventory change when outbound is zero',
+      (tester) async {
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('库存变化'), findsNothing);
+  });
+
+  testWidgets('keeps custom range button on the same row as 一月 on narrow width',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await seedOutbound();
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    final monthY = tester.getTopLeft(find.text('一月')).dy;
+    final customY = tester.getTopLeft(find.byTooltip('自定义范围')).dy;
+    expect((monthY - customY).abs(), lessThan(20));
   });
 }

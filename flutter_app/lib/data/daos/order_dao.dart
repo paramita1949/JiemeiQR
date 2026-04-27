@@ -305,6 +305,22 @@ class OrderDao {
     return page.orders;
   }
 
+  Future<OrderStatusCounts> orderStatusCounts({
+    DateTimeRange? dateRange,
+  }) async {
+    final rows = await _ordersInRange(dateRange).get();
+    var done = 0;
+    var unfinished = 0;
+    for (final order in rows) {
+      if (order.status == OrderStatus.done) {
+        done += 1;
+      } else {
+        unfinished += 1;
+      }
+    }
+    return OrderStatusCounts(done: done, unfinished: unfinished);
+  }
+
   Future<PagedOrderSummaries> orderSummariesPage({
     OrderStatus? status,
     DateTimeRange? dateRange,
@@ -459,6 +475,29 @@ class OrderDao {
 
     return OrderDetail(order: order, lines: lines);
   }
+
+  SimpleSelectStatement<$OrdersTable, Order> _ordersInRange(
+    DateTimeRange? dateRange,
+  ) {
+    final query = _database.select(_database.orders);
+    if (dateRange != null) {
+      final start = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+      );
+      final end = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23,
+        59,
+        59,
+      );
+      query.where((table) => table.orderDate.isBetweenValues(start, end));
+    }
+    return query;
+  }
 }
 
 class PendingOrderItemInput {
@@ -536,6 +575,16 @@ class PagedOrderSummaries {
 
   final List<OrderSummary> orders;
   final int total;
+}
+
+class OrderStatusCounts {
+  const OrderStatusCounts({
+    required this.done,
+    required this.unfinished,
+  });
+
+  final int done;
+  final int unfinished;
 }
 
 class OrderDetail {

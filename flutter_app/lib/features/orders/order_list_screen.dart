@@ -29,8 +29,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final bool _ownsDatabase;
   late DateTimeRange? _dateRange;
   _OrderQuickFilter _quickFilter = _OrderQuickFilter.today;
-  OrderStatus _status = OrderStatus.pending;
+  OrderStatus? _status;
   final List<OrderSummary> _orders = <OrderSummary>[];
+  OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
   bool _hasMore = false;
@@ -101,6 +102,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 _refreshOrders();
               },
             ),
+            if (_counts != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '完成 ${_counts!.done}单 · 未完成 ${_counts!.unfinished}单',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: _openNewWaybill,
@@ -145,6 +157,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _loadingMore = false;
       _hasMore = false;
       _total = 0;
+      _counts = null;
       _orders.clear();
     });
     final page = await _orderDao.orderSummariesPage(
@@ -153,11 +166,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
       offset: 0,
       limit: _pageSize,
     );
+    final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
     if (!mounted) {
       return;
     }
     setState(() {
       _orders.addAll(page.orders);
+      _counts = counts;
       _total = page.total;
       _hasMore = _orders.length < _total;
       _loadingInitial = false;
@@ -415,13 +430,22 @@ class _StatusTabs extends StatelessWidget {
     required this.onChanged,
   });
 
-  final OrderStatus selected;
-  final ValueChanged<OrderStatus> onChanged;
+  final OrderStatus? selected;
+  final ValueChanged<OrderStatus?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        Expanded(
+          child: _StatusButton(
+            label: '全部',
+            color: AppTheme.primary,
+            selected: selected == null,
+            onTap: () => onChanged(null),
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: _StatusButton(
             label: '未完成',

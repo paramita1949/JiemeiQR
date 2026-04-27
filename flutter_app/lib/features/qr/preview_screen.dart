@@ -1,9 +1,48 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:qrscan_flutter/models/qr_record.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
+
+abstract class QrSizeStore {
+  Future<double?> loadQrSize();
+
+  Future<void> saveQrSize(double size);
+}
+
+class FileQrSizeStore implements QrSizeStore {
+  const FileQrSizeStore();
+
+  static const double minSize = 160;
+  static const double maxSize = 340;
+
+  @override
+  Future<double?> loadQrSize() async {
+    final file = await _file();
+    if (!await file.exists()) {
+      return null;
+    }
+    final parsed = double.tryParse((await file.readAsString()).trim());
+    return parsed == null ? null : _clampSize(parsed);
+  }
+
+  @override
+  Future<void> saveQrSize(double size) async {
+    final file = await _file();
+    await file.writeAsString(_clampSize(size).round().toString());
+  }
+
+  Future<File> _file() async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}/qr_preview_size.txt');
+  }
+
+  static double _clampSize(double value) =>
+      value.clamp(minSize, maxSize).toDouble();
+}
 
 class PreviewScreen extends StatefulWidget {
   const PreviewScreen({
@@ -12,12 +51,14 @@ class PreviewScreen extends StatefulWidget {
     required this.scanIndex,
     required this.group,
     required this.initialAutoSlideSeconds,
+    this.qrSizeStore,
   });
 
   final List<QrRecord> records;
   final int scanIndex;
   final QrGroup group;
   final double initialAutoSlideSeconds;
+  final QrSizeStore? qrSizeStore;
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -25,6 +66,7 @@ class PreviewScreen extends StatefulWidget {
 
 class _PreviewScreenState extends State<PreviewScreen> {
   late final PageController _pageController;
+  late final QrSizeStore _qrSizeStore;
 
   late List<QrRecord> _records;
   late QrGroup _group;
@@ -33,6 +75,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Timer? _autoSlideTimer;
   late double _autoSlideSeconds;
+  double _qrSize = 260;
   bool _autoSliding = false;
 
   @override
@@ -42,9 +85,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _group = widget.group;
     _scanIndex = widget.scanIndex;
     _autoSlideSeconds = widget.initialAutoSlideSeconds;
+    _qrSizeStore = widget.qrSizeStore ?? const FileQrSizeStore();
     _currentIndex =
         _records.isEmpty ? 0 : _scanIndex.clamp(0, _records.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
+    _loadQrSize();
   }
 
   @override
@@ -97,6 +142,24 @@ class _PreviewScreenState extends State<PreviewScreen> {
     setState(() {
       _autoSliding = true;
     });
+  }
+
+  Future<void> _loadQrSize() async {
+    final size = await _qrSizeStore.loadQrSize();
+    if (!mounted || size == null) {
+      return;
+    }
+    setState(() {
+      _qrSize = FileQrSizeStore._clampSize(size);
+    });
+  }
+
+  void _setQrSize(double size) {
+    final next = FileQrSizeStore._clampSize(size);
+    setState(() {
+      _qrSize = next;
+    });
+    unawaited(_qrSizeStore.saveQrSize(next));
   }
 
   Future<void> _setAutoSlideSeconds() async {
@@ -228,17 +291,47 @@ class _PreviewScreenState extends State<PreviewScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: Text(
-                    '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                    FilledButton.tonal(
+                      onPressed: _generateNextGroup,
+                      child: const Text('下一组'),
+                    ),
+                  ],
                 ),
-                FilledButton.tonal(
-                  onPressed: _generateNextGroup,
-                  child: const Text('下一组'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 112,
+                      child: Text(
+                        '二维码大小 ${_qrSize.round()}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        key: const Key('qrSizeSlider'),
+                        min: FileQrSizeStore.minSize,
+                        max: FileQrSizeStore.maxSize,
+                        divisions: 18,
+                        value: _qrSize,
+                        label: _qrSize.round().toString(),
+                        onChanged: _setQrSize,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -264,54 +357,56 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   final isScanned = index == _scanIndex;
                   return Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            color: Colors.white,
-                          ),
-                          child: QrImageView(
-                            data: item.content,
-                            size: 260,
-                            backgroundColor: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          item.serial,
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SelectableText(
-                          item.content,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.greenAccent,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (isScanned)
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 6,
-                            ),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(999),
-                              border:
-                                  Border.all(color: const Color(0xFF6C63FF)),
+                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.white,
                             ),
-                            child: const Text('扫描号'),
+                            child: QrImageView(
+                              data: item.content,
+                              size: _qrSize,
+                              backgroundColor: Colors.white,
+                            ),
                           ),
-                      ],
+                          const SizedBox(height: 20),
+                          Text(
+                            item.serial,
+                            style: const TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SelectableText(
+                            item.content,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (isScanned)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                border:
+                                    Border.all(color: const Color(0xFF6C63FF)),
+                              ),
+                              child: const Text('扫描号'),
+                            ),
+                        ],
+                      ),
                     ),
                   );
                 },
