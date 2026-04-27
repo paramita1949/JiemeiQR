@@ -65,6 +65,10 @@ class StockDao {
   }
 
   Future<int> totalInventoryPieces() async {
+    return totalInventoryPiecesAt(DateTime.now());
+  }
+
+  Future<int> totalInventoryPiecesAt(DateTime snapshotAt) async {
     final movementDeltaSql = '''
       COALESCE(SUM(CASE
         WHEN type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
@@ -80,9 +84,11 @@ class StockDao {
       LEFT JOIN (
         SELECT batch_id, $movementDeltaSql AS delta_boxes
         FROM stock_movements
+        WHERE movement_date <= ?
         GROUP BY batch_id
       ) m ON m.batch_id = b.id
       ''',
+      variables: [Variable.withDateTime(snapshotAt)],
       readsFrom: {
         _database.batches,
         _database.products,
@@ -365,7 +371,7 @@ class StockDao {
         $havingSql
       ) t
       GROUP BY t.code
-      ORDER BY t.code ASC
+      ORDER BY total_pieces DESC, total_boxes DESC, product_code ASC
       ''',
           variables: vars,
           readsFrom: {

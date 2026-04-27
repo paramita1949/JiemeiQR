@@ -4,6 +4,7 @@ import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class BaseInfoEditScreen extends StatefulWidget {
@@ -537,44 +538,45 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   }
 
   Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDeleteConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认删除'),
-        content: const Text('删除后会移除当前产品与批号资料。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除基础资料',
+      message: '删除后会移除当前批号资料；若该产品无其他批号，将一并删除产品。',
+      riskLevel: DeleteRiskLevel.high,
     );
 
     if (confirmed != true || _savedBatchId == null || _savedProductId == null) {
       return;
     }
 
-    await _productDao.deleteBatch(_savedBatchId!);
-    await _productDao.deleteProduct(_savedProductId!);
-    if (!mounted) {
-      return;
+    try {
+      final result = await _productDao.deleteBatchWithRelations(_savedBatchId!);
+      if (!mounted) {
+        return;
+      }
+      if (_isEditing) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      setState(() {
+        _savedBatchId = null;
+        _savedProductId = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.deletedProductId == null ? '已删除当前批号资料' : '已删除当前批号及产品资料',
+          ),
+        ),
+      );
+    } on BatchDeleteBlockedException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
     }
-    if (_isEditing) {
-      Navigator.of(context).pop(true);
-      return;
-    }
-    setState(() {
-      _savedBatchId = null;
-      _savedProductId = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已删除基础资料')),
-    );
   }
 
   Future<void> _showQuickScanActions() async {

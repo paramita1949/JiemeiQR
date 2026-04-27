@@ -58,7 +58,9 @@ void main() {
     expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('总库存'), findsOneWidget);
     expect(find.text('300 件'), findsOneWidget);
-    expect(find.text('总订单 2 单 · 今日新增 2 单 · 未完成 1 单'), findsOneWidget);
+    expect(find.textContaining('今日订单'), findsOneWidget);
+    expect(find.textContaining('昨日订单'), findsOneWidget);
+    expect(find.textContaining('未完成 1 单'), findsOneWidget);
 
     expect(find.text('QR箱码'), findsOneWidget);
     expect(find.text('订单信息'), findsOneWidget);
@@ -85,7 +87,7 @@ void main() {
       type: StockMovementType.inAdjust,
       boxes: 5,
     );
-    await tester.pump(const Duration(seconds: 2));
+    await tester.drag(find.byType(ListView).first, const Offset(0, 400));
     await tester.pumpAndSettle();
 
     expect(find.text('450 件'), findsOneWidget);

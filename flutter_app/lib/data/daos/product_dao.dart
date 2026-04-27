@@ -84,6 +84,35 @@ class ProductDao {
         .get();
   }
 
+  Future<List<ProductInventoryOption>> productsForOrderEntry() async {
+    final products = await allProducts();
+    final options = <ProductInventoryOption>[];
+    for (final product in products) {
+      final batches = await availableBatchesForProduct(product.id);
+      final currentBoxes = batches.fold<int>(
+        0,
+        (sum, row) => sum + row.currentBoxes,
+      );
+      final tsRequired = batches.any((row) => row.batch.tsRequired) ||
+          await hasTsRequiredBatches(product.id);
+      options.add(
+        ProductInventoryOption(
+          product: product,
+          currentBoxes: currentBoxes,
+          tsRequired: tsRequired,
+        ),
+      );
+    }
+    options.sort((a, b) {
+      final stockCmp = b.currentBoxes.compareTo(a.currentBoxes);
+      if (stockCmp != 0) {
+        return stockCmp;
+      }
+      return a.product.code.compareTo(b.product.code);
+    });
+    return options;
+  }
+
   Future<Product?> productByCode(String code) {
     return (_database.select(_database.products)
           ..where((table) => table.code.equals(code)))
@@ -105,7 +134,8 @@ class ProductDao {
       return const <AvailableBatch>[];
     }
     final movements = await (_database.select(_database.stockMovements)
-          ..where((table) => table.batchId.isIn(batches.map((e) => e.id).toList())))
+          ..where(
+              (table) => table.batchId.isIn(batches.map((e) => e.id).toList())))
         .get();
     final deltasByBatch = <int, int>{};
     for (final movement in movements) {
@@ -202,6 +232,56 @@ class ProductDao {
     );
   }
 
+  Future<DeleteBatchResult> deleteBatchWithRelations(int batchId) async {
+    return _database.transaction(() async {
+      final batch = await (_database.select(_database.batches)
+            ..where((table) => table.id.equals(batchId)))
+          .getSingleOrNull();
+      if (batch == null) {
+        throw StateError('Batch $batchId does not exist.');
+      }
+      final orderItemCountExp = _database.orderItems.id.count();
+      final orderItemCountRow =
+          await (_database.selectOnly(_database.orderItems)
+                ..addColumns([orderItemCountExp])
+                ..where(_database.orderItems.batchId.equals(batchId)))
+              .getSingle();
+      final orderItemCount = orderItemCountRow.read(orderItemCountExp) ?? 0;
+      if (orderItemCount > 0) {
+        throw const BatchDeleteBlockedException('该批号已关联订单，无法删除');
+      }
+      final movementCountExp = _database.stockMovements.id.count();
+      final movementCountRow =
+          await (_database.selectOnly(_database.stockMovements)
+                ..addColumns([movementCountExp])
+                ..where(_database.stockMovements.batchId.equals(batchId)))
+              .getSingle();
+      final movementCount = movementCountRow.read(movementCountExp) ?? 0;
+      if (movementCount > 0) {
+        throw const BatchDeleteBlockedException('该批号已有库存流水，无法删除');
+      }
+
+      await (_database.delete(_database.batches)
+            ..where((table) => table.id.equals(batchId)))
+          .go();
+      final remainingBatch = await (_database.select(_database.batches)
+            ..where((table) => table.productId.equals(batch.productId))
+            ..limit(1))
+          .getSingleOrNull();
+      var deletedProduct = false;
+      if (remainingBatch == null) {
+        await (_database.delete(_database.products)
+              ..where((table) => table.id.equals(batch.productId)))
+            .go();
+        deletedProduct = true;
+      }
+      return DeleteBatchResult(
+        deletedBatchId: batchId,
+        deletedProductId: deletedProduct ? batch.productId : null,
+      );
+    });
+  }
+
   Future<void> updateBaseInfoEntry({
     required int batchId,
     required String code,
@@ -226,7 +306,8 @@ class ProductDao {
       }
       final duplicateCode = await (_database.select(_database.products)
             ..where((table) =>
-                table.code.equals(code) & table.id.isNotValue(entry.product.id)))
+                table.code.equals(code) &
+                table.id.isNotValue(entry.product.id)))
           .getSingleOrNull();
       if (duplicateCode != null) {
         throw ProductCodeAlreadyExistsException(code);
@@ -264,8 +345,8 @@ class ProductDao {
           location: Value(location),
           remark: Value(remark),
           updatedAt: Value(DateTime.now()),
-          ),
-        );
+        ),
+      );
       if (tsRequired) {
         await _syncProductTsRequired(
           productId: entry.product.id,
@@ -316,6 +397,18 @@ class AvailableBatch {
   final int currentBoxes;
 }
 
+class ProductInventoryOption {
+  const ProductInventoryOption({
+    required this.product,
+    required this.currentBoxes,
+    required this.tsRequired,
+  });
+
+  final Product product;
+  final int currentBoxes;
+  final bool tsRequired;
+}
+
 class BaseInfoEntry {
   const BaseInfoEntry({
     required this.product,
@@ -352,4 +445,23 @@ class ProductCodeAlreadyExistsException implements Exception {
   String toString() {
     return 'ProductCodeAlreadyExistsException(code: $code)';
   }
+}
+
+class BatchDeleteBlockedException implements Exception {
+  const BatchDeleteBlockedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'BatchDeleteBlockedException(message: $message)';
+}
+
+class DeleteBatchResult {
+  const DeleteBatchResult({
+    required this.deletedBatchId,
+    required this.deletedProductId,
+  });
+
+  final int deletedBatchId;
+  final int? deletedProductId;
 }

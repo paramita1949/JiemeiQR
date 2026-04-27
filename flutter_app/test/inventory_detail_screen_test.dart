@@ -77,6 +77,8 @@ void main() {
 
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
 
     expect(find.text('库存明细'), findsWidgets);
     expect(find.text('总库存'), findsOneWidget);
@@ -115,6 +117,15 @@ void main() {
     await tester.tap(find.text('零库存'));
     await tester.pumpAndSettle();
 
+    final batchFinder = find.text('20380 · ELMAXEZ');
+    for (var i = 0; i < 2; i += 1) {
+      if (batchFinder.evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.tap(find.byKey(const Key('inventory-group-20380')));
+      await tester.pumpAndSettle();
+    }
+
     expect(find.text('20380 · ELMAXEZ'), findsOneWidget);
     expect(find.text('2029.6.14'), findsOneWidget);
     expect(find.text('已空'), findsOneWidget);
@@ -148,6 +159,8 @@ void main() {
 
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
 
     final earlyY = tester.getTopLeft(find.text('2029.9.6')).dy;
     final lateY = tester.getTopLeft(find.text('2029.9.7')).dy;
@@ -171,10 +184,12 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.text('20380'), findsOneWidget);
-    expect(find.text('72067'), findsOneWidget);
-    final y20380 = tester.getTopLeft(find.text('20380')).dy;
-    final y72067 = tester.getTopLeft(find.text('72067')).dy;
+    expect(find.text('20380'), findsWidgets);
+    expect(find.text('72067'), findsWidgets);
+    final y20380 =
+        tester.getTopLeft(find.byKey(const Key('inventory-group-20380'))).dy;
+    final y72067 =
+        tester.getTopLeft(find.byKey(const Key('inventory-group-72067'))).dy;
     expect(y20380, lessThan(y72067));
     expect(find.text('TS'), findsNothing);
   });
@@ -216,20 +231,19 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('BATCH-A'), findsOneWidget);
-    expect(find.textContaining('BATCH-B'), findsOneWidget);
-
-    await tester.tap(find.text('72067').first);
-    await tester.pumpAndSettle();
-
     expect(find.textContaining('BATCH-A'), findsNothing);
     expect(find.textContaining('BATCH-B'), findsNothing);
 
-    await tester.tap(find.text('72067').first);
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('BATCH-A'), findsOneWidget);
     expect(find.textContaining('BATCH-B'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('BATCH-A'), findsNothing);
+    expect(find.textContaining('BATCH-B'), findsNothing);
   });
 
   testWidgets('opens base info edit from inventory row', (tester) async {
@@ -242,6 +256,8 @@ void main() {
 
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('编辑资料').first);
     await tester.pumpAndSettle();
@@ -249,5 +265,31 @@ void main() {
     expect(find.text('编辑基础资料'), findsOneWidget);
     expect(find.text('72067'), findsWidgets);
     expect(find.text('FCHBLEZ'), findsWidgets);
+  });
+
+  testWidgets('deletes batch directly from inventory row', (tester) async {
+    final batchId = await seedBatch(
+      code: '72067',
+      batch: 'DEL-BATCH',
+      dateBatch: '2029.9.7',
+      initialBoxes: 50,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('DEL-BATCH'), findsOneWidget);
+    await tester.tap(find.byTooltip('删除批号').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已删除当前批号'), findsOneWidget);
+    final deleted = await (database.select(database.batches)
+          ..where((table) => table.id.equals(batchId)))
+        .getSingleOrNull();
+    expect(deleted, isNull);
   });
 }

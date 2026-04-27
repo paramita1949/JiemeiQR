@@ -119,7 +119,9 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   Future<_CalendarState> _loadState() async {
-    final totalPieces = await _stockDao.totalInventoryPieces();
+    final snapshotAt =
+        DateTime(_range.end.year, _range.end.month, _range.end.day, 23, 59, 59);
+    final totalPieces = await _stockDao.totalInventoryPiecesAt(snapshotAt);
     final rows = await _outboundRows();
     final orders = await _orderDao.orderSummaries(dateRange: _range);
     return _CalendarState(
@@ -168,7 +170,6 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       final nextBoxes = (current?.boxes ?? 0) + movement.boxes;
       rows[key] = _OutboundRow(
         productCode: product.code,
-        actualBatch: batch.actualBatch,
         dateBatch: batch.dateBatch,
         boxesPerBoard: batch.boxesPerBoard,
         boxes: nextBoxes,
@@ -232,14 +233,12 @@ class _CalendarState {
 class _OutboundRow {
   const _OutboundRow({
     required this.productCode,
-    required this.actualBatch,
     required this.dateBatch,
     required this.boxesPerBoard,
     required this.boxes,
   });
 
   final String productCode;
-  final String actualBatch;
   final String dateBatch;
   final int boxesPerBoard;
   final int boxes;
@@ -393,7 +392,7 @@ class _OutboundDetailCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '${row.productCode} · ${row.actualBatch} · ${row.dateBatch}',
+                        '${row.productCode} · ${row.dateBatch}',
                         style: const TextStyle(
                           color: AppTheme.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -401,23 +400,13 @@ class _OutboundDetailCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '今日出货 ${row.boxes}箱',
+                      '${row.boxes}箱',
                       style: const TextStyle(
                         color: AppTheme.primary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      BoardCalculator.format(
-                        boxes: row.boxes,
-                        boxesPerBoard: row.boxesPerBoard,
-                      ),
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    ..._buildBoardText(row),
                   ],
                 ),
               ),
@@ -425,6 +414,26 @@ class _OutboundDetailCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildBoardText(_OutboundRow row) {
+    final boardText = BoardCalculator.format(
+      boxes: row.boxes,
+      boxesPerBoard: row.boxesPerBoard,
+    );
+    if (boardText == '${row.boxes}箱') {
+      return const <Widget>[];
+    }
+    return [
+      const SizedBox(width: 8),
+      Text(
+        boardText,
+        style: const TextStyle(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ];
   }
 }
 

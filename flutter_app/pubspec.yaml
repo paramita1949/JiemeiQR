@@ -1,7 +1,7 @@
 name: qrscan_flutter
 description: Jiemei warehouse order and inventory app.
 publish_to: 'none'
-version: 2.0.0+2
+version: 2.0.1+3
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -39,6 +39,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: assets/icon/liushen-foreground-1024.png
+  image_path: assets/icon/jiemei.png
   adaptive_icon_background: "#00000000"
-  adaptive_icon_foreground: assets/icon/liushen-foreground-1024.png
+  adaptive_icon_foreground: assets/icon/jiemei.png

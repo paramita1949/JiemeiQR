@@ -176,29 +176,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
+    final yesterday = todayStart.subtract(const Duration(days: 1));
+    final yesterdayStart =
+        DateTime(yesterday.year, yesterday.month, yesterday.day);
+    final yesterdayEnd =
+        DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
     final countsRow = await _database.customSelect(
-        '''
+      '''
       SELECT
-        COUNT(*) AS total_count,
         SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending_count,
-        SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS today_new_count
+        SUM(CASE WHEN order_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS today_count,
+        SUM(CASE WHEN order_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS yesterday_count
       FROM orders
       ''',
-        variables: [
-          Variable.withInt(OrderStatus.pending.index),
-          Variable.withDateTime(todayStart),
-          Variable.withDateTime(todayEnd),
-        ],
-      ).getSingleOrNull();
+      variables: [
+        Variable.withInt(OrderStatus.pending.index),
+        Variable.withDateTime(todayStart),
+        Variable.withDateTime(todayEnd),
+        Variable.withDateTime(yesterdayStart),
+        Variable.withDateTime(yesterdayEnd),
+      ],
+    ).getSingleOrNull();
     final countsData = countsRow?.data ?? const <String, Object?>{};
-    final totalOrders = (countsData['total_count'] as int?) ?? 0;
     final pendingOrders = (countsData['pending_count'] as int?) ?? 0;
-    final todayNew = (countsData['today_new_count'] as int?) ?? 0;
+    final todayOrders = (countsData['today_count'] as int?) ?? 0;
+    final yesterdayOrders = (countsData['yesterday_count'] as int?) ?? 0;
 
     return _HomeStats(
       totalPieces: totalPieces,
-      totalOrders: totalOrders,
-      todayNewOrders: todayNew,
+      todayOrders: todayOrders,
+      yesterdayOrders: yesterdayOrders,
       pendingOrders: pendingOrders,
     );
   }
@@ -266,8 +273,8 @@ class _InventorySummaryCard extends StatelessWidget {
           const SizedBox(height: 7),
           Text(
             loading || stats == null
-                ? '总订单 -- 单 · 今日新增 -- 单 · 未完成 -- 单'
-                : '总订单 ${stats!.totalOrders} 单 · 今日新增 ${stats!.todayNewOrders} 单 · 未完成 ${stats!.pendingOrders} 单',
+                ? '今日订单 -- 单 · 昨日订单 -- 单 · 未完成 -- 单'
+                : '今日订单 ${stats!.todayOrders} 单 · 昨日订单 ${stats!.yesterdayOrders} 单 · 未完成 ${stats!.pendingOrders} 单',
             style: const TextStyle(
               color: Color(0xFFDBEAFE),
               fontSize: 12,
@@ -282,14 +289,14 @@ class _InventorySummaryCard extends StatelessWidget {
 class _HomeStats {
   const _HomeStats({
     required this.totalPieces,
-    required this.totalOrders,
-    required this.todayNewOrders,
+    required this.todayOrders,
+    required this.yesterdayOrders,
     required this.pendingOrders,
   });
 
   final int totalPieces;
-  final int totalOrders;
-  final int todayNewOrders;
+  final int todayOrders;
+  final int yesterdayOrders;
   final int pendingOrders;
 }
 

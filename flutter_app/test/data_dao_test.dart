@@ -267,6 +267,47 @@ void main() {
     expect(await database.select(database.orders).get(), isEmpty);
   });
 
+  test('order dao rejects duplicate product batch in same open waybill',
+      () async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBLEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final item = PendingOrderItemInput(
+      productId: productId,
+      batchId: batchId,
+      boxes: 20,
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: 'DUP-DAO',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: item,
+    );
+
+    expect(
+      () => orderDao.appendPendingWaybillItem(
+        waybillNo: 'DUP-DAO',
+        merchantName: '洁美A',
+        orderDate: DateTime(2026, 4, 26),
+        item: item,
+      ),
+      throwsA(isA<DuplicateOrderItemException>()),
+    );
+    expect(await database.select(database.orderItems).get(), hasLength(1));
+  });
+
   test('stock dao derives current stock and total pieces from movements',
       () async {
     final productId = await productDao.createProduct(
@@ -304,6 +345,47 @@ void main() {
 
     expect(await stockDao.currentBoxesForBatch(batchId), 80);
     expect(await stockDao.totalInventoryPieces(), 2400);
+  });
+
+  test('stock dao supports total pieces snapshot by date', () async {
+    final productId = await productDao.createProduct(
+      code: '20382',
+      name: '六神花露水快照测试',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'SNAP-1',
+      dateBatch: '2029.6.15',
+      initialBoxes: 100,
+    );
+
+    await stockDao.addMovement(
+      batchId: batchId,
+      movementDate: DateTime(2026, 4, 26, 10),
+      type: StockMovementType.orderOut,
+      boxes: 20,
+    );
+    await stockDao.addMovement(
+      batchId: batchId,
+      movementDate: DateTime(2026, 4, 27, 10),
+      type: StockMovementType.orderOut,
+      boxes: 10,
+    );
+
+    expect(
+      await stockDao.totalInventoryPiecesAt(
+        DateTime(2026, 4, 26, 23, 59, 59),
+      ),
+      2400,
+    );
+    expect(
+      await stockDao.totalInventoryPiecesAt(
+        DateTime(2026, 4, 27, 23, 59, 59),
+      ),
+      2100,
+    );
   });
 
   test('stock dao rejects invalid or overdrawn movements', () async {

@@ -71,3 +71,27 @@
 **Learning:** Treat stock entry as piece-based at the UI/business level. Convert derived boxes/boards from pieces using pieces-per-box and boxes-per-board. Do not ask the user to enter stock boxes in base information.
 
 **Action:** Base info should collect 库存件数, validate whole-box conversion when needed, and clear fields after saving so the operator can enter the next product/batch.
+
+## 2026-04-28 - User Preference - Lightweight Practical Development And UI Judgment
+
+**Context:** The user instructed that for this project, agents should load required skills, retain self-memory, learn and summarize, improve UI design ability, keep code practical and lightweight, make interactions human-friendly, avoid over-optimization and over-engineering, avoid changing code merely for change, and challenge unnecessary modifications.
+
+**Learning:** In QRSCAN, default to minimal, evidence-based changes. UI improvements should support real warehouse/order/inventory workflows rather than decorative redesign. If a requested or tempting change does not solve a concrete problem, question it instead of implementing churn.
+
+**Action:** Before future edits, check whether the change is necessary, small, and aligned with existing learnings. Do not repeatedly optimize stable code without a clear user-facing benefit.
+
+## 2026-04-28 - Project Tooling - UI Design Skills And Pencil Toolset
+
+**Context:** The user asked whether UI design skills and Pencil-related skills exist, and requested adding them to project rules.
+
+**Learning:** Confirmed local UI/design-related skills include `brainstorming`, `web-design-guidelines`, `figma`, `figma-implement-design`, `playwright`, `playwright-interactive`, and `agent-browser` for relevant UI tasks. No standalone local `pencil` SKILL.md was confirmed; Pencil should be treated as an available MCP design toolset (`mcp__pencil__`) for `.pen` inspection, editing, screenshots, and export.
+
+**Action:** For future UI work, load design skills only when matched by the task. For Pencil work, use `mcp__pencil__` tools directly and avoid decorative design churn.
+
+## 2026-04-28 - Project Tooling - Fixed Flutter SDK Path
+
+**Context:** The user pointed out that the agent often reports `flutter` is missing from the current shell and repeatedly locates the SDK. The correct local SDK root is `C:\tools\flutter`.
+
+**Learning:** In QRSCAN, do not rely on `flutter` or `dart` being on `PATH`. Use `C:\tools\flutter\bin\flutter.bat` and `C:\tools\flutter\bin\dart.bat` directly for commands and verification.
+
+**Action:** Future Flutter verification should run from `flutter_app/` with commands such as `C:\tools\flutter\bin\flutter.bat test`. Only re-locate the SDK if that absolute path is missing or fails.

@@ -1,21 +1,217 @@
 [
   {
+    "code": "19723",
+    "name": "195ml上海花露水",
+    "actualBatch": "FAIAAEZ",
+    "dateBatch": "2029.1.8",
+    "currentBoxes": 1032,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 40,
+    "location": "1楼+4楼-A"
+  },
+  {
+    "code": "20148",
+    "name": "六神喷雾花露水180ml",
+    "actualBatch": "FBAADEZ",
+    "dateBatch": "2029.7.31",
+    "currentBoxes": 10,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70
+  },
+  {
+    "code": "20148",
+    "name": "六神喷雾花露水180ml",
+    "actualBatch": "FBLAFEX",
+    "dateBatch": "2029.8.11",
+    "currentBoxes": 3456,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70
+  },
+  {
+    "code": "20148",
+    "name": "六神喷雾花露水180ml",
+    "actualBatch": "FBZAFEZ",
+    "dateBatch": "2029.8.25",
+    "currentBoxes": 508,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70
+  },
+  {
+    "code": "20148",
+    "name": "六神喷雾花露水180ml",
+    "actualBatch": "FCZAGEZ",
+    "dateBatch": "2029.9.25",
+    "currentBoxes": 1640,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70
+  },
+  {
+    "code": "20379",
+    "name": "六神喷雾止痒花露水80ml",
+    "actualBatch": "FDCABEZ",
+    "dateBatch": "2029.10.2",
+    "currentBoxes": 185,
+    "piecesPerBox": 48,
+    "boxesPerBoard": 80,
+    "location": "3楼-过道"
+  },
+  {
+    "code": "20380",
+    "name": "六神180ML止痒花露水喷雾",
+    "actualBatch": "ELOAYEZ",
+    "dateBatch": "2029.6.14",
+    "currentBoxes": 1284,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50,
+    "location": "4楼-后"
+  },
+  {
+    "code": "20380",
+    "name": "六神180ML止痒花露水喷雾",
+    "actualBatch": "ELTBCEZ",
+    "dateBatch": "2029.6.19",
+    "currentBoxes": 80,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70,
+    "location": "一楼"
+  },
+  {
+    "code": "20380",
+    "name": "六神180ML止痒花露水喷雾",
+    "actualBatch": "FDPAEEZ",
+    "dateBatch": "2029.10.15",
+    "currentBoxes": 1667,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50,
+    "location": "3楼-D区"
+  },
+  {
+    "code": "20763",
+    "name": "六神劲凉酷爽花露水180ml",
+    "actualBatch": "FBJAAEZ",
+    "dateBatch": "2029.8.9",
+    "currentBoxes": 256,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70,
+    "location": "3楼"
+  },
+  {
+    "code": "20850",
+    "name": "六神驱蚊花露水195ml",
+    "actualBatch": "FAKAAEZ",
+    "dateBatch": "2029.1.10",
+    "currentBoxes": 157,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 35,
+    "remark": "冻结8箱"
+  },
+  {
+    "code": "20851",
+    "name": "六神驱蚊花露水95ml",
+    "actualBatch": "FDQAKEZ",
+    "dateBatch": "2029.4.16",
+    "currentBoxes": 468,
+    "piecesPerBox": 40,
+    "boxesPerBoard": 50,
+    "location": "3楼-E"
+  },
+  {
+    "code": "20854",
+    "name": "六神喷雾驱蚊花露水180ml",
+    "actualBatch": "FAYAUEZ",
+    "dateBatch": "2029.1.24",
+    "currentBoxes": 3054,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50,
+    "location": "3楼-后"
+  },
+  {
+    "code": "20854",
+    "name": "六神喷雾驱蚊花露水180ml",
+    "actualBatch": "FBGAZEZ",
+    "dateBatch": "2029.2.6",
+    "currentBoxes": 1378,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50
+  },
+  {
+    "code": "20854",
+    "name": "六神喷雾驱蚊花露水180ml",
+    "actualBatch": "FBHBAEZ",
+    "dateBatch": "2029.2.7",
+    "currentBoxes": 408,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50
+  },
+  {
+    "code": "20854",
+    "name": "六神喷雾驱蚊花露水180ml",
+    "actualBatch": "FB3BCEZ",
+    "dateBatch": "2029.2.27",
+    "currentBoxes": 671,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50
+  },
+  {
+    "code": "20854",
+    "name": "六神喷雾驱蚊花露水180ml",
+    "actualBatch": "FDUBVEZ",
+    "dateBatch": "2029.4.20",
+    "currentBoxes": 1000,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50,
+    "location": "3楼-后"
+  },
+  {
+    "code": "20855",
+    "name": "六神喷雾驱蚊花露水80ml",
+    "actualBatch": "FDIBQEZ",
+    "dateBatch": "2029.4.8",
+    "currentBoxes": 195,
+    "piecesPerBox": 48,
+    "boxesPerBoard": 80,
+    "location": "3楼-后"
+  },
+  {
+    "code": "20856",
+    "name": "六神喷雾驱蚊花露水（冰莲香型）180ml",
+    "actualBatch": "FAHAAEZ",
+    "dateBatch": "2029.1.7",
+    "currentBoxes": 75,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 50,
+    "location": "3楼-电梯口"
+  },
+  {
+    "code": "20858",
+    "name": "六神喷雾驱蚊花露水180ml（薄荷香型）",
+    "actualBatch": "FBBZZEZ",
+    "dateBatch": "2029.2.1",
+    "currentBoxes": 409,
+    "piecesPerBox": 30,
+    "boxesPerBoard": 70,
+    "location": "3楼-过道"
+  },
+  {
     "code": "72067",
     "name": "六神花露水195ML",
     "actualBatch": "FCGBKEZ",
     "dateBatch": "2029.9.6",
-    "currentBoxes": 1858,
+    "currentBoxes": 333,
     "piecesPerBox": 30,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 35,
+    "location": "4楼-后-右",
+    "remark": "摔坏18箱，待补"
   },
   {
     "code": "72067",
     "name": "六神花露水195ML",
     "actualBatch": "FCHBLEZ",
     "dateBatch": "2029.9.7",
-    "currentBoxes": 3477,
+    "currentBoxes": 3427,
     "piecesPerBox": 30,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 40,
+    "location": "4楼"
   },
   {
     "code": "72067",
@@ -105,7 +301,8 @@
     "dateBatch": "2029.9.20",
     "currentBoxes": 6970,
     "piecesPerBox": 30,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 40,
+    "remark": "多2箱,用了1箱"
   },
   {
     "code": "72067",
@@ -144,49 +341,24 @@
     "boxesPerBoard": 40
   },
   {
-    "code": "20380",
-    "name": "六神180ML止痒花露水喷雾",
-    "actualBatch": "ELOAYEZ",
-    "dateBatch": "2029.6.14",
-    "currentBoxes": 1284,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20380",
-    "name": "六神180ML止痒花露水喷雾",
-    "actualBatch": "ELTBCEZ",
-    "dateBatch": "2029.6.19",
-    "currentBoxes": 80,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20380",
-    "name": "六神180ML止痒花露水喷雾",
-    "actualBatch": "FDPAEEZ",
-    "dateBatch": "2029.10.15",
-    "currentBoxes": 1667,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
     "code": "72068",
     "name": "六神花露水95ML",
     "actualBatch": "EL3FJEZ",
     "dateBatch": "2029.6.27",
     "currentBoxes": 1,
     "piecesPerBox": 40,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 50,
+    "location": "4楼-前-B"
   },
   {
     "code": "72068",
     "name": "六神花露水95ML",
     "actualBatch": "EL5FLEZ",
     "dateBatch": "2029.6.29",
-    "currentBoxes": 2354,
+    "currentBoxes": 1994,
     "piecesPerBox": 40,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 50,
+    "location": "4楼-F"
   },
   {
     "code": "72068",
@@ -195,7 +367,8 @@
     "dateBatch": "2029.10.19",
     "currentBoxes": 1100,
     "piecesPerBox": 40,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 50,
+    "location": "4楼-A"
   },
   {
     "code": "72068",
@@ -204,159 +377,6 @@
     "dateBatch": "2029.10.20",
     "currentBoxes": 3082,
     "piecesPerBox": 40,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20856",
-    "name": "六神喷雾驱蚊花露水（冰莲香型）180ml",
-    "actualBatch": "FAHAAEZ",
-    "dateBatch": "2029.1.7",
-    "currentBoxes": 80,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "19723",
-    "name": "195ml上海花露水",
-    "actualBatch": "FAIAAEZ",
-    "dateBatch": "2029.1.8",
-    "currentBoxes": 1032,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20854",
-    "name": "六神喷雾驱蚊花露水180ml",
-    "actualBatch": "FAYAUEZ",
-    "dateBatch": "2029.1.24",
-    "currentBoxes": 3054,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20854",
-    "name": "六神喷雾驱蚊花露水180ml",
-    "actualBatch": "FBGAZEZ",
-    "dateBatch": "2029.2.6",
-    "currentBoxes": 1378,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20854",
-    "name": "六神喷雾驱蚊花露水180ml",
-    "actualBatch": "FBHBAEZ",
-    "dateBatch": "2029.2.7",
-    "currentBoxes": 408,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20854",
-    "name": "六神喷雾驱蚊花露水180ml",
-    "actualBatch": "FB3BCEZ",
-    "dateBatch": "2029.2.27",
-    "currentBoxes": 671,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20854",
-    "name": "六神喷雾驱蚊花露水180ml",
-    "actualBatch": "FDUBVEZ",
-    "dateBatch": "2029.4.20",
-    "currentBoxes": 1000,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20855",
-    "name": "六神喷雾驱蚊花露水80ml",
-    "actualBatch": "FDIBQEZ",
-    "dateBatch": "2029.4.8",
-    "currentBoxes": 233,
-    "piecesPerBox": 48,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20850",
-    "name": "六神驱蚊花露水195ml",
-    "actualBatch": "FAKAAEZ",
-    "dateBatch": "2029.1.10",
-    "currentBoxes": 172,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20148",
-    "name": "六神喷雾花露水180ml",
-    "actualBatch": "FBAADEZ",
-    "dateBatch": "2029.7.31",
-    "currentBoxes": 10,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20148",
-    "name": "六神喷雾花露水180ml",
-    "actualBatch": "FBLAFEX",
-    "dateBatch": "2029.8.11",
-    "currentBoxes": 3593,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20148",
-    "name": "六神喷雾花露水180ml",
-    "actualBatch": "FBZAFEZ",
-    "dateBatch": "2029.8.25",
-    "currentBoxes": 508,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20148",
-    "name": "六神喷雾花露水180ml",
-    "actualBatch": "FCZAGEZ",
-    "dateBatch": "2029.9.25",
-    "currentBoxes": 1640,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20858",
-    "name": "六神喷雾驱蚊花露水180ml（薄荷香型）",
-    "actualBatch": "FBBZZEZ",
-    "dateBatch": "2029.2.1",
-    "currentBoxes": 414,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20763",
-    "name": "六神劲凉酷爽花露水180ml",
-    "actualBatch": "FBJAAEZ",
-    "dateBatch": "2029.8.9",
-    "currentBoxes": 256,
-    "piecesPerBox": 30,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20379",
-    "name": "六神喷雾止痒花露水80ml",
-    "actualBatch": "FDCABEZ",
-    "dateBatch": "2029.10.2",
-    "currentBoxes": 245,
-    "piecesPerBox": 48,
-    "boxesPerBoard": 40
-  },
-  {
-    "code": "20851",
-    "name": "六神驱蚊花露水95ml",
-    "actualBatch": "FDQAKEZ",
-    "dateBatch": "2029.4.16",
-    "currentBoxes": 473,
-    "piecesPerBox": 40,
-    "boxesPerBoard": 40
+    "boxesPerBoard": 50
   }
 ]

@@ -39,7 +39,7 @@ void main() {
     );
   }
 
-  Future<void> seedOutbound() async {
+  Future<void> seedOutbound({bool includeNextDayOutbound = false}) async {
     final productId = await productDao.createProduct(
       code: '72067',
       name: '六神花露水195ML',
@@ -71,6 +71,15 @@ void main() {
       type: StockMovementType.orderOut,
       boxes: 20,
     );
+    if (includeNextDayOutbound) {
+      await stockDao.addMovement(
+        batchId: batchId,
+        orderId: Value(orderId),
+        movementDate: DateTime(2026, 4, 27),
+        type: StockMovementType.orderOut,
+        boxes: 10,
+      );
+    }
   }
 
   testWidgets('shows outbound calendar inventory and grouped detail',
@@ -89,9 +98,19 @@ void main() {
     expect(find.text('一周'), findsOneWidget);
     expect(find.text('一月'), findsOneWidget);
     expect(find.byTooltip('自定义范围'), findsOneWidget);
-    expect(find.text('72067 · FCHBLEZ · 2029.9.7'), findsOneWidget);
-    expect(find.text('今日出货 20箱'), findsOneWidget);
+    expect(find.text('72067 · 2029.9.7'), findsOneWidget);
+    expect(find.text('20箱'), findsOneWidget);
     expect(find.text('订单 1单'), findsOneWidget);
+  });
+
+  testWidgets('total inventory uses end-date snapshot instead of realtime',
+      (tester) async {
+    await seedOutbound(includeNextDayOutbound: true);
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('2,400 件'), findsOneWidget);
   });
 
   testWidgets('navigates to order list with selected range', (tester) async {

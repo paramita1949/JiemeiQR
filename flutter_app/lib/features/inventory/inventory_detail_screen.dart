@@ -7,6 +7,7 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class InventoryDetailScreen extends StatefulWidget {
@@ -25,8 +26,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   static const int _pageSize = 50;
 
   late final AppDatabase _database;
-  late final StockDao _stockDao;
   late final ProductDao _productDao;
+  late final StockDao _stockDao;
   late final bool _ownsDatabase;
 
   final _filterController = TextEditingController();
@@ -35,7 +36,9 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   int _total = 0;
   int? _totalPieces;
   Map<String, InventoryGroupSummary> _groupSummaries = const {};
+  List<String> _quickProductCodes = const [];
   final Set<String> _collapsedProductCodes = <String>{};
+  bool _collapseInitialized = false;
   bool _loading = true;
   bool _loadingMore = false;
   int _queryVersion = 0;
@@ -46,8 +49,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     super.initState();
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
-    _stockDao = StockDao(_database);
     _productDao = ProductDao(_database);
+    _stockDao = StockDao(_database);
     _refreshRows(refreshTotals: true);
   }
 
@@ -99,8 +102,13 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             _FilterBar(
               controller: _filterController,
               selected: _stockFilter,
+              quickProductCodes: _quickProductCodes,
               onTextChanged: _onFilterTextChanged,
               onFilterChanged: _onStockFilterChanged,
+              onQuickProductTap: (code) {
+                _filterController.text = code;
+                _refreshRows();
+              },
             ),
             const SizedBox(height: 10),
             if (_loading)
@@ -151,13 +159,27 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     if (!mounted || requestVersion != _queryVersion) {
       return;
     }
+    final sortedRows = _sortRowsByGroupRanking(result.rows, groupSummaries);
+    final rankedCodes = groupSummaries.map((item) => item.productCode).toList();
     setState(() {
-      _rows = result.rows;
+      _rows = sortedRows;
       _total = result.total;
       _totalPieces = totalPieces;
+      _quickProductCodes = rankedCodes;
       _groupSummaries = {
         for (final summary in groupSummaries) summary.productCode: summary,
       };
+      if (!_collapseInitialized) {
+        _collapsedProductCodes.addAll(rankedCodes);
+        _collapseInitialized = true;
+      } else {
+        for (final code in rankedCodes) {
+          if (!_collapsedProductCodes.contains(code) &&
+              !_rows.any((row) => row.product.code == code)) {
+            _collapsedProductCodes.add(code);
+          }
+        }
+      }
       _loading = false;
     });
   }
@@ -178,7 +200,11 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       return;
     }
     setState(() {
-      _rows = [..._rows, ...result.rows];
+      final mergedRows = [..._rows, ...result.rows];
+      _rows = _sortRowsByGroupRanking(
+        mergedRows,
+        _groupSummaries.values.toList(),
+      );
       _total = result.total;
       _loadingMore = false;
     });
@@ -269,6 +295,42 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     );
   }
 
+  Future<void> _deleteBatch(InventoryDetailRow row) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context: context,
+      title: '删除批号资料',
+      message: '确认删除 ${row.product.code} · ${row.batch.actualBatch}？',
+      riskLevel: DeleteRiskLevel.high,
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      final result = await _productDao.deleteBatchWithRelations(row.batch.id);
+      if (!mounted) {
+        return;
+      }
+      await _refreshRows(refreshTotals: true);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.deletedProductId == null ? '已删除当前批号' : '已删除当前批号及产品',
+          ),
+        ),
+      );
+    } on BatchDeleteBlockedException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
+
   List<Widget> _buildGroupedRows(List<InventoryDetailRow> rows) {
     final widgets = <Widget>[];
     String? currentProductCode;
@@ -310,11 +372,55 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             row: row,
             onEditRemark: () => _editRemark(row),
             onEditBaseInfo: () => _editBaseInfo(row),
+            onDeleteBatch: () => _deleteBatch(row),
           ),
         ),
       );
     }
     return widgets;
+  }
+
+  List<InventoryDetailRow> _sortRowsByGroupRanking(
+    List<InventoryDetailRow> rows,
+    List<InventoryGroupSummary> summaries,
+  ) {
+    if (rows.length <= 1) {
+      return rows;
+    }
+    final rankByCode = <String, int>{};
+    for (var index = 0; index < summaries.length; index += 1) {
+      rankByCode[summaries[index].productCode] = index;
+    }
+    final sorted = [...rows];
+    sorted.sort((a, b) {
+      final rankA = rankByCode[a.product.code] ?? 1 << 20;
+      final rankB = rankByCode[b.product.code] ?? 1 << 20;
+      if (rankA != rankB) {
+        return rankA.compareTo(rankB);
+      }
+      final dateA = _parseDate(a.batch.dateBatch);
+      final dateB = _parseDate(b.batch.dateBatch);
+      for (var i = 0; i < 3; i += 1) {
+        final cmp = dateA[i].compareTo(dateB[i]);
+        if (cmp != 0) {
+          return cmp;
+        }
+      }
+      return a.batch.actualBatch.compareTo(b.batch.actualBatch);
+    });
+    return sorted;
+  }
+
+  List<int> _parseDate(String dateText) {
+    final parts = dateText.split('.');
+    if (parts.length != 3) {
+      return const [9999, 99, 99];
+    }
+    return [
+      int.tryParse(parts[0]) ?? 9999,
+      int.tryParse(parts[1]) ?? 99,
+      int.tryParse(parts[2]) ?? 99,
+    ];
   }
 }
 
@@ -364,14 +470,18 @@ class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.controller,
     required this.selected,
+    required this.quickProductCodes,
     required this.onTextChanged,
     required this.onFilterChanged,
+    required this.onQuickProductTap,
   });
 
   final TextEditingController controller;
   final _StockFilter selected;
+  final List<String> quickProductCodes;
   final ValueChanged<String> onTextChanged;
   final ValueChanged<_StockFilter> onFilterChanged;
+  final ValueChanged<String> onQuickProductTap;
 
   @override
   Widget build(BuildContext context) {
@@ -397,6 +507,51 @@ class _FilterBar extends StatelessWidget {
               ),
             ),
           ),
+          if (quickProductCodes.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: quickProductCodes.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final code = quickProductCodes[index];
+                  final selectedQuick = controller.text.trim() == code;
+                  return GestureDetector(
+                    onTap: () => onQuickProductTap(code),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selectedQuick
+                            ? const Color(0xFFE5EDFF)
+                            : const Color(0xFFF7F9FC),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: selectedQuick
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFFD5DDEB),
+                        ),
+                      ),
+                      child: Text(
+                        code,
+                        style: TextStyle(
+                          color: selectedQuick
+                              ? const Color(0xFF1D4ED8)
+                              : AppTheme.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SegmentedButton<_StockFilter>(
             segments: const [
@@ -432,6 +587,7 @@ class _ProductGroupHeader extends StatelessWidget {
     final totalPieces = summary?.totalPieces ?? 0;
     final totalBoxes = summary?.totalBoxes ?? 0;
     return InkWell(
+      key: Key('inventory-group-$productCode'),
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
@@ -475,11 +631,13 @@ class _InventoryRowCard extends StatelessWidget {
     required this.row,
     required this.onEditRemark,
     required this.onEditBaseInfo,
+    required this.onDeleteBatch,
   });
 
   final InventoryDetailRow row;
   final VoidCallback onEditRemark;
   final VoidCallback onEditBaseInfo;
+  final VoidCallback onDeleteBatch;
 
   @override
   Widget build(BuildContext context) {
@@ -545,6 +703,7 @@ class _InventoryRowCard extends StatelessWidget {
                 text:
                     '${row.batch.boxesPerBoard}箱/板 · ${row.product.piecesPerBox}件/箱',
               ),
+              _MetricChip(text: '库位 ${row.batch.location ?? '--'}'),
               if (row.batch.tsRequired)
                 const _MetricChip(
                   text: 'TS',
@@ -586,6 +745,11 @@ class _InventoryRowCard extends StatelessWidget {
                 tooltip: '编辑备注',
                 onPressed: onEditRemark,
                 icon: const Icon(Icons.edit_note_outlined),
+              ),
+              IconButton(
+                tooltip: '删除批号',
+                onPressed: onDeleteBatch,
+                icon: const Icon(Icons.delete_outline),
               ),
             ],
           ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
@@ -5,6 +7,7 @@ import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class OrderEditScreen extends StatefulWidget {
@@ -34,8 +37,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   DateTime _orderDate = DateTime.now();
   Product? _selectedProduct;
   AvailableBatch? _selectedBatch;
+  List<ProductInventoryOption> _productOptions = const [];
   List<Product> _products = const [];
   List<AvailableBatch> _availableBatches = const [];
+  String? _draftOrderKey;
+  List<OrderDetailLine> _draftLines = const [];
 
   @override
   void initState() {
@@ -45,6 +51,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _productDao = ProductDao(_database);
     _orderDao = OrderDao(_database);
     _boxesController.addListener(() => setState(() {}));
+    _waybillNoController.addListener(_onOrderHeaderChanged);
+    _merchantController.addListener(_onOrderHeaderChanged);
     _stateFuture = _loadState();
   }
 
@@ -75,7 +83,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                   const PageTitle(
                     icon: Icons.add_box_outlined,
                     title: '新增运单',
-                    subtitle: '商家、产品、批号、箱数',
+                    subtitle: '商家、产品、批号、箱数录入',
                   ),
                   const SizedBox(height: 14),
                   _SectionCard(
@@ -129,10 +137,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                         validator: (value) => value == null ? '必选' : null,
                         decoration: _inputDecoration('产品'),
                         items: _products
+                            .map(_productOptionFor)
                             .map(
-                              (product) => DropdownMenuItem(
-                                value: product.id,
-                                child: Text(product.code),
+                              (option) => DropdownMenuItem(
+                                value: option.product.id,
+                                child: _ProductOptionLabel(option: option),
                               ),
                             )
                             .toList(),
@@ -176,20 +185,28 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                       ),
                     ],
                   ),
+                  if (_draftLines.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _DraftLinesCard(
+                      lines: _draftLines,
+                      onDeleteLine: _deleteDraftLine,
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => _save(popAfterSave: true),
-                          child: const Text('暂存'),
+                          key: const Key('continueWaybillButton'),
+                          onPressed: () => _save(continueAdd: true),
+                          child: const Text('继续添加'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: FilledButton(
                           key: const Key('finishWaybillButton'),
-                          onPressed: () => _save(popAfterSave: false),
+                          onPressed: () => _save(continueAdd: false),
                           child: const Text('完成'),
                         ),
                       ),
@@ -206,7 +223,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
 
   Future<_OrderEditState> _loadState() async {
     final merchants = await _orderDao.recentMerchantNames(limit: 10);
-    _products = await _productDao.allProducts();
+    _productOptions = await _productDao.productsForOrderEntry();
+    _products = _productOptions.map((option) => option.product).toList();
     if (_selectedProduct == null && _products.isNotEmpty) {
       await _selectProduct(_products.first.id);
     }
@@ -232,6 +250,17 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     });
   }
 
+  ProductInventoryOption _productOptionFor(Product product) {
+    return _productOptions.firstWhere(
+      (option) => option.product.id == product.id,
+      orElse: () => ProductInventoryOption(
+        product: product,
+        currentBoxes: 0,
+        tsRequired: false,
+      ),
+    );
+  }
+
   Future<void> _pickOrderDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -244,9 +273,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       return;
     }
     setState(() => _orderDate = picked);
+    _onOrderHeaderChanged();
   }
 
-  Future<void> _save({required bool popAfterSave}) async {
+  Future<void> _save({required bool continueAdd}) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -255,10 +285,22 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     final boxes = int.parse(_boxesController.text.trim());
 
     try {
-      await _orderDao.createPendingWaybill(
-        waybillNo: _waybillNoController.text.trim(),
-        merchantName: _merchantController.text.trim(),
-        orderDate: _orderDate,
+      final waybillNo = _waybillNoController.text.trim();
+      final merchantName = _merchantController.text.trim();
+      final orderDate =
+          DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
+      final currentKey = _orderHeaderKey(
+        waybillNo: waybillNo,
+        merchantName: merchantName,
+        orderDate: orderDate,
+      );
+      if (_draftOrderKey != null && _draftOrderKey != currentKey) {
+        _draftOrderKey = null;
+      }
+      final orderId = await _orderDao.appendPendingWaybillItem(
+        waybillNo: waybillNo,
+        merchantName: merchantName,
+        orderDate: orderDate,
         item: PendingOrderItemInput(
           productId: product.id,
           batchId: batch.batch.id,
@@ -267,6 +309,17 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
           piecesPerBox: product.piecesPerBox,
         ),
       );
+      _draftOrderKey = currentKey;
+      await _reloadDraftLines(orderId: orderId, headerKey: currentKey);
+    } on DuplicateOrderItemException {
+      if (!mounted) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('该产品批号已添加，请勿重复添加')),
+      );
+      return;
     } on InsufficientStockException {
       if (!mounted) {
         return;
@@ -283,15 +336,73 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         const SnackBar(content: Text('箱数无效，无法保存运单')),
       );
       return;
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('保存失败，请重试')),
+      );
+      return;
     }
     if (!mounted) {
       return;
     }
+    if (continueAdd) {
+      _boxesController.clear();
+      if (_availableBatches.isNotEmpty) {
+        setState(() {
+          _selectedBatch = _availableBatches.first;
+        });
+      } else {
+        setState(() {});
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已追加，继续录入同运单产品')),
+      );
+      return;
+    }
+    _clearForNextWaybill();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已保存运单')),
+      const SnackBar(content: Text('已完成并清空，可录入下一单')),
     );
-    if (popAfterSave) {
-      Navigator.of(context).pop(true);
+  }
+
+  void _onOrderHeaderChanged() {
+    final currentKey = _orderHeaderKey(
+      waybillNo: _waybillNoController.text.trim(),
+      merchantName: _merchantController.text.trim(),
+      orderDate: DateTime(_orderDate.year, _orderDate.month, _orderDate.day),
+    );
+    if (_draftOrderKey != null && _draftOrderKey != currentKey) {
+      _draftOrderKey = null;
+    }
+    unawaited(_reloadDraftLinesByHeader());
+  }
+
+  String _orderHeaderKey({
+    required String waybillNo,
+    required String merchantName,
+    required DateTime orderDate,
+  }) {
+    return '$waybillNo|$merchantName|${orderDate.year}-${orderDate.month}-${orderDate.day}';
+  }
+
+  Future<void> _clearForNextWaybill() async {
+    _draftOrderKey = null;
+    _draftLines = const [];
+    _waybillNoController.clear();
+    _merchantController.clear();
+    _boxesController.clear();
+    _orderDate = DateTime.now();
+    if (_products.isNotEmpty) {
+      await _selectProduct(_products.first.id);
+    } else {
+      setState(() {
+        _selectedProduct = null;
+        _selectedBatch = null;
+        _availableBatches = const [];
+      });
     }
   }
 
@@ -334,6 +445,128 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     }
     return '${batch.batch.boxesPerBoard}箱/板 · ${product.piecesPerBox}件/箱';
   }
+
+  Future<void> _reloadDraftLinesByHeader() async {
+    final waybillNo = _waybillNoController.text.trim();
+    final merchantName = _merchantController.text.trim();
+    if (waybillNo.isEmpty || merchantName.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draftLines = const [];
+      });
+      return;
+    }
+    final orderDate =
+        DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
+    final headerKey = _orderHeaderKey(
+      waybillNo: waybillNo,
+      merchantName: merchantName,
+      orderDate: orderDate,
+    );
+    final orderId = await _orderDao.findOpenOrderId(
+      waybillNo: waybillNo,
+      merchantName: merchantName,
+      orderDate: orderDate,
+    );
+    if (orderId == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draftLines = const [];
+      });
+      return;
+    }
+    await _reloadDraftLines(orderId: orderId, headerKey: headerKey);
+  }
+
+  Future<void> _reloadDraftLines({
+    required int orderId,
+    required String headerKey,
+  }) async {
+    final detail = await _orderDao.orderDetail(orderId);
+    if (!mounted) {
+      return;
+    }
+    final currentHeaderKey = _orderHeaderKey(
+      waybillNo: _waybillNoController.text.trim(),
+      merchantName: _merchantController.text.trim(),
+      orderDate: DateTime(_orderDate.year, _orderDate.month, _orderDate.day),
+    );
+    if (currentHeaderKey != headerKey) {
+      return;
+    }
+    setState(() {
+      _draftOrderKey = headerKey;
+      _draftLines = _sortDraftLines(detail.lines);
+    });
+  }
+
+  List<OrderDetailLine> _sortDraftLines(List<OrderDetailLine> lines) {
+    final sorted = [...lines];
+    sorted.sort((a, b) {
+      final dateA = _parseDate(a.batch.dateBatch);
+      final dateB = _parseDate(b.batch.dateBatch);
+      for (var i = 0; i < 3; i += 1) {
+        final cmp = dateA[i].compareTo(dateB[i]);
+        if (cmp != 0) {
+          return cmp;
+        }
+      }
+      final batchCmp = a.batch.actualBatch.compareTo(b.batch.actualBatch);
+      if (batchCmp != 0) {
+        return batchCmp;
+      }
+      return a.item.id.compareTo(b.item.id);
+    });
+    return sorted;
+  }
+
+  List<int> _parseDate(String dateText) {
+    final parts = dateText.split('.');
+    if (parts.length != 3) {
+      return const [9999, 99, 99];
+    }
+    return [
+      int.tryParse(parts[0]) ?? 9999,
+      int.tryParse(parts[1]) ?? 99,
+      int.tryParse(parts[2]) ?? 99,
+    ];
+  }
+
+  Future<void> _deleteDraftLine(OrderDetailLine line) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context: context,
+      title: '删除已添加明细',
+      message: '确认删除 ${line.product.code} · ${line.batch.actualBatch} 这条记录？',
+      riskLevel: DeleteRiskLevel.normal,
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await _orderDao.deleteOrderItem(itemId: line.item.id);
+      if (!mounted) {
+        return;
+      }
+      await _reloadDraftLinesByHeader();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已删除该明细')),
+      );
+    } on OrderItemDeleteNotAllowedException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成订单不允许删除单条明细')),
+      );
+    }
+  }
 }
 
 class _OrderEditState {
@@ -367,6 +600,39 @@ class _SectionCard extends StatelessWidget {
           ...children,
         ],
       ),
+    );
+  }
+}
+
+class _ProductOptionLabel extends StatelessWidget {
+  const _ProductOptionLabel({required this.option});
+
+  final ProductInventoryOption option;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(option.product.code),
+        const SizedBox(width: 8),
+        Text(
+          '${option.currentBoxes}箱',
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (option.tsRequired) ...[
+          const SizedBox(width: 6),
+          const _MetaChip(
+            text: 'TS',
+            textColor: Color(0xFFDC2626),
+            backgroundColor: Color(0xFFFEE2E2),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -430,6 +696,62 @@ class _MetaChip extends StatelessWidget {
           fontSize: 13,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+class _DraftLinesCard extends StatelessWidget {
+  const _DraftLinesCard({
+    required this.lines,
+    required this.onDeleteLine,
+  });
+
+  final List<OrderDetailLine> lines;
+  final ValueChanged<OrderDetailLine> onDeleteLine;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalBoxes = lines.fold<int>(0, (sum, line) => sum + line.item.boxes);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '已添加明细（${lines.length}条 / $totalBoxes箱）',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          ...lines.map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${line.product.code} · ${line.batch.dateBatch} · ${line.batch.actualBatch} · ${line.item.boxes}箱${line.batch.tsRequired ? ' · TS' : ''}',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '删除该明细',
+                    onPressed: () => onDeleteLine(line),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

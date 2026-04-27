@@ -15,11 +15,16 @@ class OrderDao {
     required DateTime orderDate,
     String? remark,
   }) async {
+    final normalizedDate = DateTime(
+      orderDate.year,
+      orderDate.month,
+      orderDate.day,
+    );
     final id = await _database.into(_database.orders).insert(
           OrdersCompanion.insert(
             waybillNo: waybillNo,
             merchantName: merchantName,
-            orderDate: orderDate,
+            orderDate: normalizedDate,
             remark: Value.absentIfNull(remark),
           ),
         );
@@ -90,8 +95,183 @@ class OrderDao {
       OrdersCompanion(
         status: Value(status),
         updatedAt: Value(DateTime.now()),
-        ),
+      ),
+    );
+  }
+
+  Future<int> findOrCreateOpenOrder({
+    required String waybillNo,
+    required String merchantName,
+    required DateTime orderDate,
+  }) async {
+    final normalizedDate = DateTime(
+      orderDate.year,
+      orderDate.month,
+      orderDate.day,
+    );
+    final existing = await (_database.select(_database.orders)
+          ..where((table) =>
+              table.waybillNo.equals(waybillNo) &
+              table.merchantName.equals(merchantName) &
+              table.orderDate.equals(normalizedDate) &
+              table.status.isNotValue(OrderStatus.done.index))
+          ..orderBy([(table) => OrderingTerm.desc(table.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing != null) {
+      return existing.id;
+    }
+    return createOrder(
+      waybillNo: waybillNo,
+      merchantName: merchantName,
+      orderDate: normalizedDate,
+    );
+  }
+
+  Future<int?> findOpenOrderId({
+    required String waybillNo,
+    required String merchantName,
+    required DateTime orderDate,
+  }) async {
+    final normalizedDate = DateTime(
+      orderDate.year,
+      orderDate.month,
+      orderDate.day,
+    );
+    final existing = await (_database.select(_database.orders)
+          ..where((table) =>
+              table.waybillNo.equals(waybillNo) &
+              table.merchantName.equals(merchantName) &
+              table.orderDate.equals(normalizedDate) &
+              table.status.isNotValue(OrderStatus.done.index))
+          ..orderBy([(table) => OrderingTerm.desc(table.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
+    return existing?.id;
+  }
+
+  Future<int> appendPendingWaybillItem({
+    required String waybillNo,
+    required String merchantName,
+    required DateTime orderDate,
+    required PendingOrderItemInput item,
+  }) async {
+    if (item.boxes <= 0 || item.boxes > 1000000000) {
+      throw InvalidStockQuantityException(item.boxes);
+    }
+    final stockDao = StockDao(_database);
+    final availableBoxes = await stockDao.currentBoxesForBatch(item.batchId);
+    if (item.boxes > availableBoxes) {
+      throw InsufficientStockException(
+        batchId: item.batchId,
+        requestedBoxes: item.boxes,
+        availableBoxes: availableBoxes,
       );
+    }
+    return _database.transaction(() async {
+      final orderId = await findOrCreateOpenOrder(
+        waybillNo: waybillNo,
+        merchantName: merchantName,
+        orderDate: orderDate,
+      );
+      final duplicateItem = await (_database.select(_database.orderItems)
+            ..where((table) =>
+                table.orderId.equals(orderId) &
+                table.productId.equals(item.productId) &
+                table.batchId.equals(item.batchId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (duplicateItem != null) {
+        throw DuplicateOrderItemException(
+          orderId: orderId,
+          productId: item.productId,
+          batchId: item.batchId,
+        );
+      }
+      await addOrderItem(
+        orderId: orderId,
+        productId: item.productId,
+        batchId: item.batchId,
+        boxes: item.boxes,
+        boxesPerBoard: item.boxesPerBoard,
+        piecesPerBox: item.piecesPerBox,
+      );
+      return orderId;
+    });
+  }
+
+  Future<void> updateOrderBasic({
+    required int orderId,
+    required String waybillNo,
+    required String merchantName,
+    required DateTime orderDate,
+  }) async {
+    final normalizedDate = DateTime(
+      orderDate.year,
+      orderDate.month,
+      orderDate.day,
+    );
+    await (_database.update(_database.orders)
+          ..where((table) => table.id.equals(orderId)))
+        .write(
+      OrdersCompanion(
+        waybillNo: Value(waybillNo),
+        merchantName: Value(merchantName),
+        orderDate: Value(normalizedDate),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> deleteOrder(int orderId) async {
+    await _database.transaction(() async {
+      await (_database.delete(_database.stockMovements)
+            ..where((table) => table.orderId.equals(orderId)))
+          .go();
+      await (_database.delete(_database.orderItems)
+            ..where((table) => table.orderId.equals(orderId)))
+          .go();
+      await (_database.delete(_database.orders)
+            ..where((table) => table.id.equals(orderId)))
+          .go();
+    });
+  }
+
+  Future<void> deleteOrderItem({
+    required int itemId,
+  }) async {
+    await _database.transaction(() async {
+      final item = await (_database.select(_database.orderItems)
+            ..where((table) => table.id.equals(itemId)))
+          .getSingleOrNull();
+      if (item == null) {
+        return;
+      }
+      final order = await (_database.select(_database.orders)
+            ..where((table) => table.id.equals(item.orderId)))
+          .getSingleOrNull();
+      if (order == null) {
+        return;
+      }
+      if (order.status == OrderStatus.done) {
+        throw const OrderItemDeleteNotAllowedException();
+      }
+      await (_database.delete(_database.orderItems)
+            ..where((table) => table.id.equals(itemId)))
+          .go();
+      final hasRemaining = await (_database.select(_database.orderItems)
+            ..where((table) => table.orderId.equals(order.id)))
+          .getSingleOrNull();
+      if (hasRemaining != null) {
+        return;
+      }
+      await (_database.delete(_database.stockMovements)
+            ..where((table) => table.orderId.equals(order.id)))
+          .go();
+      await (_database.delete(_database.orders)
+            ..where((table) => table.id.equals(order.id)))
+          .go();
+    });
   }
 
   Future<List<String>> recentMerchantNames({int limit = 10}) async {
@@ -198,16 +378,26 @@ class OrderDao {
         : await (_database.select(_database.batches)
               ..where((table) => table.id.isIn(batchIds)))
             .get();
-    final batchTsById = {
-      for (final batch in batches) batch.id: batch.tsRequired
+    final batchById = {
+      for (final batch in batches) batch.id: batch,
     };
     final statByOrderId = <int, _OrderItemStats>{};
     for (final item in items) {
-      final tsRequired = batchTsById[item.batchId] ?? false;
+      final batch = batchById[item.batchId];
+      final tsRequired = batch?.tsRequired ?? false;
+      final location = batch?.location;
       statByOrderId.update(
         item.orderId,
-        (value) => value.add(item.boxes, tsRequired: tsRequired),
-        ifAbsent: () => _OrderItemStats(item.boxes, tsRequired: tsRequired),
+        (value) => value.add(
+          item.boxes,
+          tsRequired: tsRequired,
+          location: location,
+        ),
+        ifAbsent: () => _OrderItemStats(
+          item.boxes,
+          tsRequired: tsRequired,
+          location: location,
+        ),
       );
     }
     final summaries = <OrderSummary>[];
@@ -223,6 +413,7 @@ class OrderDao {
           itemCount: stats?.count ?? 0,
           totalBoxes: stats?.totalBoxes ?? 0,
           hasTsRequired: stats?.hasTsRequired ?? false,
+          locationsText: stats?.locationsText ?? '',
         ),
       );
     }
@@ -286,6 +477,30 @@ class PendingOrderItemInput {
   final int piecesPerBox;
 }
 
+class OrderItemDeleteNotAllowedException implements Exception {
+  const OrderItemDeleteNotAllowedException();
+
+  @override
+  String toString() => 'OrderItemDeleteNotAllowedException';
+}
+
+class DuplicateOrderItemException implements Exception {
+  const DuplicateOrderItemException({
+    required this.orderId,
+    required this.productId,
+    required this.batchId,
+  });
+
+  final int orderId;
+  final int productId;
+  final int batchId;
+
+  @override
+  String toString() {
+    return 'DuplicateOrderItemException(orderId: $orderId, productId: $productId, batchId: $batchId)';
+  }
+}
+
 class OrderSummary {
   const OrderSummary({
     required this.id,
@@ -296,6 +511,7 @@ class OrderSummary {
     required this.itemCount,
     required this.totalBoxes,
     required this.hasTsRequired,
+    required this.locationsText,
   });
 
   final int id;
@@ -306,6 +522,7 @@ class OrderSummary {
   final int itemCount;
   final int totalBoxes;
   final bool hasTsRequired;
+  final String locationsText;
 
   String get dateText =>
       '${orderDate.year}.${orderDate.month}.${orderDate.day}';
@@ -344,17 +561,43 @@ class OrderDetailLine {
 }
 
 class _OrderItemStats {
-  _OrderItemStats(this.totalBoxes, {required bool tsRequired})
-      : hasTsRequired = tsRequired;
+  _OrderItemStats(
+    this.totalBoxes, {
+    required bool tsRequired,
+    String? location,
+  }) : hasTsRequired = tsRequired {
+    if (location != null && location.isNotEmpty) {
+      _locations.add(location);
+    }
+  }
 
   int count = 1;
   int totalBoxes;
   bool hasTsRequired;
+  final Set<String> _locations = <String>{};
 
-  _OrderItemStats add(int boxes, {required bool tsRequired}) {
+  String get locationsText {
+    if (_locations.isEmpty) {
+      return '';
+    }
+    final locations = _locations.toList()..sort();
+    if (locations.length <= 2) {
+      return locations.join(' / ');
+    }
+    return '${locations.take(2).join(' / ')} 等${locations.length}个库位';
+  }
+
+  _OrderItemStats add(
+    int boxes, {
+    required bool tsRequired,
+    String? location,
+  }) {
     count += 1;
     totalBoxes += boxes;
     hasTsRequired = hasTsRequired || tsRequired;
+    if (location != null && location.isNotEmpty) {
+      _locations.add(location);
+    }
     return this;
   }
 }

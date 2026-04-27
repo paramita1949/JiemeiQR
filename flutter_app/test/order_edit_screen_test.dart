@@ -95,7 +95,7 @@ void main() {
     expect(order.waybillNo, '168220019125');
     expect(order.status, OrderStatus.pending);
     expect(item.boxes, 320);
-    expect(find.text('已保存运单'), findsOneWidget);
+    expect(find.text('已完成并清空，可录入下一单'), findsOneWidget);
   });
 
   testWidgets('waybill number must be filled manually without scan action',
@@ -116,6 +116,42 @@ void main() {
 
     expect(find.text('需 0箱'), findsNothing);
     expect(find.text('需 --'), findsNothing);
+  });
+
+  testWidgets('sorts product selector by stock and marks TS products',
+      (tester) async {
+    final lowerStockProductId = await productDao.createProduct(
+      code: '20584',
+      name: '低库存产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: lowerStockProductId,
+      actualBatch: 'LOW',
+      dateBatch: '2029.1.1',
+      initialBoxes: 10,
+    );
+    final highStockProductId = await productDao.createProduct(
+      code: '72067',
+      name: '高库存扫码产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: highStockProductId,
+      actualBatch: 'HIGH-TS',
+      dateBatch: '2029.1.2',
+      initialBoxes: 100,
+      tsRequired: true,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('72067'), findsOneWidget);
+    expect(find.text('可用 100箱'), findsOneWidget);
+    expect(find.text('TS'), findsWidgets);
   });
 
   testWidgets('shows stock error when save becomes over-stock', (tester) async {
@@ -148,5 +184,88 @@ void main() {
 
     expect(find.text('库存不足，无法保存运单'), findsOneWidget);
     expect(await database.select(database.orders).get(), hasLength(1));
+  });
+
+  testWidgets('blocks duplicate product batch in the same waybill',
+      (tester) async {
+    await seedProduct();
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('waybillNoField')), 'DUP-1');
+    await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
+    await tester.enterText(find.byKey(const Key('boxesField')), '20');
+    final continueButton = find.byKey(const Key('continueWaybillButton'));
+    await tester.scrollUntilVisible(
+      continueButton,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(continueButton);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('boxesField')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('boxesField')), '20');
+    await tester.ensureVisible(continueButton);
+    await tester.pumpAndSettle();
+    await tester.tap(continueButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('该产品批号已添加，请勿重复添加'), findsOneWidget);
+    expect(await database.select(database.orderItems).get(), hasLength(1));
+  });
+
+  testWidgets('shows appended lines and supports deleting single line',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'BATCH-LATE',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'BATCH-EARLY',
+      dateBatch: '2029.9.6',
+      initialBoxes: 100,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('waybillNoField')), 'WB-APPEND');
+    await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
+    await tester.enterText(find.byKey(const Key('boxesField')), '20');
+    final continueButton = find.byKey(const Key('continueWaybillButton'));
+    await tester.scrollUntilVisible(
+      continueButton,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(continueButton);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已添加明细（1条 / 20箱）'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('删除该明细').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已添加明细'), findsNothing);
+    final order = await (database.select(database.orders)
+          ..where((table) => table.waybillNo.equals('WB-APPEND')))
+        .getSingleOrNull();
+    expect(order, isNull);
   });
 }

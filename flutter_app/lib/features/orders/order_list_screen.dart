@@ -4,6 +4,7 @@ import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_edit_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class OrderListScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final OrderDao _orderDao;
   late final bool _ownsDatabase;
   late DateTimeRange? _dateRange;
+  _OrderQuickFilter _quickFilter = _OrderQuickFilter.today;
   OrderStatus _status = OrderStatus.pending;
   final List<OrderSummary> _orders = <OrderSummary>[];
   bool _loadingInitial = true;
@@ -40,7 +42,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
-    _dateRange = widget.dateRange;
+    _dateRange = widget.dateRange ?? _singleDayRange(DateTime.now());
+    _quickFilter = widget.dateRange == null
+        ? _OrderQuickFilter.today
+        : _OrderQuickFilter.custom;
     _refreshOrders();
   }
 
@@ -76,11 +81,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            _QuickFilterChips(
+              selected: _quickFilter,
+              onSelected: _applyQuickFilter,
+            ),
             const SizedBox(height: 14),
             _StatusTabs(
               selected: _status,
               onChanged: (status) {
-                setState(() => _status = status);
+                setState(() {
+                  _status = status;
+                  if (_quickFilter == _OrderQuickFilter.pendingOnly &&
+                      status != OrderStatus.pending) {
+                    _quickFilter = _OrderQuickFilter.today;
+                    _dateRange = _singleDayRange(DateTime.now());
+                  }
+                });
                 _refreshOrders();
               },
             ),
@@ -102,6 +119,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   child: _OrderCard(
                     order: order,
                     onTap: () => _openOrderDetail(order),
+                    onDelete: () => _deleteOrder(order.id),
                   ),
                 ),
               ),
@@ -169,6 +187,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   String _dateRangeText() {
+    if (_quickFilter == _OrderQuickFilter.pendingOnly) {
+      return '未完成';
+    }
     final range = _dateRange;
     if (range == null) {
       return '全部日期';
@@ -197,7 +218,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (picked == null) {
       return;
     }
-    setState(() => _dateRange = picked);
+    setState(() {
+      _dateRange = picked;
+      _quickFilter = _OrderQuickFilter.custom;
+    });
     _refreshOrders();
   }
 
@@ -226,6 +250,149 @@ class _OrderListScreenState extends State<OrderListScreen> {
       return;
     }
     _refreshOrders();
+  }
+
+  void _applyQuickFilter(_OrderQuickFilter filter) {
+    setState(() {
+      _quickFilter = filter;
+      switch (filter) {
+        case _OrderQuickFilter.today:
+          _dateRange = _singleDayRange(DateTime.now());
+        case _OrderQuickFilter.yesterday:
+          _dateRange = _singleDayRange(
+            DateTime.now().subtract(const Duration(days: 1)),
+          );
+        case _OrderQuickFilter.week:
+          final today = DateTime.now();
+          final end = DateTime(today.year, today.month, today.day);
+          final start = end.subtract(const Duration(days: 6));
+          _dateRange = DateTimeRange(start: start, end: end);
+        case _OrderQuickFilter.month:
+          final now = DateTime.now();
+          _dateRange = DateTimeRange(
+            start: DateTime(now.year, now.month, 1),
+            end: DateTime(now.year, now.month + 1, 0),
+          );
+        case _OrderQuickFilter.pendingOnly:
+          _dateRange = null;
+          _status = OrderStatus.pending;
+        case _OrderQuickFilter.custom:
+          break;
+      }
+    });
+    _refreshOrders();
+  }
+
+  Future<void> _deleteOrder(int orderId) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context: context,
+      title: '删除订单',
+      message: '删除后不可恢复，确定删除该订单？',
+      riskLevel: DeleteRiskLevel.high,
+    );
+    if (!confirmed) {
+      return;
+    }
+    await _orderDao.deleteOrder(orderId);
+    if (!mounted) {
+      return;
+    }
+    await _refreshOrders();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('订单已删除')),
+    );
+  }
+}
+
+DateTimeRange _singleDayRange(DateTime date) {
+  final day = DateTime(date.year, date.month, date.day);
+  return DateTimeRange(start: day, end: day);
+}
+
+enum _OrderQuickFilter { today, yesterday, week, month, pendingOnly, custom }
+
+class _QuickFilterChips extends StatelessWidget {
+  const _QuickFilterChips({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _OrderQuickFilter selected;
+  final ValueChanged<_OrderQuickFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _QuickChip(
+          label: '今日',
+          selected: selected == _OrderQuickFilter.today,
+          onTap: () => onSelected(_OrderQuickFilter.today),
+        ),
+        _QuickChip(
+          label: '昨日',
+          selected: selected == _OrderQuickFilter.yesterday,
+          onTap: () => onSelected(_OrderQuickFilter.yesterday),
+        ),
+        _QuickChip(
+          label: '一周',
+          selected: selected == _OrderQuickFilter.week,
+          onTap: () => onSelected(_OrderQuickFilter.week),
+        ),
+        _QuickChip(
+          label: '一月',
+          selected: selected == _OrderQuickFilter.month,
+          onTap: () => onSelected(_OrderQuickFilter.month),
+        ),
+        _QuickChip(
+          label: '未完成',
+          selected: selected == _OrderQuickFilter.pendingOnly,
+          onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickChip extends StatelessWidget {
+  const _QuickChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE5EDFF) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFD5DDEB),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? const Color(0xFF1D4ED8) : AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -330,10 +497,12 @@ class _OrderCard extends StatelessWidget {
   const _OrderCard({
     required this.order,
     required this.onTap,
+    required this.onDelete,
   });
 
   final OrderSummary order;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -380,6 +549,12 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: '删除订单',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
               ],
             ),
             const SizedBox(height: 9),
@@ -406,6 +581,15 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ),
                 if (order.hasTsRequired) const _TsPill(),
+                if (order.itemCount == 1 && order.locationsText.isNotEmpty)
+                  Text(
+                    '库位 ${order.locationsText}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
               ],
             ),
           ],

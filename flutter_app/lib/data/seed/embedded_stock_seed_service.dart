@@ -50,8 +50,8 @@ class EmbeddedStockSeedService {
           initialBoxes: row.currentBoxes,
           boxesPerBoard: row.boxesPerBoard,
           tsRequired: false,
-          location: '浙江仓',
-          remark: '内置库存',
+          location: row.location,
+          remark: row.remark,
         );
       }
     });
@@ -80,6 +80,8 @@ class EmbeddedSeedRow {
     required this.currentBoxes,
     required this.piecesPerBox,
     required this.boxesPerBoard,
+    required this.location,
+    required this.remark,
   });
 
   final String code;
@@ -89,6 +91,8 @@ class EmbeddedSeedRow {
   final int currentBoxes;
   final int piecesPerBox;
   final int boxesPerBoard;
+  final String? location;
+  final String? remark;
 
   static EmbeddedSeedRow fromJson(Map<String, dynamic> json) {
     return EmbeddedSeedRow(
@@ -99,6 +103,12 @@ class EmbeddedSeedRow {
       currentBoxes: (json['currentBoxes'] as num?)?.toInt() ?? 0,
       piecesPerBox: (json['piecesPerBox'] as num?)?.toInt() ?? 30,
       boxesPerBoard: (json['boxesPerBoard'] as num?)?.toInt() ?? 40,
+      location: (json['location'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['location'] as String?)?.trim(),
+      remark: (json['remark'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['remark'] as String?)?.trim(),
     );
   }
 }

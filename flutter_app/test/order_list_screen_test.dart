@@ -30,16 +30,17 @@ void main() {
   }
 
   testWidgets('shows status tabs and centered order cards', (tester) async {
+    final today = DateTime.now();
     final pickedOrderId = await orderDao.createOrder(
       waybillNo: '168220019125',
       merchantName: '洁美A',
-      orderDate: DateTime(2026, 4, 26),
+      orderDate: today,
     );
     await orderDao.setStatus(pickedOrderId, OrderStatus.picked);
     await orderDao.createOrder(
       waybillNo: '168220019126',
       merchantName: '洁美B',
-      orderDate: DateTime(2026, 4, 26),
+      orderDate: today,
     );
 
     await tester.pumpWidget(buildScreen());
@@ -101,10 +102,11 @@ void main() {
   });
 
   testWidgets('order card opens detail screen', (tester) async {
+    final today = DateTime.now();
     await orderDao.createOrder(
       waybillNo: 'DETAIL-1',
       merchantName: '洁美A',
-      orderDate: DateTime(2026, 4, 26),
+      orderDate: today,
     );
 
     await tester.pumpWidget(buildScreen());
@@ -118,6 +120,7 @@ void main() {
   });
 
   testWidgets('shows TS badge only for TS-required orders', (tester) async {
+    final today = DateTime.now();
     final productId = await productDao.createProduct(
       code: '72067',
       name: '六神花露水195ML',
@@ -141,7 +144,7 @@ void main() {
     await orderDao.createPendingWaybill(
       waybillNo: 'TS-ORDER',
       merchantName: '洁美TS',
-      orderDate: DateTime(2026, 4, 26),
+      orderDate: today,
       item: PendingOrderItemInput(
         productId: productId,
         batchId: tsBatchId,
@@ -153,7 +156,7 @@ void main() {
     await orderDao.createPendingWaybill(
       waybillNo: 'NORMAL-ORDER',
       merchantName: '洁美普通',
-      orderDate: DateTime(2026, 4, 25),
+      orderDate: today.subtract(const Duration(days: 1)),
       item: PendingOrderItemInput(
         productId: productId,
         batchId: normalBatchId,
@@ -167,5 +170,59 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('TS'), findsOneWidget);
+  });
+
+  testWidgets('hides location summary for multi-product order', (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'LOC-A',
+      dateBatch: '2029.9.6',
+      initialBoxes: 10,
+      location: '4楼-后',
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'LOC-B',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+      location: '5楼-前',
+    );
+    final today = DateTime.now();
+    await orderDao.createPendingWaybill(
+      waybillNo: 'MULTI-LOC',
+      merchantName: '洁美A',
+      orderDate: today,
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: 'MULTI-LOC',
+      merchantName: '洁美A',
+      orderDate: today,
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchB,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('MULTI-LOC'), findsWidgets);
+    expect(find.textContaining('库位 '), findsNothing);
   });
 }

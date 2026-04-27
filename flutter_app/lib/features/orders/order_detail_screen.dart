@@ -5,6 +5,7 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_completion_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -57,10 +58,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
               children: [
-                const PageTitle(
-                  icon: Icons.receipt_long_outlined,
-                  title: '运单详情',
-                  subtitle: '订单状态与产品明细',
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: PageTitle(
+                        icon: Icons.receipt_long_outlined,
+                        title: '运单详情',
+                        subtitle: '订单状态与产品明细',
+                      ),
+                    ),
+                    if (detail != null) ...[
+                      IconButton.filledTonal(
+                        tooltip: '编辑订单',
+                        onPressed: () => _editOrderBasic(detail),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton.filledTonal(
+                        tooltip: '删除订单',
+                        onPressed: _deleteOrder,
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 14),
                 if (snapshot.connectionState != ConnectionState.done)
@@ -78,7 +99,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ...detail.lines.map(
                     (line) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _LineCard(line: line),
+                      child: _LineCard(
+                        line: line,
+                        onDeleteLine: detail.order.status == OrderStatus.done
+                            ? null
+                            : () => _deleteOrderLine(line),
+                      ),
                     ),
                   ),
                   if (detail.order.status != OrderStatus.done) ...[
@@ -106,6 +132,159 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     setState(() {
       _detailFuture = _orderDao.orderDetail(widget.orderId);
     });
+  }
+
+  Future<void> _editOrderBasic(OrderDetail detail) async {
+    final waybillController =
+        TextEditingController(text: detail.order.waybillNo);
+    final merchantController = TextEditingController(
+      text: detail.order.merchantName,
+    );
+    var selectedDate = DateTime(
+      detail.order.orderDate.year,
+      detail.order.orderDate.month,
+      detail.order.orderDate.day,
+    );
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('编辑订单信息'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: waybillController,
+                decoration: const InputDecoration(labelText: '运单号'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: merchantController,
+                decoration: const InputDecoration(labelText: '商家'),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('日期'),
+                subtitle: Text(_formatDate(selectedDate)),
+                trailing: const Icon(Icons.calendar_month_outlined),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    locale: const Locale('zh', 'CN'),
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(DateTime.now().year + 5),
+                  );
+                  if (picked == null) {
+                    return;
+                  }
+                  setLocalState(() => selectedDate = picked);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (shouldSave != true) {
+      return;
+    }
+    final waybillNo = waybillController.text.trim();
+    final merchantName = merchantController.text.trim();
+    if (waybillNo.isEmpty || merchantName.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('运单号和商家不能为空')),
+      );
+      return;
+    }
+    await _orderDao.updateOrderBasic(
+      orderId: widget.orderId,
+      waybillNo: waybillNo,
+      merchantName: merchantName,
+      orderDate: selectedDate,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _detailFuture = _orderDao.orderDetail(widget.orderId);
+    });
+  }
+
+  Future<void> _deleteOrder() async {
+    final confirmed = await showDeleteConfirmDialog(
+      context: context,
+      title: '删除订单',
+      message: '删除后不可恢复，确定删除该订单？',
+      riskLevel: DeleteRiskLevel.high,
+    );
+    if (!confirmed) {
+      return;
+    }
+    await _orderDao.deleteOrder(widget.orderId);
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _deleteOrderLine(OrderDetailLine line) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context: context,
+      title: '删除产品明细',
+      message: '确认删除 ${line.product.code} · ${line.batch.actualBatch} 这条明细？',
+      riskLevel: DeleteRiskLevel.normal,
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await _orderDao.deleteOrderItem(itemId: line.item.id);
+      if (!mounted) {
+        return;
+      }
+      try {
+        await _orderDao.orderDetail(widget.orderId);
+      } on StateError {
+        if (!mounted) {
+          return;
+        }
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _detailFuture = _orderDao.orderDetail(widget.orderId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已删除该产品明细')),
+      );
+    } on OrderItemDeleteNotAllowedException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成订单不允许删除单条明细')),
+      );
+    }
   }
 
   Future<void> _confirmComplete() async {
@@ -282,15 +461,19 @@ class _StatusButton extends StatelessWidget {
 }
 
 class _LineCard extends StatelessWidget {
-  const _LineCard({required this.line});
+  const _LineCard({
+    required this.line,
+    this.onDeleteLine,
+  });
 
   final OrderDetailLine line;
+  final VoidCallback? onDeleteLine;
 
   @override
   Widget build(BuildContext context) {
     final boardText = BoardCalculator.format(
       boxes: line.item.boxes,
-      boxesPerBoard: line.item.boxesPerBoard,
+      boxesPerBoard: line.batch.boxesPerBoard,
     );
     return Container(
       padding: const EdgeInsets.all(14),
@@ -301,13 +484,25 @@ class _LineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${line.product.code} · ${line.batch.actualBatch} · ${line.batch.dateBatch}',
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${line.product.code} · ${line.batch.actualBatch} · ${line.batch.dateBatch}',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (onDeleteLine != null)
+                IconButton(
+                  tooltip: '删除该产品',
+                  onPressed: onDeleteLine,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+            ],
           ),
           const SizedBox(height: 9),
           Wrap(
@@ -318,8 +513,9 @@ class _LineCard extends StatelessWidget {
               _MetricChip(text: boardText),
               _MetricChip(
                 text:
-                    '${line.item.boxesPerBoard}箱/板 · ${line.item.piecesPerBox}件/箱',
+                    '${line.batch.boxesPerBoard}箱/板 · ${line.product.piecesPerBox}件/箱',
               ),
+              _MetricChip(text: '库位 ${line.batch.location ?? '--'}'),
               if (line.batch.tsRequired)
                 const _MetricChip(
                   text: 'TS',
