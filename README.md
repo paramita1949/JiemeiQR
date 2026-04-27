@@ -20,6 +20,7 @@
 - 默认补丁号递增：`2.0.1 -> 2.0.2`
 - 需要功能升级时手动使用 `minor`/`major`
 - 升版脚本：`./scripts/bump_version.ps1`
+- Android `versionCode` 自动由 `x.y.z` 计算（`major*10000 + minor*100 + patch`），确保覆盖安装可升级
 - 示例：
   - `./scripts/bump_version.ps1`（patch）
   - `./scripts/bump_version.ps1 -Part minor`
