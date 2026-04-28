@@ -29,6 +29,14 @@ void main() {
     );
   }
 
+  Finder richTextContaining(String pattern) {
+    return find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains(pattern),
+    );
+  }
+
   testWidgets('defaults to pending quick filter and shows status stats',
       (tester) async {
     final today = DateTime.now();
@@ -190,7 +198,7 @@ void main() {
 
     expect(find.text('TS'), findsOneWidget);
     expect(find.text('备货汇总（按产品/批号/日期）'), findsOneWidget);
-    expect(find.textContaining('72067'), findsWidgets);
+    expect(richTextContaining('72067'), findsWidgets);
   });
 
   testWidgets('hides location summary for multi-product order', (tester) async {
@@ -278,7 +286,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('30箱 · 30箱'), findsOneWidget);
+    expect(richTextContaining('30箱 · 30箱'), findsOneWidget);
     expect(find.textContaining('.5板'), findsNothing);
   });
 }

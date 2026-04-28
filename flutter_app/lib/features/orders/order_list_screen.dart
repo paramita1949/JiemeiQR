@@ -743,12 +743,29 @@ class _RestockAggregateCard extends StatelessWidget {
           ...rows.take(6).map(
                 (row) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.totalBoxes}箱 · ${BoardCalculator.format(boxes: row.totalBoxes, boxesPerBoard: row.boxesPerBoard)}',
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      children: [
+                        TextSpan(
+                            text: '${row.productCode} · ${row.actualBatch} · '),
+                        TextSpan(
+                          text: row.dateBatch,
+                          style: const TextStyle(color: Color(0xFFDC2626)),
+                        ),
+                        TextSpan(text: ' · ${row.totalBoxes}箱 · '),
+                        TextSpan(
+                          text: BoardCalculator.format(
+                            boxes: row.totalBoxes,
+                            boxesPerBoard: row.boxesPerBoard,
+                          ),
+                          style: const TextStyle(color: Color(0xFFDC2626)),
+                        ),
+                      ],
                     ),
                   ),
                 ),
