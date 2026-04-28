@@ -98,8 +98,7 @@ void main() {
     expect(find.text('RANGE-2'), findsNothing);
   });
 
-  testWidgets('quick filter starts from 未完成 then 今日/昨日/一周/一月',
-      (tester) async {
+  testWidgets('quick filter starts from 未完成 then 今日/昨日/一周/一月', (tester) async {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
     final labels = find.text('未完成');
@@ -246,5 +245,40 @@ void main() {
 
     expect(find.text('MULTI-LOC'), findsWidgets);
     expect(find.textContaining('库位 '), findsNothing);
+  });
+
+  testWidgets('restock aggregate uses board+box format without decimal boards',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '20148',
+      name: '测试产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'B-1',
+      dateBatch: '2029.8.11',
+      initialBoxes: 100,
+      boxesPerBoard: 40,
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'WB-BOARD-FMT',
+      merchantName: '洁美A',
+      orderDate: DateTime.now(),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchId,
+        boxes: 30,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('30箱 · 30箱'), findsOneWidget);
+    expect(find.textContaining('.5板'), findsNothing);
   });
 }

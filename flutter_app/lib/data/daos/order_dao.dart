@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
+import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 
 import '../app_database.dart';
 import 'stock_dao.dart';
@@ -361,7 +362,8 @@ class OrderDao {
         picked += 1;
       }
     }
-    return OrderStatusCounts(done: done, unfinished: unfinished, picked: picked);
+    return OrderStatusCounts(
+        done: done, unfinished: unfinished, picked: picked);
   }
 
   Future<List<OrderRestockAggregate>> orderRestockAggregates({
@@ -395,14 +397,15 @@ class OrderDao {
       vars.add(Variable.withDateTime(end));
     }
     final whereSql = where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}';
-    final rows = await _database.customSelect(
-      '''
+    final rows = await _database
+        .customSelect(
+          '''
       SELECT
         p.code AS product_code,
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
         SUM(oi.boxes) AS total_boxes,
-        SUM(CAST(oi.boxes AS REAL) / oi.boxes_per_board) AS total_boards
+        MAX(oi.boxes_per_board) AS boxes_per_board
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
       INNER JOIN products p ON p.id = oi.product_id
@@ -411,24 +414,27 @@ class OrderDao {
       GROUP BY p.code, b.actual_batch, b.date_batch
       ORDER BY p.code ASC, b.date_batch ASC, b.actual_batch ASC
       ''',
-      variables: vars,
-      readsFrom: {
-        _database.orderItems,
-        _database.orders,
-        _database.products,
-        _database.batches,
-      },
-    ).get();
-    return rows.map((row) {
-      final boardsRaw = row.data['total_boards'];
-      return OrderRestockAggregate(
-        productCode: row.data['product_code'] as String? ?? '',
-        actualBatch: row.data['actual_batch'] as String? ?? '',
-        dateBatch: row.data['date_batch'] as String? ?? '',
-        totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
-        totalBoards: boardsRaw is num ? boardsRaw.toDouble() : 0,
-      );
-    }).where((row) => row.productCode.isNotEmpty).toList();
+          variables: vars,
+          readsFrom: {
+            _database.orderItems,
+            _database.orders,
+            _database.products,
+            _database.batches,
+          },
+        )
+        .get();
+    return rows
+        .map((row) {
+          return OrderRestockAggregate(
+            productCode: row.data['product_code'] as String? ?? '',
+            actualBatch: row.data['actual_batch'] as String? ?? '',
+            dateBatch: row.data['date_batch'] as String? ?? '',
+            totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
+            boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
+          );
+        })
+        .where((row) => row.productCode.isNotEmpty)
+        .toList();
   }
 
   Future<PagedOrderSummaries> orderSummariesPage({
@@ -548,7 +554,8 @@ class OrderDao {
           hasTsRequired: stats?.hasTsRequired ?? false,
           locationsText: stats?.locationsText ?? '',
           restockSummaryText: _restockSummaryText(
-            orderItems: items.where((item) => item.orderId == order.id).toList(),
+            orderItems:
+                items.where((item) => item.orderId == order.id).toList(),
             productsById: productsById,
             batchesById: batchById,
           ),
@@ -626,7 +633,7 @@ class OrderDao {
     required Map<int, Product> productsById,
     required Map<int, BatchRecord> batchesById,
   }) {
-    final boardsByProductDate = <String, double>{};
+    final boxesByProductDate = <String, _RestockBoxesAccumulator>{};
     for (final item in orderItems) {
       final product = productsById[item.productId];
       final batch = batchesById[item.batchId];
@@ -634,31 +641,30 @@ class OrderDao {
         continue;
       }
       final key = '${product.code}|${batch.dateBatch}';
-      final boards = item.boxes / item.boxesPerBoard;
-      boardsByProductDate.update(
+      boxesByProductDate.update(
         key,
-        (value) => value + boards,
-        ifAbsent: () => boards,
+        (value) => value.add(boxes: item.boxes),
+        ifAbsent: () => _RestockBoxesAccumulator(
+          totalBoxes: item.boxes,
+          boxesPerBoard: item.boxesPerBoard,
+        ),
       );
     }
-    if (boardsByProductDate.isEmpty) {
+    if (boxesByProductDate.isEmpty) {
       return '';
     }
-    final entries = boardsByProductDate.entries.toList()
+    final entries = boxesByProductDate.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
     return entries.map((entry) {
       final parts = entry.key.split('|');
       final code = parts.first;
       final dateBatch = parts.length > 1 ? parts[1] : '';
-      return '$code $dateBatch 需${_formatBoards(entry.value)}板';
+      final text = BoardCalculator.format(
+        boxes: entry.value.totalBoxes,
+        boxesPerBoard: entry.value.boxesPerBoard,
+      );
+      return '$code $dateBatch 需$text';
     }).join(' / ');
-  }
-
-  String _formatBoards(double value) {
-    if (value == value.roundToDouble()) {
-      return value.toInt().toString();
-    }
-    return value.toStringAsFixed(1);
   }
 }
 
@@ -763,14 +769,31 @@ class OrderRestockAggregate {
     required this.actualBatch,
     required this.dateBatch,
     required this.totalBoxes,
-    required this.totalBoards,
+    required this.boxesPerBoard,
   });
 
   final String productCode;
   final String actualBatch;
   final String dateBatch;
   final int totalBoxes;
-  final double totalBoards;
+  final int boxesPerBoard;
+}
+
+class _RestockBoxesAccumulator {
+  const _RestockBoxesAccumulator({
+    required this.totalBoxes,
+    required this.boxesPerBoard,
+  });
+
+  final int totalBoxes;
+  final int boxesPerBoard;
+
+  _RestockBoxesAccumulator add({required int boxes}) {
+    return _RestockBoxesAccumulator(
+      totalBoxes: totalBoxes + boxes,
+      boxesPerBoard: boxesPerBoard,
+    );
+  }
 }
 
 class OrderDetail {

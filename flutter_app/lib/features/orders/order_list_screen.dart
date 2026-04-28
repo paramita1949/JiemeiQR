@@ -4,6 +4,7 @@ import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_edit_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -360,35 +361,35 @@ class _QuickFilterChips extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-        _QuickChip(
-          label: '未完成',
-          selected: selected == _OrderQuickFilter.pendingOnly,
-          onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
-        ),
-        const SizedBox(width: 8),
-        _QuickChip(
-          label: '今日',
-          selected: selected == _OrderQuickFilter.today,
-          onTap: () => onSelected(_OrderQuickFilter.today),
-        ),
-        const SizedBox(width: 8),
-        _QuickChip(
-          label: '昨日',
-          selected: selected == _OrderQuickFilter.yesterday,
-          onTap: () => onSelected(_OrderQuickFilter.yesterday),
-        ),
-        const SizedBox(width: 8),
-        _QuickChip(
-          label: '一周',
-          selected: selected == _OrderQuickFilter.week,
-          onTap: () => onSelected(_OrderQuickFilter.week),
-        ),
-        const SizedBox(width: 8),
-        _QuickChip(
-          label: '一月',
-          selected: selected == _OrderQuickFilter.month,
-          onTap: () => onSelected(_OrderQuickFilter.month),
-        ),
+          _QuickChip(
+            label: '未完成',
+            selected: selected == _OrderQuickFilter.pendingOnly,
+            onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
+          ),
+          const SizedBox(width: 8),
+          _QuickChip(
+            label: '今日',
+            selected: selected == _OrderQuickFilter.today,
+            onTap: () => onSelected(_OrderQuickFilter.today),
+          ),
+          const SizedBox(width: 8),
+          _QuickChip(
+            label: '昨日',
+            selected: selected == _OrderQuickFilter.yesterday,
+            onTap: () => onSelected(_OrderQuickFilter.yesterday),
+          ),
+          const SizedBox(width: 8),
+          _QuickChip(
+            label: '一周',
+            selected: selected == _OrderQuickFilter.week,
+            onTap: () => onSelected(_OrderQuickFilter.week),
+          ),
+          const SizedBox(width: 8),
+          _QuickChip(
+            label: '一月',
+            selected: selected == _OrderQuickFilter.month,
+            onTap: () => onSelected(_OrderQuickFilter.month),
+          ),
         ],
       ),
     );
@@ -560,67 +561,67 @@ class _OrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        order.waybillNo,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          order.waybillNo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        order.merchantName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          order.merchantName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                alignment: Alignment.center,
-                width: 64,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
-                  color: status.color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  status.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: status.color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                tooltip: '删除订单',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
-          ),
+                const SizedBox(width: 6),
+                Container(
+                  alignment: Alignment.center,
+                  width: 64,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: status.color.withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    status.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: status.color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: '删除订单',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
             const SizedBox(height: 7),
             Wrap(
               spacing: 8,
@@ -740,18 +741,18 @@ class _RestockAggregateCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ...rows.take(6).map(
-            (row) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.totalBoxes}箱 · ${_formatBoards(row.totalBoards)}板',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                (row) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.totalBoxes}箱 · ${BoardCalculator.format(boxes: row.totalBoxes, boxesPerBoard: row.boxesPerBoard)}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
           if (rows.length > 6)
             Text(
               '其余 ${rows.length - 6} 条请在明细中查看',
@@ -765,11 +766,4 @@ class _RestockAggregateCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatBoards(double value) {
-  if (value == value.roundToDouble()) {
-    return value.toInt().toString();
-  }
-  return value.toStringAsFixed(1);
 }
