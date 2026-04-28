@@ -196,6 +196,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                   Row(
                     children: [
                       Expanded(
+                        child: TextButton(
+                          key: const Key('endWaybillButton'),
+                          onPressed: _endAndBackHome,
+                          child: const Text('结束'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: OutlinedButton(
                           key: const Key('continueWaybillButton'),
                           onPressed: () => _save(continueAdd: true),
@@ -375,6 +383,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已完成并清空，可录入下一单')),
     );
+  }
+
+  void _endAndBackHome() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _onOrderHeaderChanged() {

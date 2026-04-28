@@ -104,6 +104,7 @@ void main() {
     expect(find.text('订单 1单 · 20箱'), findsOneWidget);
     expect(find.text('168220019125'), findsOneWidget);
     expect(find.text('洁美A'), findsWidgets);
+    expect(find.textContaining('+0箱'), findsNothing);
     expect(find.text('出库明细'), findsOneWidget);
     expect(find.text('按运单'), findsOneWidget);
     expect(find.text('运单 168220019125'), findsOneWidget);

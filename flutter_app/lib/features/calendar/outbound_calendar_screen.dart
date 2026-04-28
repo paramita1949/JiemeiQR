@@ -712,13 +712,7 @@ class _OutboundDetailCard extends StatelessWidget {
   }
 
   Widget _buildProductRow(_OutboundRow row) {
-    final boardText = BoardCalculator.format(
-      boxes: row.boxes,
-      boxesPerBoard: row.boxesPerBoard,
-    );
-    final quantityText = boardText == '${row.boxes}箱'
-        ? '${row.boxes}箱'
-        : '${row.boxes}箱 · $boardText';
+    final quantity = _quantityParts(row);
     return Container(
       margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
@@ -738,18 +732,78 @@ class _OutboundDetailCard extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            quantityText,
-            style: const TextStyle(
-              color: AppTheme.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
+          SizedBox(
+            width: 64,
+            child: Text(
+              quantity.boxesText,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppTheme.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
+          ),
+          SizedBox(
+            width: 88,
+            child: quantity.boardText == null
+                ? const SizedBox.shrink()
+                : Row(
+                    children: [
+                      const Text(
+                        '·',
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          quantity.boardText!,
+                          textAlign: TextAlign.left,
+                          style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
+
+  _QuantityParts _quantityParts(_OutboundRow row) {
+    final boardText = BoardCalculator.format(
+      boxes: row.boxes,
+      boxesPerBoard: row.boxesPerBoard,
+    );
+    if (boardText == '${row.boxes}箱') {
+      return _QuantityParts(
+        boxesText: '${row.boxes}箱',
+        boardText: null,
+      );
+    }
+    return _QuantityParts(
+      boxesText: '${row.boxes}箱',
+      boardText: boardText,
+    );
+  }
+}
+
+class _QuantityParts {
+  const _QuantityParts({
+    required this.boxesText,
+    required this.boardText,
+  });
+
+  final String boxesText;
+  final String? boardText;
 }
 
 class _OutboundGroup {

@@ -268,4 +268,54 @@ void main() {
         .getSingleOrNull();
     expect(order, isNull);
   });
+
+  testWidgets('end button exits and returns to home without saving',
+      (tester) async {
+    await seedProduct();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrderEditScreen(database: database),
+                    ),
+                  );
+                },
+                child: const Text('打开新增运单'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('打开新增运单'));
+    await tester.pumpAndSettle();
+    expect(find.text('新增运单'), findsWidgets);
+
+    await tester.enterText(find.byKey(const Key('waybillNoField')), 'END-1');
+    await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
+    await tester.enterText(find.byKey(const Key('boxesField')), '20');
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('endWaybillButton')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('endWaybillButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('打开新增运单'), findsOneWidget);
+    final order = await (database.select(database.orders)
+          ..where((table) => table.waybillNo.equals('END-1')))
+        .getSingleOrNull();
+    expect(order, isNull);
+  });
 }
