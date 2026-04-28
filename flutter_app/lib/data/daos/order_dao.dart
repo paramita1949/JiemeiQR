@@ -369,12 +369,14 @@ class OrderDao {
   Future<List<OrderRestockAggregate>> orderRestockAggregates({
     OrderStatus? status,
     DateTimeRange? dateRange,
+    bool unfinishedOnly = false,
   }) async {
     final where = <String>[];
     final vars = <Variable<Object>>[];
-    where.add('o.status != ?');
-    vars.add(Variable.withInt(OrderStatus.done.index));
-    if (status != null) {
+    if (unfinishedOnly) {
+      where.add('o.status != ?');
+      vars.add(Variable.withInt(OrderStatus.done.index));
+    } else if (status != null) {
       where.add('o.status = ?');
       vars.add(Variable.withInt(status.index));
     }
@@ -440,13 +442,16 @@ class OrderDao {
   Future<PagedOrderSummaries> orderSummariesPage({
     OrderStatus? status,
     DateTimeRange? dateRange,
+    bool unfinishedOnly = false,
     required int offset,
     required int limit,
   }) async {
     final orderTable = _database.orders;
     final countExp = orderTable.id.count();
     final countQuery = _database.selectOnly(orderTable)..addColumns([countExp]);
-    if (status != null) {
+    if (unfinishedOnly) {
+      countQuery.where(orderTable.status.isNotValue(OrderStatus.done.index));
+    } else if (status != null) {
       countQuery.where(orderTable.status.equals(status.index));
     }
     if (dateRange != null) {
@@ -468,7 +473,9 @@ class OrderDao {
     final total = (await countQuery.getSingle()).read(countExp) ?? 0;
 
     final query = _database.select(_database.orders);
-    if (status != null) {
+    if (unfinishedOnly) {
+      query.where((table) => table.status.isNotValue(OrderStatus.done.index));
+    } else if (status != null) {
       query.where((table) => table.status.equals(status.index));
     }
     if (dateRange != null) {

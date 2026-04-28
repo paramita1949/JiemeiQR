@@ -32,12 +32,11 @@ void main() {
   Finder richTextContaining(String pattern) {
     return find.byWidgetPredicate(
       (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains(pattern),
+          widget is RichText && widget.text.toPlainText().contains(pattern),
     );
   }
 
-  testWidgets('defaults to pending quick filter and shows status stats',
+  testWidgets('defaults to unfinished quick filter and shows status stats',
       (tester) async {
     final today = DateTime.now();
     final pickedOrderId = await orderDao.createOrder(
@@ -64,6 +63,7 @@ void main() {
     expect(find.text('备货汇总（按产品/批号/日期）'), findsNothing);
     expect(find.text('新增运单'), findsOneWidget);
     expect(find.byTooltip('日期筛选'), findsOneWidget);
+    expect(find.text('168220019125'), findsOneWidget);
     expect(find.text('168220019126'), findsOneWidget);
     expect(find.text('洁美B'), findsOneWidget);
 

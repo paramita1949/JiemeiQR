@@ -31,7 +31,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final bool _ownsDatabase;
   late DateTimeRange? _dateRange;
   _OrderQuickFilter _quickFilter = _OrderQuickFilter.pendingOnly;
-  OrderStatus? _status = OrderStatus.pending;
+  OrderStatus? _status;
   final List<OrderSummary> _orders = <OrderSummary>[];
   List<OrderRestockAggregate> _restockAggregates = const [];
   OrderStatusCounts? _counts;
@@ -50,7 +50,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _quickFilter = widget.dateRange == null
         ? _OrderQuickFilter.pendingOnly
         : _OrderQuickFilter.custom;
-    _status = widget.dateRange == null ? OrderStatus.pending : null;
+    _status = null;
     _refreshOrders();
   }
 
@@ -98,7 +98,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 setState(() {
                   _status = status;
                   if (_quickFilter == _OrderQuickFilter.pendingOnly &&
-                      status != OrderStatus.pending) {
+                      status == OrderStatus.done) {
                     _quickFilter = _OrderQuickFilter.today;
                     _dateRange = _singleDayRange(DateTime.now());
                   }
@@ -172,6 +172,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final page = await _orderDao.orderSummariesPage(
       status: _status,
       dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
       offset: 0,
       limit: _pageSize,
     );
@@ -179,6 +180,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final restockAggregates = await _orderDao.orderRestockAggregates(
       status: _status,
       dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
     );
     if (!mounted) {
       return;
@@ -201,6 +203,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final page = await _orderDao.orderSummariesPage(
       status: _status,
       dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
       offset: _orders.length,
       limit: _pageSize,
     );
@@ -283,7 +286,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       switch (filter) {
         case _OrderQuickFilter.pendingOnly:
           _dateRange = null;
-          _status = OrderStatus.pending;
+          _status = null;
         case _OrderQuickFilter.today:
           _dateRange = _singleDayRange(DateTime.now());
           _status = null;
@@ -737,10 +740,16 @@ class _RestockAggregateCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...rows.take(6).map(
-                (row) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: RichText(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: Scrollbar(
+              thumbVisibility: rows.length > 5,
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: rows.length,
+                itemBuilder: (context, index) {
+                  final row = rows[index];
+                  return RichText(
                     text: TextSpan(
                       style: const TextStyle(
                         color: AppTheme.textSecondary,
@@ -749,7 +758,8 @@ class _RestockAggregateCard extends StatelessWidget {
                       ),
                       children: [
                         TextSpan(
-                            text: '${row.productCode} · ${row.actualBatch} · '),
+                          text: '${row.productCode} · ${row.actualBatch} · ',
+                        ),
                         TextSpan(
                           text: row.dateBatch,
                           style: const TextStyle(color: Color(0xFFDC2626)),
@@ -764,18 +774,12 @@ class _RestockAggregateCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-          if (rows.length > 6)
-            Text(
-              '其余 ${rows.length - 6} 条请在明细中查看',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                  );
+                },
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
               ),
             ),
+          ),
         ],
       ),
     );
