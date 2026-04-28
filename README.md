@@ -31,6 +31,7 @@
 - 版本脚本：`scripts/bump_version.ps1`
 - CI 构建：`.github/workflows/flutter-android-build.yml`
 - 云编译说明：`docs/FLUTTER_GITHUB_BUILD.md`
+- Android 固定签名说明：`docs/ANDROID_RELEASE_SIGNING.md`
 
 ## 本地开发
 ```bash
