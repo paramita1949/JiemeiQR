@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/seed/embedded_stock_seed_service.dart';
+import 'package:qrscan_flutter/data/seed/startup_seed_service.dart';
 import 'package:qrscan_flutter/features/home/home_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
@@ -48,8 +49,8 @@ class _QrScanAppState extends State<QrScanApp> {
 
   Future<void> _seedInBackground() async {
     try {
-      final seeded =
-          await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+      final seeded = await StartupSeedService(database: _database)
+          .seedOnlyOnFirstInstall();
       if (!mounted || !seeded) {
         return;
       }

@@ -24,6 +24,9 @@ class _ResetOnlyBackupService extends BackupService {
       resetAt: DateTime(2026, 4, 28),
     );
   }
+
+  @override
+  Future<List<BackupSnapshot>> listLocalBackups() async => const [];
 }
 
 Future<void> _createBusinessDatabase(
@@ -57,6 +60,26 @@ List<String> _productCodes(File file) {
   }
 }
 
+Future<void> _overwriteProducts(
+  File file, {
+  required String productCode,
+}) async {
+  final database = AppDatabase.forTesting(NativeDatabase(file));
+  try {
+    await database.delete(database.products).go();
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: productCode,
+            name: '测试产品$productCode',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+  } finally {
+    await database.close();
+  }
+}
+
 void main() {
   test('backup service creates local backup and metadata file', () async {
     final tempDir =
@@ -86,6 +109,38 @@ void main() {
         jsonDecode(await metadataFile.readAsString()) as Map<String, dynamic>;
     expect(metadata['databaseFileName'], 'jiemei.sqlite');
     expect(metadata['backupDatabasePath'], result.filePath);
+  });
+
+  test('backup service lists snapshots by date and restores selected snapshot',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('jiemei-restore-test-');
+    final currentDb = File('${tempDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(currentDb, productCode: 'CURRENT');
+    var now = DateTime(2026, 4, 26, 8, 0, 0);
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => now,
+    );
+
+    final older = await service.createLocalBackup();
+    await _overwriteProducts(currentDb, productCode: 'NEWER');
+    now = DateTime(2026, 4, 26, 9, 0, 0);
+    final newer = await service.createLocalBackup();
+    await _overwriteProducts(currentDb, productCode: 'ACTIVE');
+
+    final snapshots = await service.listLocalBackups();
+
+    expect(snapshots.map((snapshot) => snapshot.fileName), [
+      newer.fileName,
+      older.fileName,
+    ]);
+
+    final restore = await service.restoreBackupSnapshot(older.filePath);
+
+    expect(restore.backupFileName, isNotEmpty);
+    expect(_productCodes(currentDb), ['CURRENT']);
   });
 
   test('backup service reads source database from database directory',

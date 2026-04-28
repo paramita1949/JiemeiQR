@@ -40,6 +40,9 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   bool _resettingDatabase = false;
   bool _startingSend = false;
   bool _receiving = false;
+  bool _loadingBackups = true;
+  String? _restoringBackupPath;
+  List<BackupSnapshot> _backupSnapshots = const [];
   SendSession? _sendSession;
   String? _statusText;
 
@@ -51,6 +54,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     _lanTransferService = widget.lanTransferService ??
         LanTransferService(backupService: _backupService);
     _backupDraft = _backupService.createLocalBackupDraft();
+    _loadBackupSnapshots();
   }
 
   @override
@@ -109,9 +113,13 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               backupFileName: _backupDraft.fileName,
               creatingBackup: _creatingBackup,
               resettingDatabase: _resettingDatabase,
+              loadingBackups: _loadingBackups,
+              backupSnapshots: _backupSnapshots,
+              restoringBackupPath: _restoringBackupPath,
               onCreateBackup: _creatingBackup ? null : _createBackup,
               onResetDatabase:
                   _resettingDatabase ? null : _confirmAndResetDatabase,
+              onRestoreBackup: _confirmAndRestoreBackup,
             ),
           ],
         ),
@@ -361,6 +369,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (!mounted) {
         return;
       }
+      await _loadBackupSnapshots();
       setState(() => _statusText = '接收完成，已自动备份：${result.backupFileName}');
       _showSnack('接收完成');
     } on ConnectionCodeParseException {
@@ -414,6 +423,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         return;
       }
       setState(() => _backupDraft = _backupService.createLocalBackupDraft());
+      await _loadBackupSnapshots();
       _showSnack('备份完成：${result.fileName}');
     } on BackupSourceMissingException {
       _showSnack('未找到数据库文件，无法生成备份');
@@ -459,6 +469,10 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (!mounted) {
         return;
       }
+      await _loadBackupSnapshots();
+      if (!mounted) {
+        return;
+      }
       _showSnack('数据库已重置，备份：${result.backupFileName}');
       Navigator.of(context).pop();
     } on BackupSourceMissingException {
@@ -482,6 +496,95 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
     await Clipboard.setData(ClipboardData(text: session.connectionCode));
     _showSnack('二维码内容已复制');
+  }
+
+  Future<void> _loadBackupSnapshots() async {
+    if (mounted) {
+      setState(() => _loadingBackups = true);
+    }
+    try {
+      final snapshots = await _backupService.listLocalBackups();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backupSnapshots = snapshots;
+        _loadingBackups = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backupSnapshots = const [];
+        _loadingBackups = false;
+      });
+    }
+  }
+
+  Future<void> _confirmAndRestoreBackup(BackupSnapshot snapshot) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('恢复备份快照'),
+        content: Text(
+          '将当前业务数据恢复到 ${_formatSnapshotTime(snapshot.createdAt)} 的备份。'
+          '恢复前会自动备份当前数据，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _restoringBackupPath = snapshot.filePath;
+      _statusText = '正在恢复备份快照...';
+    });
+    var prepared = false;
+    try {
+      await widget.onPrepareImport?.call();
+      prepared = true;
+      final result =
+          await _backupService.restoreBackupSnapshot(snapshot.filePath);
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
+      prepared = false;
+      if (!mounted) {
+        return;
+      }
+      await _loadBackupSnapshots();
+      setState(() => _statusText = '恢复完成，已自动备份当前数据：${result.backupFileName}');
+      _showSnack('备份已恢复');
+    } on InvalidImportDatabaseException {
+      _showSnack('备份文件无效，无法恢复');
+    } on BackupSourceMissingException {
+      _showSnack('当前数据库不存在，无法恢复');
+    } on ImportDatabaseFailedException {
+      _showSnack('恢复失败，请关闭占用数据库的页面后重试');
+    } catch (_) {
+      _showSnack('恢复失败，请稍后重试');
+    } finally {
+      if (prepared) {
+        try {
+          await widget.onImportCompleted?.call(seedIfEmpty: false);
+        } catch (_) {
+          _showSnack('数据库恢复失败，请重启应用后再试');
+        }
+      }
+      if (mounted) {
+        setState(() => _restoringBackupPath = null);
+      }
+    }
   }
 
   void _showSnack(String text) {
@@ -608,15 +711,23 @@ class _UtilityPanel extends StatelessWidget {
     required this.backupFileName,
     required this.creatingBackup,
     required this.resettingDatabase,
+    required this.loadingBackups,
+    required this.backupSnapshots,
+    required this.restoringBackupPath,
     required this.onCreateBackup,
     required this.onResetDatabase,
+    required this.onRestoreBackup,
   });
 
   final String backupFileName;
   final bool creatingBackup;
   final bool resettingDatabase;
+  final bool loadingBackups;
+  final List<BackupSnapshot> backupSnapshots;
+  final String? restoringBackupPath;
   final VoidCallback? onCreateBackup;
   final VoidCallback? onResetDatabase;
+  final ValueChanged<BackupSnapshot> onRestoreBackup;
 
   @override
   Widget build(BuildContext context) {
@@ -661,8 +772,139 @@ class _UtilityPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  '备份快照',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                loadingBackups ? '读取中' : '${backupSnapshots.length} 个',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (loadingBackups)
+            const Text(
+              '正在读取备份快照...',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else if (backupSnapshots.isEmpty)
+            const Text(
+              '暂无备份。生成备份、重置前、接收前都会创建日期快照。',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...backupSnapshots.take(5).map(
+                  (snapshot) => _BackupSnapshotTile(
+                    snapshot: snapshot,
+                    restoring: restoringBackupPath == snapshot.filePath,
+                    onRestore: () => onRestoreBackup(snapshot),
+                  ),
+                ),
         ],
       ),
     );
   }
+}
+
+class _BackupSnapshotTile extends StatelessWidget {
+  const _BackupSnapshotTile({
+    required this.snapshot,
+    required this.restoring,
+    required this.onRestore,
+  });
+
+  final BackupSnapshot snapshot;
+  final bool restoring;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.history_rounded,
+            size: 20,
+            color: AppTheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatSnapshotTime(snapshot.createdAt),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _formatBytes(snapshot.sizeBytes),
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: restoring ? null : onRestore,
+            child: Text(restoring ? '恢复中' : '恢复'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatSnapshotTime(DateTime value) {
+  String pad2(int n) => n.toString().padLeft(2, '0');
+  return '${value.year}.${value.month}.${value.day} '
+      '${pad2(value.hour)}:${pad2(value.minute)}';
+}
+
+String _formatBytes(int value) {
+  if (value >= 1024 * 1024) {
+    return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  if (value >= 1024) {
+    return '${(value / 1024).toStringAsFixed(1)} KB';
+  }
+  return '$value B';
 }

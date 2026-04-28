@@ -103,3 +103,11 @@
 **Learning:** In QRSCAN, reset semantics are business-data clearing, not database-file deletion. Avoid replacing/deleting the live SQLite file for reset/import because it blurs business intent and can destabilize active app state. Prefer explicit SQL operations: clear tables, overwrite tables, or later add a separate merge mode with defined conflict rules.
 
 **Action:** For future data backup work, keep strategies explicit in code and UI: `重置=清空`, `覆盖=清空后插入`, `增量合并=单独设计冲突规则`. Do not silently use file replacement when a database command can express the operation.
+
+## 2026-04-29 - Correction - Embedded Seed Must Only Run Once
+
+**Context:** The user clarified again that reset means all business tables are empty and the initial embedded stock must not be retained or restored after DEBUG/app restart.
+
+**Learning:** Do not use "database is empty" alone as the first-install signal. A reset intentionally creates an empty database, so startup seed needs a separate persistent first-install marker outside business tables. Otherwise reset appears to fail because startup re-imports embedded stock.
+
+**Action:** Future seed or demo-data logic must distinguish `first install` from `user reset to empty`. Demo data should never silently reappear after reset unless the user explicitly chooses to import it.

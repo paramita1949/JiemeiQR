@@ -74,6 +74,55 @@ class BackupService {
     );
   }
 
+  Future<List<BackupSnapshot>> listLocalBackups() async {
+    final documentsDir = await _documentsDirectory();
+    final backupDir = Directory(p.join(documentsDir.path, 'backups'));
+    if (!await backupDir.exists()) {
+      return const [];
+    }
+
+    final snapshots = <BackupSnapshot>[];
+    await for (final entity in backupDir.list()) {
+      if (entity is! File || p.extension(entity.path) != '.sqlite') {
+        continue;
+      }
+      final stat = await entity.stat();
+      final fileName = p.basename(entity.path);
+      final infoPath = p.setExtension(entity.path, '.backup_info.json');
+      final infoFile = File(infoPath);
+      DateTime createdAt = stat.modified;
+      if (await infoFile.exists()) {
+        try {
+          final content = jsonDecode(await infoFile.readAsString());
+          if (content is Map<String, dynamic>) {
+            final parsed =
+                DateTime.tryParse(content['createdAt'] as String? ?? '');
+            if (parsed != null) {
+              createdAt = parsed;
+            }
+          }
+        } catch (_) {
+          // A damaged metadata file should not hide a valid backup snapshot.
+        }
+      }
+      snapshots.add(
+        BackupSnapshot(
+          fileName: fileName,
+          filePath: entity.path,
+          infoPath: await infoFile.exists() ? infoFile.path : null,
+          createdAt: createdAt,
+          sizeBytes: stat.size,
+        ),
+      );
+    }
+    snapshots.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return snapshots;
+  }
+
+  Future<ImportResult> restoreBackupSnapshot(String backupPath) {
+    return importDatabaseFromPath(backupPath);
+  }
+
   Future<SendPackageResult> createSendPackage() async {
     final now = (nowProvider ?? DateTime.now)();
     final documentsDir = await _documentsDirectory();
@@ -420,6 +469,22 @@ class BackupResult {
   final String filePath;
   final String infoPath;
   final String note;
+}
+
+class BackupSnapshot {
+  const BackupSnapshot({
+    required this.fileName,
+    required this.filePath,
+    required this.createdAt,
+    required this.sizeBytes,
+    this.infoPath,
+  });
+
+  final String fileName;
+  final String filePath;
+  final String? infoPath;
+  final DateTime createdAt;
+  final int sizeBytes;
 }
 
 class BackupSourceMissingException implements Exception {
