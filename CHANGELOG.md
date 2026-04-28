@@ -1,5 +1,11 @@
 # Changelog
 
+
+## 3.0.3 (2026-04-28)
+
+### Changed
+- 重新发布 Android APK，使用固定 release 签名，确保本地与 GitHub 构建签名一致。
+- 触发 GitHub Actions 重新生成可覆盖安装的发布包。
 ## 3.0.2 (2026-04-28)
 
 ### Added
