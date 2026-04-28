@@ -56,7 +56,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('新增运单'), findsWidgets);
-    expect(find.text('常用商家'), findsOneWidget);
+    expect(find.byKey(const Key('merchantHistoryDropdown')), findsOneWidget);
     expect(find.text('72067'), findsOneWidget);
     expect(find.text('FCHBLEZ · 2029.9.7'), findsOneWidget);
 
@@ -68,7 +68,7 @@ void main() {
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
   });
 
-  testWidgets('saves pending waybill from finish button', (tester) async {
+  testWidgets('saves pending waybill from next button', (tester) async {
     await seedProduct();
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
@@ -78,13 +78,13 @@ void main() {
     await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
     await tester.enterText(find.byKey(const Key('boxesField')), '320');
     await tester.scrollUntilVisible(
-      find.byKey(const Key('finishWaybillButton')),
+      find.byKey(const Key('nextWaybillButton')),
       120,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -120));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('finishWaybillButton')));
+    await tester.tap(find.byKey(const Key('nextWaybillButton')));
     await tester.pumpAndSettle();
 
     final order = await (database.select(database.orders)
@@ -173,20 +173,20 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
-      find.byKey(const Key('finishWaybillButton')),
+      find.byKey(const Key('nextWaybillButton')),
       120,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.ensureVisible(find.byKey(const Key('finishWaybillButton')));
+    await tester.ensureVisible(find.byKey(const Key('nextWaybillButton')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('finishWaybillButton')));
+    await tester.tap(find.byKey(const Key('nextWaybillButton')));
     await tester.pumpAndSettle();
 
     expect(find.text('库存不足，无法保存运单'), findsOneWidget);
     expect(await database.select(database.orders).get(), hasLength(1));
   });
 
-  testWidgets('blocks duplicate product batch in the same waybill',
+  testWidgets('duplicate product batch can be merged after confirmation',
       (tester) async {
     await seedProduct();
     await tester.pumpWidget(buildScreen());
@@ -213,8 +213,13 @@ void main() {
     await tester.tap(continueButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('该产品批号已添加，请勿重复添加'), findsOneWidget);
+    expect(find.text('同一运单下该产品批号已添加，是否累加箱数？'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '累加'));
+    await tester.pumpAndSettle();
+
     expect(await database.select(database.orderItems).get(), hasLength(1));
+    final mergedItem = await database.select(database.orderItems).getSingle();
+    expect(mergedItem.boxes, 40);
   });
 
   testWidgets('shows appended lines and supports deleting single line',

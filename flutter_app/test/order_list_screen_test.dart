@@ -29,7 +29,8 @@ void main() {
     );
   }
 
-  testWidgets('shows status tabs and centered order cards', (tester) async {
+  testWidgets('defaults to pending quick filter and shows status stats',
+      (tester) async {
     final today = DateTime.now();
     final pickedOrderId = await orderDao.createOrder(
       waybillNo: '168220019125',
@@ -51,12 +52,15 @@ void main() {
     expect(find.text('未完成'), findsWidgets);
     expect(find.text('已拣货'), findsWidgets);
     expect(find.text('完成'), findsWidgets);
-    expect(find.text('完成 0单 · 未完成 2单'), findsOneWidget);
+    expect(find.text('完成 0单 · 未完成 2单 · 已拣货 1单'), findsOneWidget);
     expect(find.text('新增运单'), findsOneWidget);
     expect(find.byTooltip('日期筛选'), findsOneWidget);
-    expect(find.text('168220019125'), findsOneWidget);
     expect(find.text('168220019126'), findsOneWidget);
     expect(find.text('洁美B'), findsOneWidget);
+
+    await tester.tap(find.text('全部').first);
+    await tester.pumpAndSettle();
+    expect(find.text('168220019125'), findsOneWidget);
 
     await tester.tap(find.text('已拣货').last);
     await tester.pumpAndSettle();
@@ -91,6 +95,18 @@ void main() {
     expect(find.textContaining('2026.4.25'), findsWidgets);
     expect(find.text('RANGE-1'), findsOneWidget);
     expect(find.text('RANGE-2'), findsNothing);
+  });
+
+  testWidgets('quick filter starts from 未完成 then 今日/昨日/一周/一月',
+      (tester) async {
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+    final labels = find.text('未完成');
+    expect(labels, findsWidgets);
+    expect(find.text('今日'), findsOneWidget);
+    expect(find.text('昨日'), findsOneWidget);
+    expect(find.text('一周'), findsOneWidget);
+    expect(find.text('一月'), findsOneWidget);
   });
 
   testWidgets('new waybill button opens edit screen', (tester) async {

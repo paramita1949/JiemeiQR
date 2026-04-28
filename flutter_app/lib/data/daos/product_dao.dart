@@ -91,7 +91,7 @@ class ProductDao {
       final batches = await availableBatchesForProduct(product.id);
       final currentBoxes = batches.fold<int>(
         0,
-        (sum, row) => sum + row.currentBoxes,
+        (sum, row) => sum + row.availableBoxes,
       );
       final tsRequired = batches.any((row) => row.batch.tsRequired) ||
           await hasTsRequiredBatches(product.id);
@@ -128,7 +128,10 @@ class ProductDao {
         .get();
   }
 
-  Future<List<AvailableBatch>> availableBatchesForProduct(int productId) async {
+  Future<List<AvailableBatch>> availableBatchesForProduct(
+    int productId, {
+    int? excludeOrderId,
+  }) async {
     final batches = await batchesForProduct(productId);
     if (batches.isEmpty) {
       return const <AvailableBatch>[];
@@ -145,16 +148,66 @@ class ProductDao {
         ifAbsent: () => _movementDelta(movement),
       );
     }
+    final pendingReservedByBatch = await _pendingReservedBoxesByBatch(
+      productId: productId,
+      excludeOrderId: excludeOrderId,
+    );
     final rows = <AvailableBatch>[];
 
     for (final batch in batches) {
       final currentBoxes = batch.initialBoxes + (deltasByBatch[batch.id] ?? 0);
-      if (currentBoxes > 0) {
-        rows.add(AvailableBatch(batch: batch, currentBoxes: currentBoxes));
+      final reserved = pendingReservedByBatch[batch.id] ?? 0;
+      final availableBoxes = currentBoxes - reserved;
+      if (availableBoxes > 0) {
+        rows.add(
+          AvailableBatch(
+            batch: batch,
+            currentBoxes: currentBoxes,
+            reservedBoxes: reserved,
+          ),
+        );
       }
     }
 
     return rows;
+  }
+
+  Future<Map<int, int>> _pendingReservedBoxesByBatch({
+    required int productId,
+    int? excludeOrderId,
+  }) async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT oi.batch_id AS batch_id, COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      INNER JOIN batches b ON b.id = oi.batch_id
+      WHERE b.product_id = ?
+        AND o.status != ?
+        ${excludeOrderId == null ? '' : 'AND o.id != ?'}
+      GROUP BY oi.batch_id
+      ''',
+      variables: [
+        Variable.withInt(productId),
+        Variable.withInt(OrderStatus.done.index),
+        if (excludeOrderId != null) Variable.withInt(excludeOrderId),
+      ],
+      readsFrom: {
+        _database.orderItems,
+        _database.orders,
+        _database.batches,
+      },
+    ).get();
+    final result = <int, int>{};
+    for (final row in rows) {
+      final batchId = row.data['batch_id'] as int?;
+      final reserved = row.data['reserved_boxes'] as int?;
+      if (batchId == null || reserved == null) {
+        continue;
+      }
+      result[batchId] = reserved;
+    }
+    return result;
   }
 
   Future<void> deleteBatch(int batchId) async {
@@ -391,10 +444,14 @@ class AvailableBatch {
   const AvailableBatch({
     required this.batch,
     required this.currentBoxes,
+    required this.reservedBoxes,
   });
 
   final BatchRecord batch;
   final int currentBoxes;
+  final int reservedBoxes;
+
+  int get availableBoxes => currentBoxes - reservedBoxes;
 }
 
 class ProductInventoryOption {

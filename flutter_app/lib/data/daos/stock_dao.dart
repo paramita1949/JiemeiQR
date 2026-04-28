@@ -68,6 +68,41 @@ class StockDao {
     return totalInventoryPiecesAt(DateTime.now());
   }
 
+  Future<int> projectedInventoryPieces() async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        COALESCE(SUM((b.initial_boxes + COALESCE(m.delta_boxes, 0) - COALESCE(p.pending_boxes, 0)) * pr.pieces_per_box), 0) AS total_pieces
+      FROM batches b
+      INNER JOIN products pr ON pr.id = b.product_id
+      LEFT JOIN (
+        SELECT batch_id, COALESCE(SUM(CASE
+          WHEN type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+            THEN boxes
+          ELSE -boxes
+        END), 0) AS delta_boxes
+        FROM stock_movements
+        GROUP BY batch_id
+      ) m ON m.batch_id = b.id
+      LEFT JOIN (
+        SELECT oi.batch_id AS batch_id, COALESCE(SUM(oi.boxes), 0) AS pending_boxes
+        FROM order_items oi
+        INNER JOIN orders o ON o.id = oi.order_id
+        WHERE o.status != ${OrderStatus.done.index}
+        GROUP BY oi.batch_id
+      ) p ON p.batch_id = b.id
+      ''',
+      readsFrom: {
+        _database.batches,
+        _database.products,
+        _database.stockMovements,
+        _database.orderItems,
+        _database.orders,
+      },
+    ).getSingleOrNull();
+    return (rows?.data['total_pieces'] as int?) ?? 0;
+  }
+
   Future<int> totalInventoryPiecesAt(DateTime snapshotAt) async {
     final movementDeltaSql = '''
       COALESCE(SUM(CASE

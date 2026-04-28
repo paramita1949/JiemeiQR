@@ -173,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<_HomeStats> _loadStats() async {
     final stockDao = StockDao(_database);
     final totalPieces = await stockDao.totalInventoryPieces();
+    final projectedPieces = await stockDao.projectedInventoryPieces();
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
@@ -204,6 +205,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return _HomeStats(
       totalPieces: totalPieces,
+      projectedPieces: projectedPieces,
       todayOrders: todayOrders,
       yesterdayOrders: yesterdayOrders,
       pendingOrders: pendingOrders,
@@ -271,6 +273,17 @@ class _InventorySummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 7),
+          if (!loading && stats != null && stats!.projectedPieces != stats!.totalPieces)
+            Text(
+              '预占后 ${_formatNumber(stats!.projectedPieces)} 件',
+              style: const TextStyle(
+                color: Color(0xFFBFDBFE),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          if (!loading && stats != null && stats!.projectedPieces != stats!.totalPieces)
+            const SizedBox(height: 6),
           Text(
             loading || stats == null
                 ? '今日订单 -- 单 · 昨日订单 -- 单 · 未完成 -- 单'
@@ -289,12 +302,14 @@ class _InventorySummaryCard extends StatelessWidget {
 class _HomeStats {
   const _HomeStats({
     required this.totalPieces,
+    required this.projectedPieces,
     required this.todayOrders,
     required this.yesterdayOrders,
     required this.pendingOrders,
   });
 
   final int totalPieces;
+  final int projectedPieces;
   final int todayOrders;
   final int yesterdayOrders;
   final int pendingOrders;

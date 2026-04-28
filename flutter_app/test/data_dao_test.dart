@@ -308,6 +308,84 @@ void main() {
     expect(await database.select(database.orderItems).get(), hasLength(1));
   });
 
+  test('order dao can merge duplicate item boxes after confirmation', () async {
+    final productId = await productDao.createProduct(
+      code: '72068',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'MERGE-1',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final item = PendingOrderItemInput(
+      productId: productId,
+      batchId: batchId,
+      boxes: 20,
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: 'MERGE-DAO',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: item,
+    );
+    try {
+      await orderDao.appendPendingWaybillItem(
+        waybillNo: 'MERGE-DAO',
+        merchantName: '洁美A',
+        orderDate: DateTime(2026, 4, 26),
+        item: item,
+      );
+      fail('should throw duplicate');
+    } on DuplicateOrderItemException catch (duplicate) {
+      await orderDao.mergeDuplicateOrderItem(
+        itemId: duplicate.itemId,
+        appendBoxes: 20,
+      );
+    }
+    final mergedItem = await database.select(database.orderItems).getSingle();
+    expect(mergedItem.boxes, 40);
+  });
+
+  test('product dao uses pending order as reserved stock for available batches',
+      () async {
+    final productId = await productDao.createProduct(
+      code: '20584',
+      name: '六神花露水',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'RESERVE-1',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'RESERVE-ORDER',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchId,
+        boxes: 30,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    final batches = await productDao.availableBatchesForProduct(productId);
+    expect(batches.single.currentBoxes, 100);
+    expect(batches.single.reservedBoxes, 30);
+    expect(batches.single.availableBoxes, 70);
+  });
+
   test('stock dao derives current stock and total pieces from movements',
       () async {
     final productId = await productDao.createProduct(

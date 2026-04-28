@@ -60,8 +60,7 @@ class OrderDao {
     if (item.boxes <= 0 || item.boxes > 1000000000) {
       throw InvalidStockQuantityException(item.boxes);
     }
-    final stockDao = StockDao(_database);
-    final availableBoxes = await stockDao.currentBoxesForBatch(item.batchId);
+    final availableBoxes = await _availableBoxesForBatch(item.batchId);
     if (item.boxes > availableBoxes) {
       throw InsufficientStockException(
         batchId: item.batchId,
@@ -159,8 +158,7 @@ class OrderDao {
     if (item.boxes <= 0 || item.boxes > 1000000000) {
       throw InvalidStockQuantityException(item.boxes);
     }
-    final stockDao = StockDao(_database);
-    final availableBoxes = await stockDao.currentBoxesForBatch(item.batchId);
+    final availableBoxes = await _availableBoxesForBatch(item.batchId);
     if (item.boxes > availableBoxes) {
       throw InsufficientStockException(
         batchId: item.batchId,
@@ -184,6 +182,8 @@ class OrderDao {
       if (duplicateItem != null) {
         throw DuplicateOrderItemException(
           orderId: orderId,
+          itemId: duplicateItem.id,
+          currentBoxes: duplicateItem.boxes,
           productId: item.productId,
           batchId: item.batchId,
         );
@@ -198,6 +198,45 @@ class OrderDao {
       );
       return orderId;
     });
+  }
+
+  Future<int> _availableBoxesForBatch(int batchId) async {
+    final stockDao = StockDao(_database);
+    final currentBoxes = await stockDao.currentBoxesForBatch(batchId);
+    final pendingRow = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE oi.batch_id = ? AND o.status != ?
+      ''',
+      variables: [
+        Variable.withInt(batchId),
+        Variable.withInt(OrderStatus.done.index),
+      ],
+      readsFrom: {_database.orderItems, _database.orders},
+    ).getSingleOrNull();
+    final reserved = (pendingRow?.data['reserved_boxes'] as int?) ?? 0;
+    final available = currentBoxes - reserved;
+    return available < 0 ? 0 : available;
+  }
+
+  Future<int> mergeDuplicateOrderItem({
+    required int itemId,
+    required int appendBoxes,
+  }) async {
+    final item = await (_database.select(_database.orderItems)
+          ..where((table) => table.id.equals(itemId))
+          ..limit(1))
+        .getSingle();
+    await (_database.update(_database.orderItems)
+          ..where((table) => table.id.equals(itemId)))
+        .write(
+      OrderItemsCompanion(
+        boxes: Value(item.boxes + appendBoxes),
+      ),
+    );
+    return item.orderId;
   }
 
   Future<void> updateOrderBasic({
@@ -311,14 +350,18 @@ class OrderDao {
     final rows = await _ordersInRange(dateRange).get();
     var done = 0;
     var unfinished = 0;
+    var picked = 0;
     for (final order in rows) {
       if (order.status == OrderStatus.done) {
         done += 1;
       } else {
         unfinished += 1;
       }
+      if (order.status == OrderStatus.picked) {
+        picked += 1;
+      }
     }
-    return OrderStatusCounts(done: done, unfinished: unfinished);
+    return OrderStatusCounts(done: done, unfinished: unfinished, picked: picked);
   }
 
   Future<PagedOrderSummaries> orderSummariesPage({
@@ -388,7 +431,14 @@ class OrderDao {
     final items = await (_database.select(_database.orderItems)
           ..where((table) => table.orderId.isIn(orderIds)))
         .get();
+    final productIds = items.map((item) => item.productId).toSet().toList();
     final batchIds = items.map((item) => item.batchId).toSet().toList();
+    final products = productIds.isEmpty
+        ? const <Product>[]
+        : await (_database.select(_database.products)
+              ..where((table) => table.id.isIn(productIds)))
+            .get();
+    final productsById = {for (final product in products) product.id: product};
     final batches = batchIds.isEmpty
         ? const <BatchRecord>[]
         : await (_database.select(_database.batches)
@@ -430,6 +480,11 @@ class OrderDao {
           totalBoxes: stats?.totalBoxes ?? 0,
           hasTsRequired: stats?.hasTsRequired ?? false,
           locationsText: stats?.locationsText ?? '',
+          restockSummaryText: _restockSummaryText(
+            orderItems: items.where((item) => item.orderId == order.id).toList(),
+            productsById: productsById,
+            batchesById: batchById,
+          ),
         ),
       );
     }
@@ -498,6 +553,46 @@ class OrderDao {
     }
     return query;
   }
+
+  String _restockSummaryText({
+    required List<OrderItem> orderItems,
+    required Map<int, Product> productsById,
+    required Map<int, BatchRecord> batchesById,
+  }) {
+    final boardsByProductDate = <String, double>{};
+    for (final item in orderItems) {
+      final product = productsById[item.productId];
+      final batch = batchesById[item.batchId];
+      if (product == null || batch == null || item.boxesPerBoard <= 0) {
+        continue;
+      }
+      final key = '${product.code}|${batch.dateBatch}';
+      final boards = item.boxes / item.boxesPerBoard;
+      boardsByProductDate.update(
+        key,
+        (value) => value + boards,
+        ifAbsent: () => boards,
+      );
+    }
+    if (boardsByProductDate.isEmpty) {
+      return '';
+    }
+    final entries = boardsByProductDate.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((entry) {
+      final parts = entry.key.split('|');
+      final code = parts.first;
+      final dateBatch = parts.length > 1 ? parts[1] : '';
+      return '$code $dateBatch 需${_formatBoards(entry.value)}板';
+    }).join(' / ');
+  }
+
+  String _formatBoards(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+    return value.toStringAsFixed(1);
+  }
 }
 
 class PendingOrderItemInput {
@@ -526,17 +621,21 @@ class OrderItemDeleteNotAllowedException implements Exception {
 class DuplicateOrderItemException implements Exception {
   const DuplicateOrderItemException({
     required this.orderId,
+    required this.itemId,
+    required this.currentBoxes,
     required this.productId,
     required this.batchId,
   });
 
   final int orderId;
+  final int itemId;
+  final int currentBoxes;
   final int productId;
   final int batchId;
 
   @override
   String toString() {
-    return 'DuplicateOrderItemException(orderId: $orderId, productId: $productId, batchId: $batchId)';
+    return 'DuplicateOrderItemException(orderId: $orderId, itemId: $itemId, currentBoxes: $currentBoxes, productId: $productId, batchId: $batchId)';
   }
 }
 
@@ -551,6 +650,7 @@ class OrderSummary {
     required this.totalBoxes,
     required this.hasTsRequired,
     required this.locationsText,
+    required this.restockSummaryText,
   });
 
   final int id;
@@ -562,6 +662,7 @@ class OrderSummary {
   final int totalBoxes;
   final bool hasTsRequired;
   final String locationsText;
+  final String restockSummaryText;
 
   String get dateText =>
       '${orderDate.year}.${orderDate.month}.${orderDate.day}';
@@ -581,10 +682,12 @@ class OrderStatusCounts {
   const OrderStatusCounts({
     required this.done,
     required this.unfinished,
+    required this.picked,
   });
 
   final int done;
   final int unfinished;
+  final int picked;
 }
 
 class OrderDetail {

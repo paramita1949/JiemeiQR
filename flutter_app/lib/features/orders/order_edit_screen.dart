@@ -104,19 +104,24 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                       ),
                       if (state != null && state.merchants.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: state.merchants
+                        DropdownButtonFormField<String>(
+                          key: const Key('merchantHistoryDropdown'),
+                          initialValue: null,
+                          decoration: _inputDecoration('历史商家（可选）'),
+                          items: state.merchants
                               .map(
-                                (name) => ActionChip(
-                                  label: Text(name),
-                                  onPressed: () {
-                                    _merchantController.text = name;
-                                  },
+                                (name) => DropdownMenuItem<String>(
+                                  value: name,
+                                  child: Text(name),
                                 ),
                               )
                               .toList(),
+                          onChanged: (name) {
+                            if (name == null) {
+                              return;
+                            }
+                            _merchantController.text = name;
+                          },
                         ),
                       ],
                       const SizedBox(height: 10),
@@ -178,7 +183,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                       ),
                       const SizedBox(height: 10),
                       _ProductMeta(
-                        availableBoxes: _selectedBatch?.currentBoxes,
+                        availableBoxes: _selectedBatch?.availableBoxes,
+                        projectedUsedBoxes: _selectedBatch?.reservedBoxes,
                         boardText: _boardText(),
                         specText: _specText(),
                         tsRequired: _currentSelectionNeedsScan(),
@@ -196,26 +202,26 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: TextButton(
+                        child: OutlinedButton(
                           key: const Key('endWaybillButton'),
-                          onPressed: _endAndBackHome,
+                          onPressed: _endToOrderList,
                           child: const Text('结束'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: OutlinedButton(
+                        child: TextButton(
                           key: const Key('continueWaybillButton'),
                           onPressed: () => _save(continueAdd: true),
-                          child: const Text('继续添加'),
+                          child: const Text('继续'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: FilledButton(
-                          key: const Key('finishWaybillButton'),
+                          key: const Key('nextWaybillButton'),
                           onPressed: () => _save(continueAdd: false),
-                          child: const Text('完成'),
+                          child: const Text('下一单'),
                         ),
                       ),
                     ],
@@ -300,17 +306,16 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     final product = _selectedProduct!;
     final batch = _selectedBatch!;
     final boxes = int.parse(_boxesController.text.trim());
+    final waybillNo = _waybillNoController.text.trim();
+    final merchantName = _merchantController.text.trim();
+    final orderDate = DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
+    final currentKey = _orderHeaderKey(
+      waybillNo: waybillNo,
+      merchantName: merchantName,
+      orderDate: orderDate,
+    );
 
     try {
-      final waybillNo = _waybillNoController.text.trim();
-      final merchantName = _merchantController.text.trim();
-      final orderDate =
-          DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
-      final currentKey = _orderHeaderKey(
-        waybillNo: waybillNo,
-        merchantName: merchantName,
-        orderDate: orderDate,
-      );
       if (_draftOrderKey != null && _draftOrderKey != currentKey) {
         _draftOrderKey = null;
       }
@@ -328,14 +333,45 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       );
       _draftOrderKey = currentKey;
       await _reloadDraftLines(orderId: orderId, headerKey: currentKey);
-    } on DuplicateOrderItemException {
+    } on DuplicateOrderItemException catch (duplicate) {
       if (!mounted) {
         return;
       }
-      final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('该产品批号已添加，请勿重复添加')),
+      final shouldMerge = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('重复明细'),
+          content: const Text('同一运单下该产品批号已添加，是否累加箱数？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('累加'),
+            ),
+          ],
+        ),
       );
+      if (shouldMerge == true) {
+        final mergedOrderId = await _orderDao.mergeDuplicateOrderItem(
+          itemId: duplicate.itemId,
+          appendBoxes: boxes,
+        );
+        await _reloadDraftLines(orderId: mergedOrderId, headerKey: currentKey);
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已累加到原明细')),
+        );
+        if (continueAdd) {
+          _boxesController.clear();
+          return;
+        }
+        await _clearForNextWaybill();
+      }
       return;
     } on InsufficientStockException {
       if (!mounted) {
@@ -385,8 +421,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     );
   }
 
-  void _endAndBackHome() {
-    Navigator.of(context).popUntil((route) => route.isFirst);
+  void _endToOrderList() {
+    Navigator.of(context).pop();
   }
 
   void _onOrderHeaderChanged() {
@@ -436,7 +472,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (boxes == null || boxes <= 0) {
       return '请输入箱数';
     }
-    final available = _selectedBatch?.currentBoxes ?? 0;
+    final available = _selectedBatch?.availableBoxes ?? 0;
     if (available <= 0) {
       return '没有可用库存';
     }
@@ -653,12 +689,14 @@ class _ProductOptionLabel extends StatelessWidget {
 class _ProductMeta extends StatelessWidget {
   const _ProductMeta({
     required this.availableBoxes,
+    required this.projectedUsedBoxes,
     required this.boardText,
     required this.specText,
     required this.tsRequired,
   });
 
   final int? availableBoxes;
+  final int? projectedUsedBoxes;
   final String? boardText;
   final String specText;
   final bool tsRequired;
@@ -670,6 +708,12 @@ class _ProductMeta extends StatelessWidget {
       runSpacing: 8,
       children: [
         _MetaChip(text: '可用 ${availableBoxes ?? 0}箱'),
+        if ((projectedUsedBoxes ?? 0) > 0)
+          _MetaChip(
+            text: '预占 ${projectedUsedBoxes!}箱',
+            textColor: const Color(0xFF92400E),
+            backgroundColor: const Color(0xFFFFF7ED),
+          ),
         if (boardText != null) _MetaChip(text: '需 $boardText'),
         _MetaChip(text: specText),
         if (tsRequired)

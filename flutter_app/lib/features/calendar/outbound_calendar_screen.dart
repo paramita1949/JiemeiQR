@@ -616,15 +616,6 @@ class _OutboundDetailCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (groups.isNotEmpty)
-                const Text(
-                  '按运单',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -725,6 +716,8 @@ class _OutboundDetailCard extends StatelessWidget {
           Expanded(
             child: Text(
               '${row.productCode} · ${row.dateBatch}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: AppTheme.textPrimary,
                 fontSize: 12,

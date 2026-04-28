@@ -28,8 +28,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final OrderDao _orderDao;
   late final bool _ownsDatabase;
   late DateTimeRange? _dateRange;
-  _OrderQuickFilter _quickFilter = _OrderQuickFilter.today;
-  OrderStatus? _status;
+  _OrderQuickFilter _quickFilter = _OrderQuickFilter.pendingOnly;
+  OrderStatus? _status = OrderStatus.pending;
   final List<OrderSummary> _orders = <OrderSummary>[];
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
@@ -43,10 +43,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
-    _dateRange = widget.dateRange ?? _singleDayRange(DateTime.now());
+    _dateRange = widget.dateRange;
     _quickFilter = widget.dateRange == null
-        ? _OrderQuickFilter.today
+        ? _OrderQuickFilter.pendingOnly
         : _OrderQuickFilter.custom;
+    _status = widget.dateRange == null ? OrderStatus.pending : null;
     _refreshOrders();
   }
 
@@ -105,7 +106,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             if (_counts != null) ...[
               const SizedBox(height: 8),
               Text(
-                '完成 ${_counts!.done}单 · 未完成 ${_counts!.unfinished}单',
+                '完成 ${_counts!.done}单 · 未完成 ${_counts!.unfinished}单 · 已拣货 ${_counts!.picked}单',
                 style: const TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 13,
@@ -271,26 +272,30 @@ class _OrderListScreenState extends State<OrderListScreen> {
     setState(() {
       _quickFilter = filter;
       switch (filter) {
+        case _OrderQuickFilter.pendingOnly:
+          _dateRange = null;
+          _status = OrderStatus.pending;
         case _OrderQuickFilter.today:
           _dateRange = _singleDayRange(DateTime.now());
+          _status = null;
         case _OrderQuickFilter.yesterday:
           _dateRange = _singleDayRange(
             DateTime.now().subtract(const Duration(days: 1)),
           );
+          _status = null;
         case _OrderQuickFilter.week:
           final today = DateTime.now();
           final end = DateTime(today.year, today.month, today.day);
           final start = end.subtract(const Duration(days: 6));
           _dateRange = DateTimeRange(start: start, end: end);
+          _status = null;
         case _OrderQuickFilter.month:
           final now = DateTime.now();
           _dateRange = DateTimeRange(
             start: DateTime(now.year, now.month, 1),
             end: DateTime(now.year, now.month + 1, 0),
           );
-        case _OrderQuickFilter.pendingOnly:
-          _dateRange = null;
-          _status = OrderStatus.pending;
+          _status = null;
         case _OrderQuickFilter.custom:
           break;
       }
@@ -345,6 +350,11 @@ class _QuickFilterChips extends StatelessWidget {
       runSpacing: 8,
       children: [
         _QuickChip(
+          label: '未完成',
+          selected: selected == _OrderQuickFilter.pendingOnly,
+          onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
+        ),
+        _QuickChip(
           label: '今日',
           selected: selected == _OrderQuickFilter.today,
           onTap: () => onSelected(_OrderQuickFilter.today),
@@ -363,11 +373,6 @@ class _QuickFilterChips extends StatelessWidget {
           label: '一月',
           selected: selected == _OrderQuickFilter.month,
           onTap: () => onSelected(_OrderQuickFilter.month),
-        ),
-        _QuickChip(
-          label: '未完成',
-          selected: selected == _OrderQuickFilter.pendingOnly,
-          onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
         ),
       ],
     );
@@ -610,6 +615,15 @@ class _OrderCard extends StatelessWidget {
                     '库位 ${order.locationsText}',
                     style: const TextStyle(
                       color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                if (order.restockSummaryText.isNotEmpty)
+                  Text(
+                    order.restockSummaryText,
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
