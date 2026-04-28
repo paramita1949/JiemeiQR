@@ -72,7 +72,12 @@ jobs:
           fi
 
           keystore_path="flutter_app/android/jiemei-release.jks"
-          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          sanitized_keystore_base64="$(
+            printf '%s' "${RELEASE_KEYSTORE_BASE64}" |
+            sed 's/^RELEASE_KEYSTORE_BASE64=//' |
+            tr -d '[:space:]'
+          )"
+          printf '%s' "${sanitized_keystore_base64}" | base64 --decode > "${keystore_path}"
           cat > flutter_app/android/key.properties <<EOF
           storeFile=jiemei-release.jks
           storePassword=${RELEASE_KEYSTORE_PASSWORD}
