@@ -48,7 +48,8 @@ class _QrScanAppState extends State<QrScanApp> {
 
   Future<void> _seedInBackground() async {
     try {
-      final seeded = await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+      final seeded =
+          await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
       if (!mounted || !seeded) {
         return;
       }
@@ -90,12 +91,14 @@ class _QrScanAppState extends State<QrScanApp> {
     await _database.close();
   }
 
-  Future<void> _importCompleted() async {
+  Future<void> _importCompleted({bool seedIfEmpty = false}) async {
     if (widget.database != null) {
       return;
     }
     _database = AppDatabase();
-    await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+    if (seedIfEmpty) {
+      await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
+    }
     if (!mounted) {
       return;
     }

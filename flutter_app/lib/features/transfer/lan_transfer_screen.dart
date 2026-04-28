@@ -7,6 +7,10 @@ import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
+typedef DatabaseReloadCallback = Future<void> Function({
+  bool seedIfEmpty,
+});
+
 class LanTransferScreen extends StatefulWidget {
   const LanTransferScreen({
     super.key,
@@ -21,7 +25,7 @@ class LanTransferScreen extends StatefulWidget {
   final BackupService? backupService;
   final LanTransferService? lanTransferService;
   final Future<void> Function()? onPrepareImport;
-  final Future<void> Function()? onImportCompleted;
+  final DatabaseReloadCallback? onImportCompleted;
 
   @override
   State<LanTransferScreen> createState() => _LanTransferScreenState();
@@ -352,7 +356,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       prepared = true;
       setState(() => _statusText = '正在接收并导入数据库...');
       final result = await receive();
-      await widget.onImportCompleted?.call();
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
       if (!mounted) {
         return;
@@ -391,7 +395,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     } finally {
       if (prepared) {
         try {
-          await widget.onImportCompleted?.call();
+          await widget.onImportCompleted?.call(seedIfEmpty: false);
         } catch (_) {
           _showSnack('数据库恢复失败，请重启应用后再试');
         }
@@ -450,7 +454,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       await widget.onPrepareImport?.call();
       prepared = true;
       final result = await _backupService.resetDatabase();
-      await widget.onImportCompleted?.call();
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
       if (!mounted) {
         return;
@@ -463,7 +467,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       _showSnack('重置失败，请稍后重试');
     } finally {
       if (prepared) {
-        await widget.onImportCompleted?.call();
+        await widget.onImportCompleted?.call(seedIfEmpty: false);
       }
       if (mounted) {
         setState(() => _resettingDatabase = false);

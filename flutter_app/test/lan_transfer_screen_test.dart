@@ -8,6 +8,21 @@ import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
+class _ResetOnlyBackupService extends BackupService {
+  _ResetOnlyBackupService() : super(databaseFileName: 'jiemei.sqlite');
+
+  bool resetCalled = false;
+
+  @override
+  Future<ResetDatabaseResult> resetDatabase() async {
+    resetCalled = true;
+    return ResetDatabaseResult(
+      backupFileName: 'test-backup.sqlite',
+      resetAt: DateTime(2026, 4, 28),
+    );
+  }
+}
+
 void main() {
   test('backup service creates local backup and metadata file', () async {
     final tempDir =
@@ -173,5 +188,46 @@ void main() {
     expect(find.text('接收'), findsOneWidget);
     expect(find.text('本地备份'), findsOneWidget);
     expect(find.textContaining('发送地址'), findsNothing);
+  });
+
+  testWidgets('reset database reopens without seeding embedded stock',
+      (tester) async {
+    final backupService = _ResetOnlyBackupService();
+    var prepareCalled = false;
+    bool? requestedSeedIfEmpty;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LanTransferScreen(
+                  backupService: backupService,
+                  onPrepareImport: () async => prepareCalled = true,
+                  onImportCompleted: ({bool seedIfEmpty = true}) async {
+                    requestedSeedIfEmpty = seedIfEmpty;
+                  },
+                ),
+              ),
+            ),
+            child: const Text('打开数据备份'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开数据备份'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重置数据库'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认重置'));
+    await tester.pumpAndSettle();
+
+    expect(prepareCalled, isTrue);
+    expect(backupService.resetCalled, isTrue);
+    expect(requestedSeedIfEmpty, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

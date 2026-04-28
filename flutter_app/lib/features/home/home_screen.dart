@@ -25,7 +25,7 @@ class HomeScreen extends StatefulWidget {
 
   final AppDatabase? database;
   final Future<void> Function()? onPrepareImport;
-  final Future<void> Function()? onImportCompleted;
+  final DatabaseReloadCallback? onImportCompleted;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
