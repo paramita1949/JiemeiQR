@@ -1,0 +1,8 @@
+# GitHub backup scope: keep only the Flutter app code and CI workflow.
+*
+!.gitignore
+!.github/
+!.github/workflows/
+!.github/workflows/flutter-android-build.yml
+!flutter_app/
+!flutter_app/**

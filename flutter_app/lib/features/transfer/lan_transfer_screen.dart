@@ -315,34 +315,10 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   }
 
   Future<void> _receiveByCodeInput() async {
-    final controller = TextEditingController();
     final code = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('输入6位配对码'),
-        content: TextField(
-          autofocus: true,
-          controller: controller,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          decoration: const InputDecoration(
-            hintText: '例如 456789',
-            counterText: '',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('开始接收'),
-          ),
-        ],
-      ),
+      builder: (context) => const _PairingCodeDialog(),
     );
-    controller.dispose();
     final trimmed = code?.trim() ?? '';
     if (!mounted || trimmed.isEmpty) {
       return;
@@ -732,6 +708,50 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
     final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
     messenger.showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _PairingCodeDialog extends StatefulWidget {
+  const _PairingCodeDialog();
+
+  @override
+  State<_PairingCodeDialog> createState() => _PairingCodeDialogState();
+}
+
+class _PairingCodeDialogState extends State<_PairingCodeDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('输入6位配对码'),
+      content: TextField(
+        autofocus: true,
+        controller: _controller,
+        keyboardType: TextInputType.number,
+        maxLength: 6,
+        decoration: const InputDecoration(
+          hintText: '例如 456789',
+          counterText: '',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('开始接收'),
+        ),
+      ],
+    );
   }
 }
 

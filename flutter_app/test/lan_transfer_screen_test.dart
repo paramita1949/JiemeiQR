@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
+import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
@@ -27,6 +28,35 @@ class _ResetOnlyBackupService extends BackupService {
 
   @override
   Future<List<BackupSnapshot>> listLocalBackups() async => const [];
+}
+
+class _NoopBackupService extends BackupService {
+  const _NoopBackupService() : super(databaseFileName: 'jiemei.sqlite');
+
+  @override
+  Future<BackupSchedule> getBackupSchedule() async => BackupSchedule.off;
+
+  @override
+  Future<BackupResult?> runAutoBackupIfDue() async => null;
+
+  @override
+  Future<List<BackupSnapshot>> listLocalBackups() async => const [];
+}
+
+class _ImmediateReceiveLanTransferService extends LanTransferService {
+  _ImmediateReceiveLanTransferService()
+      : super(backupService: const _NoopBackupService());
+
+  @override
+  Future<ReceiveResult> receiveByPairingCode(
+    String pairingCode, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    return const ReceiveResult(
+      importedFromPath: 'incoming.sqlite',
+      backupFileName: 'received-backup.sqlite',
+    );
+  }
 }
 
 Future<void> _createBusinessDatabase(
@@ -392,5 +422,50 @@ void main() {
     expect(backupService.resetCalled, isTrue);
     expect(requestedSeedIfEmpty, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('receive finishes without rebuilding active transfer route',
+      (tester) async {
+    var rootVersion = 0;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setRootState) => MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => FilledButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => LanTransferScreen(
+                      backupService: const _NoopBackupService(),
+                      lanTransferService: _ImmediateReceiveLanTransferService(),
+                      onPrepareImport: () async {},
+                      onImportCompleted: ({bool seedIfEmpty = true}) async {
+                        setRootState(() => rootVersion += 1);
+                      },
+                    ),
+                  ),
+                ),
+                child: Text('打开数据备份 $rootVersion'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开数据备份 0'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('接收'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('输入6位配对码'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('开始接收'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('接收完成'), findsOneWidget);
   });
 }
