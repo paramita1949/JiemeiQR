@@ -60,7 +60,7 @@ void main() {
     expect(find.text('300 件'), findsOneWidget);
     expect(find.textContaining('今日订单'), findsOneWidget);
     expect(find.textContaining('昨日订单'), findsOneWidget);
-    expect(find.textContaining('未完成 1 单'), findsOneWidget);
+    expect(find.textContaining('未完成 2 单'), findsOneWidget);
 
     expect(find.text('QR箱码'), findsOneWidget);
     expect(find.text('订单信息'), findsOneWidget);

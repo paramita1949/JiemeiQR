@@ -185,13 +185,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final countsRow = await _database.customSelect(
       '''
       SELECT
-        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) AS pending_count,
         SUM(CASE WHEN order_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS today_count,
         SUM(CASE WHEN order_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS yesterday_count
       FROM orders
       ''',
       variables: [
-        Variable.withInt(OrderStatus.pending.index),
+        Variable.withInt(OrderStatus.done.index),
         Variable.withDateTime(todayStart),
         Variable.withDateTime(todayEnd),
         Variable.withDateTime(yesterdayStart),
@@ -273,7 +273,9 @@ class _InventorySummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 7),
-          if (!loading && stats != null && stats!.projectedPieces != stats!.totalPieces)
+          if (!loading &&
+              stats != null &&
+              stats!.projectedPieces != stats!.totalPieces)
             Text(
               '预占后 ${_formatNumber(stats!.projectedPieces)} 件',
               style: const TextStyle(
@@ -282,7 +284,9 @@ class _InventorySummaryCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-          if (!loading && stats != null && stats!.projectedPieces != stats!.totalPieces)
+          if (!loading &&
+              stats != null &&
+              stats!.projectedPieces != stats!.totalPieces)
             const SizedBox(height: 6),
           Text(
             loading || stats == null
