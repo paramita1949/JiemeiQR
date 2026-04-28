@@ -85,7 +85,7 @@ void main() {
     expect(find.text('2,400 件'), findsOneWidget);
     expect(find.text('72067 · FCHBLEZ'), findsOneWidget);
     expect(find.text('2029.9.7'), findsOneWidget);
-    expect(find.text('80箱'), findsOneWidget);
+    expect(find.text('可用 80箱'), findsOneWidget);
     expect(find.text('2板'), findsOneWidget);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
     expect(find.text('TS'), findsOneWidget);

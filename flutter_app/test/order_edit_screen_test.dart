@@ -251,15 +251,16 @@ void main() {
     await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
     await tester.enterText(find.byKey(const Key('boxesField')), '20');
     final continueButton = find.byKey(const Key('continueWaybillButton'));
-    await tester.scrollUntilVisible(
-      continueButton,
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
     await tester.pumpAndSettle();
     await tester.tap(continueButton);
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.textContaining('已添加明细（1条 / 20箱）'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.textContaining('已添加明细（1条 / 20箱）'), findsOneWidget);
 
     await tester.tap(find.byTooltip('删除该明细').first);
@@ -308,11 +309,6 @@ void main() {
     await tester.enterText(find.byKey(const Key('merchantNameField')), '常用商家');
     await tester.enterText(find.byKey(const Key('boxesField')), '20');
 
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('endWaybillButton')),
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('endWaybillButton')));
     await tester.pumpAndSettle();

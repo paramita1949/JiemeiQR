@@ -364,6 +364,73 @@ class OrderDao {
     return OrderStatusCounts(done: done, unfinished: unfinished, picked: picked);
   }
 
+  Future<List<OrderRestockAggregate>> orderRestockAggregates({
+    OrderStatus? status,
+    DateTimeRange? dateRange,
+  }) async {
+    final where = <String>[];
+    final vars = <Variable<Object>>[];
+    where.add('o.status != ?');
+    vars.add(Variable.withInt(OrderStatus.done.index));
+    if (status != null) {
+      where.add('o.status = ?');
+      vars.add(Variable.withInt(status.index));
+    }
+    if (dateRange != null) {
+      final start = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+      );
+      final end = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23,
+        59,
+        59,
+      );
+      where.add('o.order_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    final whereSql = where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}';
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.code AS product_code,
+        b.actual_batch AS actual_batch,
+        b.date_batch AS date_batch,
+        SUM(oi.boxes) AS total_boxes,
+        SUM(CAST(oi.boxes AS REAL) / oi.boxes_per_board) AS total_boards
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      INNER JOIN products p ON p.id = oi.product_id
+      INNER JOIN batches b ON b.id = oi.batch_id
+      $whereSql
+      GROUP BY p.code, b.actual_batch, b.date_batch
+      ORDER BY p.code ASC, b.date_batch ASC, b.actual_batch ASC
+      ''',
+      variables: vars,
+      readsFrom: {
+        _database.orderItems,
+        _database.orders,
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    return rows.map((row) {
+      final boardsRaw = row.data['total_boards'];
+      return OrderRestockAggregate(
+        productCode: row.data['product_code'] as String? ?? '',
+        actualBatch: row.data['actual_batch'] as String? ?? '',
+        dateBatch: row.data['date_batch'] as String? ?? '',
+        totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
+        totalBoards: boardsRaw is num ? boardsRaw.toDouble() : 0,
+      );
+    }).where((row) => row.productCode.isNotEmpty).toList();
+  }
+
   Future<PagedOrderSummaries> orderSummariesPage({
     OrderStatus? status,
     DateTimeRange? dateRange,
@@ -688,6 +755,22 @@ class OrderStatusCounts {
   final int done;
   final int unfinished;
   final int picked;
+}
+
+class OrderRestockAggregate {
+  const OrderRestockAggregate({
+    required this.productCode,
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.totalBoxes,
+    required this.totalBoards,
+  });
+
+  final String productCode;
+  final String actualBatch;
+  final String dateBatch;
+  final int totalBoxes;
+  final double totalBoards;
 }
 
 class OrderDetail {

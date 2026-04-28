@@ -31,6 +31,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   _OrderQuickFilter _quickFilter = _OrderQuickFilter.pendingOnly;
   OrderStatus? _status = OrderStatus.pending;
   final List<OrderSummary> _orders = <OrderSummary>[];
+  List<OrderRestockAggregate> _restockAggregates = const [];
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
@@ -114,6 +115,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
               ),
             ],
+            if (_restockAggregates.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _RestockAggregateCard(rows: _restockAggregates),
+            ],
             const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: _openNewWaybill,
@@ -159,6 +164,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _hasMore = false;
       _total = 0;
       _counts = null;
+      _restockAggregates = const [];
       _orders.clear();
     });
     final page = await _orderDao.orderSummariesPage(
@@ -168,12 +174,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
       limit: _pageSize,
     );
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
+    final restockAggregates = await _orderDao.orderRestockAggregates(
+      status: _status,
+      dateRange: _dateRange,
+    );
     if (!mounted) {
       return;
     }
     setState(() {
       _orders.addAll(page.orders);
       _counts = counts;
+      _restockAggregates = restockAggregates;
       _total = page.total;
       _hasMore = _orders.length < _total;
       _loadingInitial = false;
@@ -345,36 +356,41 @@ class _QuickFilterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
         _QuickChip(
           label: '未完成',
           selected: selected == _OrderQuickFilter.pendingOnly,
           onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
         ),
+        const SizedBox(width: 8),
         _QuickChip(
           label: '今日',
           selected: selected == _OrderQuickFilter.today,
           onTap: () => onSelected(_OrderQuickFilter.today),
         ),
+        const SizedBox(width: 8),
         _QuickChip(
           label: '昨日',
           selected: selected == _OrderQuickFilter.yesterday,
           onTap: () => onSelected(_OrderQuickFilter.yesterday),
         ),
+        const SizedBox(width: 8),
         _QuickChip(
           label: '一周',
           selected: selected == _OrderQuickFilter.week,
           onTap: () => onSelected(_OrderQuickFilter.week),
         ),
+        const SizedBox(width: 8),
         _QuickChip(
           label: '一月',
           selected: selected == _OrderQuickFilter.month,
           onTap: () => onSelected(_OrderQuickFilter.month),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -392,10 +408,11 @@ class _QuickChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE5EDFF) : Colors.white,
           borderRadius: BorderRadius.circular(999),
@@ -440,44 +457,39 @@ class _StatusTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatusButton(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _StatusButton(
             label: '全部',
             color: AppTheme.primary,
             selected: selected == null,
             onTap: () => onChanged(null),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatusButton(
+          const SizedBox(width: 8),
+          _StatusButton(
             label: '未完成',
             color: const Color(0xFFF97316),
             selected: selected == OrderStatus.pending,
             onTap: () => onChanged(OrderStatus.pending),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatusButton(
+          const SizedBox(width: 8),
+          _StatusButton(
             label: '已拣货',
             color: const Color(0xFF2563EB),
             selected: selected == OrderStatus.picked,
             onTap: () => onChanged(OrderStatus.picked),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatusButton(
+          const SizedBox(width: 8),
+          _StatusButton(
             label: '完成',
             color: const Color(0xFF16A34A),
             selected: selected == OrderStatus.done,
             onTap: () => onChanged(OrderStatus.done),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -499,13 +511,13 @@ class _StatusButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(999),
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(color: color.withValues(alpha: 0.35)),
         ),
         child: Text(
@@ -513,7 +525,7 @@ class _StatusButton extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: selected ? Colors.white : color,
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -548,53 +560,67 @@ class _OrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    order.waybillNo,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.waybillNo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                Container(
-                  alignment: Alignment.center,
-                  width: 64,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: status.color.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    status.label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: status.color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        order.merchantName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: '删除订单',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
-            const SizedBox(height: 9),
-            Text(
-              order.merchantName,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
               ),
-            ),
+              const SizedBox(width: 6),
+              Container(
+                alignment: Alignment.center,
+                width: 64,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: status.color.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status.label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: status.color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: '删除订单',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
             const SizedBox(height: 7),
             Wrap(
               spacing: 8,
@@ -615,15 +641,6 @@ class _OrderCard extends StatelessWidget {
                     '库位 ${order.locationsText}',
                     style: const TextStyle(
                       color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                if (order.restockSummaryText.isNotEmpty)
-                  Text(
-                    order.restockSummaryText,
-                    style: const TextStyle(
-                      color: Color(0xFF1E3A8A),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -696,3 +713,63 @@ _StatusMeta _statusMeta(OrderStatus status) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+class _RestockAggregateCard extends StatelessWidget {
+  const _RestockAggregateCard({required this.rows});
+
+  final List<OrderRestockAggregate> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '备货汇总（按产品/批号/日期）',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...rows.take(6).map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.totalBoxes}箱 · ${_formatBoards(row.totalBoards)}板',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          if (rows.length > 6)
+            Text(
+              '其余 ${rows.length - 6} 条请在明细中查看',
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatBoards(double value) {
+  if (value == value.roundToDouble()) {
+    return value.toInt().toString();
+  }
+  return value.toStringAsFixed(1);
+}

@@ -662,7 +662,7 @@ class _InventoryRowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final boardText = BoardCalculator.format(
-      boxes: row.currentBoxes,
+      boxes: row.availableBoxes,
       boxesPerBoard: row.batch.boxesPerBoard,
     );
     final statusColor =
@@ -719,6 +719,13 @@ class _InventoryRowCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MetricChip(text: '${row.currentBoxes}箱'),
+              if (row.reservedBoxes > 0)
+                _MetricChip(
+                  text: '占用 ${row.reservedBoxes}箱',
+                  textColor: const Color(0xFF92400E),
+                  backgroundColor: const Color(0xFFFFF7ED),
+                ),
+              _MetricChip(text: '可用 ${row.availableBoxes}箱'),
               _MetricChip(text: boardText),
               _MetricChip(
                 text:

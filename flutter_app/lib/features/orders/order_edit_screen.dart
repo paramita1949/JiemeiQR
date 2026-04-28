@@ -70,6 +70,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: _OrderActionBar(
+        onEnd: _endToOrderList,
+        onContinue: () => _save(continueAdd: true),
+        onNext: () => _save(continueAdd: false),
+      ),
       body: SafeArea(
         child: FutureBuilder<_OrderEditState>(
           future: _stateFuture,
@@ -78,16 +83,21 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
             return Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
                 children: [
                   const PageTitle(
                     icon: Icons.add_box_outlined,
                     title: '新增运单',
-                    subtitle: '商家、产品、批号、箱数录入',
+                    subtitle: '',
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                   _SectionCard(
                     title: '订单信息',
+                    trailing: _DateField(
+                      dateText: _formatDate(_orderDate),
+                      onTap: _pickOrderDate,
+                      compact: true,
+                    ),
                     children: [
                       TextFormField(
                         key: const Key('waybillNoField'),
@@ -95,19 +105,19 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                         validator: _required,
                         decoration: _inputDecoration('运单号'),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       TextFormField(
                         key: const Key('merchantNameField'),
                         controller: _merchantController,
                         validator: _required,
-                        decoration: _inputDecoration('商家'),
+                        decoration: _inputDecoration('输入商家'),
                       ),
                       if (state != null && state.merchants.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           key: const Key('merchantHistoryDropdown'),
                           initialValue: null,
-                          decoration: _inputDecoration('历史商家（可选）'),
+                          decoration: _inputDecoration('历史商家'),
                           items: state.merchants
                               .map(
                                 (name) => DropdownMenuItem<String>(
@@ -124,23 +134,16 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                           },
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      ChoiceChip(
-                        label: Text(_formatDate(_orderDate)),
-                        selected: true,
-                        avatar: const Icon(Icons.calendar_month_outlined),
-                        onSelected: (_) => _pickOrderDate(),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _SectionCard(
                     title: '产品明细',
                     children: [
                       DropdownButtonFormField<int>(
                         initialValue: _selectedProduct?.id,
                         validator: (value) => value == null ? '必选' : null,
-                        decoration: _inputDecoration('产品'),
+                        decoration: _inputDecoration('选择产品'),
                         items: _products
                             .map(_productOptionFor)
                             .map(
@@ -152,11 +155,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                             .toList(),
                         onChanged: (id) => _selectProduct(id),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       DropdownButtonFormField<int>(
                         initialValue: _selectedBatch?.batch.id,
                         validator: (value) => value == null ? '必选' : null,
-                        decoration: _inputDecoration('批号'),
+                        decoration: _inputDecoration('选择批号'),
                         items: _availableBatches
                             .map(
                               (row) => DropdownMenuItem(
@@ -173,15 +176,15 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                               .firstOrNull;
                         }),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       TextFormField(
                         key: const Key('boxesField'),
                         controller: _boxesController,
                         keyboardType: TextInputType.number,
                         validator: _validateBoxes,
-                        decoration: _inputDecoration('箱数'),
+                        decoration: _inputDecoration('输入箱数'),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       _ProductMeta(
                         availableBoxes: _selectedBatch?.availableBoxes,
                         projectedUsedBoxes: _selectedBatch?.reservedBoxes,
@@ -192,40 +195,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                     ],
                   ),
                   if (_draftLines.isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                     _DraftLinesCard(
                       lines: _draftLines,
                       onDeleteLine: _deleteDraftLine,
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('endWaybillButton'),
-                          onPressed: _endToOrderList,
-                          child: const Text('结束'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextButton(
-                          key: const Key('continueWaybillButton'),
-                          onPressed: () => _save(continueAdd: true),
-                          child: const Text('继续'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton(
-                          key: const Key('nextWaybillButton'),
-                          onPressed: () => _save(continueAdd: false),
-                          child: const Text('下一单'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    const SizedBox(height: 8),
                 ],
               ),
             );
@@ -308,7 +284,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     final boxes = int.parse(_boxesController.text.trim());
     final waybillNo = _waybillNoController.text.trim();
     final merchantName = _merchantController.text.trim();
-    final orderDate = DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
+    final orderDate =
+        DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
     final currentKey = _orderHeaderKey(
       waybillNo: waybillNo,
       merchantName: merchantName,
@@ -636,26 +613,103 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.title,
     required this.children,
+    this.trailing,
   });
 
   final String title;
   final List<Widget> children;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 10),
+          if (title.isNotEmpty || trailing != null) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (title.isNotEmpty)
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  )
+                else
+                  const Spacer(),
+                if (trailing != null) trailing!,
+              ],
+            ),
+                  const SizedBox(height: 8),
+          ],
           ...children,
         ],
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.dateText,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final String dateText;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: compact ? 34 : 42,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FC),
+          borderRadius: BorderRadius.circular(compact ? 10 : 12),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!compact) ...[
+              const Text(
+                '日期',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Text(
+              dateText,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: compact ? 12 : 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.calendar_month_outlined,
+              size: compact ? 16 : 18,
+              color: AppTheme.textSecondary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -783,7 +837,7 @@ class _DraftLinesCard extends StatelessWidget {
             '已添加明细（${lines.length}条 / $totalBoxes箱）',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
           ...lines.map(
             (line) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -814,9 +868,97 @@ class _DraftLinesCard extends StatelessWidget {
   }
 }
 
+class _OrderActionBar extends StatelessWidget {
+  const _OrderActionBar({
+    required this.onEnd,
+    required this.onContinue,
+    required this.onNext,
+  });
+
+  final VoidCallback onEnd;
+  final VoidCallback onContinue;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            top: BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                key: const Key('endWaybillButton'),
+                onPressed: onEnd,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  foregroundColor: const Color(0xFF6B7280),
+                  side: const BorderSide(color: Color(0xFFD1D5DB)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('结束'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.tonal(
+                key: const Key('continueWaybillButton'),
+                onPressed: onContinue,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  foregroundColor: const Color(0xFF1D4ED8),
+                  backgroundColor: const Color(0xFFEAF1FF),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('继续'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton(
+                key: const Key('nextWaybillButton'),
+                onPressed: onNext,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  elevation: 0,
+                  backgroundColor: AppTheme.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  '下一单',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 InputDecoration _inputDecoration(String label) {
   return InputDecoration(
-    labelText: label,
+    hintText: label,
+    hintStyle: const TextStyle(
+      color: AppTheme.textSecondary,
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    ),
     filled: true,
     fillColor: const Color(0xFFF7F9FC),
     border: OutlineInputBorder(

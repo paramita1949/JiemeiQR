@@ -146,6 +146,7 @@ class StockDao {
     final productIds = batches.map((batch) => batch.productId).toSet().toList();
     final productsById = await _productsByIds(productIds);
     final deltas = await _movementDeltasByBatchIds(batchIds);
+    final reservedByBatch = await _pendingReservedByBatchIds(batchIds);
     final rows = <InventoryDetailRow>[];
 
     for (final batch in batches) {
@@ -154,11 +155,13 @@ class StockDao {
         continue;
       }
       final currentBoxes = batch.initialBoxes + (deltas[batch.id] ?? 0);
+      final reservedBoxes = reservedByBatch[batch.id] ?? 0;
       rows.add(
         InventoryDetailRow(
           product: product,
           batch: batch,
           currentBoxes: currentBoxes,
+          reservedBoxes: reservedBoxes,
         ),
       );
     }
@@ -318,6 +321,7 @@ class StockDao {
     final batchesById = {for (final batch in batches) batch.id: batch};
     final productIds = batches.map((batch) => batch.productId).toSet().toList();
     final productsById = await _productsByIds(productIds);
+    final reservedByBatch = await _pendingReservedByBatchIds(orderedBatchIds);
 
     final rows = <InventoryDetailRow>[];
     for (final batchId in orderedBatchIds) {
@@ -334,6 +338,7 @@ class StockDao {
           product: product,
           batch: batch,
           currentBoxes: currentBoxesByBatchId[batchId] ?? 0,
+          reservedBoxes: reservedByBatch[batchId] ?? 0,
         ),
       );
     }
@@ -478,6 +483,37 @@ class StockDao {
     return deltas;
   }
 
+  Future<Map<int, int>> _pendingReservedByBatchIds(List<int> batchIds) async {
+    if (batchIds.isEmpty) {
+      return const <int, int>{};
+    }
+    final rows = await _database.customSelect(
+      '''
+      SELECT oi.batch_id AS batch_id, COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE oi.batch_id IN (${List.filled(batchIds.length, '?').join(',')})
+        AND o.status != ?
+      GROUP BY oi.batch_id
+      ''',
+      variables: [
+        ...batchIds.map(Variable.withInt),
+        Variable.withInt(OrderStatus.done.index),
+      ],
+      readsFrom: {_database.orderItems, _database.orders},
+    ).get();
+    final result = <int, int>{};
+    for (final row in rows) {
+      final batchId = row.data['batch_id'] as int?;
+      final reserved = row.data['reserved_boxes'] as int?;
+      if (batchId == null || reserved == null) {
+        continue;
+      }
+      result[batchId] = reserved;
+    }
+    return result;
+  }
+
   int _movementDelta(StockMovement movement) {
     return switch (movement.type) {
       StockMovementType.initial || StockMovementType.inAdjust => movement.boxes,
@@ -510,14 +546,21 @@ class InventoryDetailRow {
     required this.product,
     required this.batch,
     required this.currentBoxes,
+    required this.reservedBoxes,
   });
 
   final Product product;
   final BatchRecord batch;
   final int currentBoxes;
+  final int reservedBoxes;
 
-  int get pieces => currentBoxes * product.piecesPerBox;
-  bool get isZeroStock => currentBoxes == 0;
+  int get availableBoxes {
+    final value = currentBoxes - reservedBoxes;
+    return value < 0 ? 0 : value;
+  }
+
+  int get pieces => availableBoxes * product.piecesPerBox;
+  bool get isZeroStock => availableBoxes == 0;
 }
 
 class PagedInventoryDetailRows {

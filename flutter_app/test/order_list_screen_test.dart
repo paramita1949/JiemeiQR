@@ -53,6 +53,7 @@ void main() {
     expect(find.text('已拣货'), findsWidgets);
     expect(find.text('完成'), findsWidgets);
     expect(find.text('完成 0单 · 未完成 2单 · 已拣货 1单'), findsOneWidget);
+    expect(find.text('备货汇总（按产品/批号/日期）'), findsNothing);
     expect(find.text('新增运单'), findsOneWidget);
     expect(find.byTooltip('日期筛选'), findsOneWidget);
     expect(find.text('168220019126'), findsOneWidget);
@@ -117,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('新增运单'), findsWidgets);
-    expect(find.text('产品明细'), findsOneWidget);
+    expect(find.byKey(const Key('waybillNoField')), findsOneWidget);
   });
 
   testWidgets('order card opens detail screen', (tester) async {
@@ -189,6 +190,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('TS'), findsOneWidget);
+    expect(find.text('备货汇总（按产品/批号/日期）'), findsOneWidget);
+    expect(find.textContaining('72067'), findsWidgets);
   });
 
   testWidgets('hides location summary for multi-product order', (tester) async {
