@@ -76,8 +76,8 @@ class _QrScanAppState extends State<QrScanApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: HomeScreen(
-        key: ValueKey(_databaseVersion),
         database: _database,
+        refreshToken: _databaseVersion,
         onPrepareImport: _prepareImport,
         onImportCompleted: _importCompleted,
       ),

@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 class _ResetOnlyBackupService extends BackupService {
   _ResetOnlyBackupService() : super(databaseFileName: 'jiemei.sqlite');
@@ -20,6 +23,37 @@ class _ResetOnlyBackupService extends BackupService {
       backupFileName: 'test-backup.sqlite',
       resetAt: DateTime(2026, 4, 28),
     );
+  }
+}
+
+Future<void> _createBusinessDatabase(
+  File file, {
+  required String productCode,
+}) async {
+  final database = AppDatabase.forTesting(NativeDatabase(file));
+  try {
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: productCode,
+            name: '测试产品$productCode',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+  } finally {
+    await database.close();
+  }
+}
+
+List<String> _productCodes(File file) {
+  final db = sqlite.sqlite3.open(file.path);
+  try {
+    return db
+        .select('SELECT code FROM products ORDER BY code')
+        .map((row) => row['code'] as String)
+        .toList();
+  } finally {
+    db.close();
   }
 }
 
@@ -109,14 +143,19 @@ void main() {
     expect(manifest['pairingCode'], '123456');
   });
 
-  test('backup service imports database with auto backup before replace',
+  test('backup service imports database with sql overwrite, not file replace',
       () async {
     final tempDir =
         await Directory.systemTemp.createTemp('jiemei-import-test-');
     final currentDb = File('${tempDir.path}/jiemei.sqlite');
     final incomingDb = File('${tempDir.path}/incoming.sqlite');
-    await currentDb.writeAsString('current-db');
-    await incomingDb.writeAsString('SQLite format 3\x00incoming-db');
+    await _createBusinessDatabase(currentDb, productCode: 'OLD');
+    await _createBusinessDatabase(incomingDb, productCode: 'NEW');
+
+    final currentSqlite = sqlite.sqlite3.open(currentDb.path);
+    currentSqlite.execute('CREATE TABLE local_marker (value TEXT NOT NULL);');
+    currentSqlite.execute("INSERT INTO local_marker VALUES ('keep-me');");
+    currentSqlite.close();
 
     final service = BackupService(
       databaseFileName: 'jiemei.sqlite',
@@ -126,10 +165,17 @@ void main() {
 
     final result = await service.importDatabaseFromPath(incomingDb.path);
 
-    expect(await currentDb.readAsString(), 'SQLite format 3\x00incoming-db');
+    expect(_productCodes(currentDb), ['NEW']);
     expect(File(result.backupFilePath).existsSync(), isTrue);
-    expect(File(result.backupFilePath).readAsStringSync(), 'current-db');
     expect(result.importedFromPath, incomingDb.path);
+
+    final afterImport = sqlite.sqlite3.open(currentDb.path);
+    try {
+      final marker = afterImport.select('SELECT value FROM local_marker');
+      expect(marker.single['value'], 'keep-me');
+    } finally {
+      afterImport.close();
+    }
   });
 
   test('backup service rejects invalid import source', () async {
@@ -152,12 +198,13 @@ void main() {
     expect(await currentDb.readAsString(), 'current-db');
   });
 
-  test('backup service resets database with auto backup', () async {
+  test('backup service resets database with sql clear and keeps database file',
+      () async {
     final tempDir = await Directory.systemTemp.createTemp('jiemei-reset-test-');
     final db = File('${tempDir.path}/jiemei.sqlite');
     final wal = File('${tempDir.path}/jiemei.sqlite-wal');
     final shm = File('${tempDir.path}/jiemei.sqlite-shm');
-    await db.writeAsString('current-db');
+    await _createBusinessDatabase(db, productCode: '72067');
     await wal.writeAsString('wal');
     await shm.writeAsString('shm');
 
@@ -170,7 +217,8 @@ void main() {
     final result = await service.resetDatabase();
 
     expect(result.backupFileName, 'jiemei-backup-20260426-120000.sqlite');
-    expect(await db.exists(), isFalse);
+    expect(await db.exists(), isTrue);
+    expect(_productCodes(db), isEmpty);
     expect(await wal.exists(), isFalse);
     expect(await shm.exists(), isFalse);
   });

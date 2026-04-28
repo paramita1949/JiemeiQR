@@ -95,3 +95,11 @@
 **Learning:** In QRSCAN, do not rely on `flutter` or `dart` being on `PATH`. Use `C:\tools\flutter\bin\flutter.bat` and `C:\tools\flutter\bin\dart.bat` directly for commands and verification.
 
 **Action:** Future Flutter verification should run from `flutter_app/` with commands such as `C:\tools\flutter\bin\flutter.bat test`. Only re-locate the SDK if that absolute path is missing or fails.
+
+## 2026-04-29 - Correction - Database Reset Must Be SQL-Level Clear
+
+**Context:** The user corrected that embedded seed data is only for first-install convenience. A reset must fully clear business data and must not preserve or re-import embedded stock. The user also challenged the file replacement approach for import/reset.
+
+**Learning:** In QRSCAN, reset semantics are business-data clearing, not database-file deletion. Avoid replacing/deleting the live SQLite file for reset/import because it blurs business intent and can destabilize active app state. Prefer explicit SQL operations: clear tables, overwrite tables, or later add a separate merge mode with defined conflict rules.
+
+**Action:** For future data backup work, keep strategies explicit in code and UI: `重置=清空`, `覆盖=清空后插入`, `增量合并=单独设计冲突规则`. Do not silently use file replacement when a database command can express the operation.

@@ -1,7 +1,7 @@
 name: qrscan_flutter
 description: Jiemei warehouse order and inventory app.
 publish_to: 'none'
-version: 3.0.10
+version: 3.0.11
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -17,6 +17,7 @@ dependencies:
   qr_flutter: ^4.1.0
   drift: ^2.32.1
   drift_sqflite: ^2.0.1
+  sqlite3: ^3.3.1
   sqlite3_flutter_libs: ^0.6.0+eol
   sqflite: ^2.4.2
   path_provider: ^2.1.5
@@ -28,7 +29,6 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   drift_dev: ^2.32.1
   build_runner: ^2.14.1
-  sqlite3: ^3.3.1
   flutter_launcher_icons: ^0.14.4
 
 flutter:
@@ -42,5 +42,6 @@ flutter_launcher_icons:
   image_path: assets/icon/jiemei.png
   adaptive_icon_background: "#00000000"
   adaptive_icon_foreground: assets/icon/jiemei.png
+
 
 

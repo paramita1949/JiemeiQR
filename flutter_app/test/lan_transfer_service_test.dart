@@ -1,8 +1,42 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
+
+Future<void> _createBusinessDatabase(
+  File file, {
+  required String productCode,
+}) async {
+  final database = AppDatabase.forTesting(NativeDatabase(file));
+  try {
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: productCode,
+            name: '测试产品$productCode',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+  } finally {
+    await database.close();
+  }
+}
+
+List<String> _productCodes(File file) {
+  final db = sqlite.sqlite3.open(file.path);
+  try {
+    return db
+        .select('SELECT code FROM products ORDER BY code')
+        .map((row) => row['code'] as String)
+        .toList();
+  } finally {
+    db.close();
+  }
+}
 
 void main() {
   test('connection code round-trip parse', () {
@@ -40,8 +74,8 @@ void main() {
 
     final senderDb = File('${senderDir.path}/jiemei.sqlite');
     final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
-    await senderDb.writeAsString('SQLite format 3\x00sender-db');
-    await receiverDb.writeAsString('SQLite format 3\x00receiver-db');
+    await _createBusinessDatabase(senderDb, productCode: 'SENDER');
+    await _createBusinessDatabase(receiverDb, productCode: 'RECEIVER');
 
     final senderService = LanTransferService(
       backupService: BackupService(
@@ -66,7 +100,7 @@ void main() {
     );
 
     expect(result.backupFileName, isNotEmpty);
-    expect(await receiverDb.readAsString(), 'SQLite format 3\x00sender-db');
+    expect(_productCodes(receiverDb), ['SENDER']);
 
     await senderService.stopSendSession();
   });
@@ -80,8 +114,8 @@ void main() {
 
     final senderDb = File('${senderDir.path}/jiemei.sqlite');
     final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
-    await senderDb.writeAsString('SQLite format 3\x00sender-db');
-    await receiverDb.writeAsString('SQLite format 3\x00receiver-db');
+    await _createBusinessDatabase(senderDb, productCode: 'SENDER');
+    await _createBusinessDatabase(receiverDb, productCode: 'RECEIVER');
 
     final senderBackupService = BackupService(
       databaseFileName: 'jiemei.sqlite',
@@ -109,11 +143,11 @@ void main() {
       pairingCode: session.pairingCode,
     );
 
-    expect(await receiverDb.readAsString(), 'SQLite format 3\x00sender-db');
+    expect(_productCodes(receiverDb), ['SENDER']);
     final backupFile =
         File('${receiverDir.path}/backups/${receiveResult.backupFileName}');
     expect(await backupFile.exists(), isTrue);
-    expect(await backupFile.readAsString(), 'SQLite format 3\x00receiver-db');
+    expect(_productCodes(backupFile), ['RECEIVER']);
 
     await senderService.stopSendSession();
   });

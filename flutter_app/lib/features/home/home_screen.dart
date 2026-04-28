@@ -19,11 +19,13 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.database,
+    this.refreshToken = 0,
     this.onPrepareImport,
     this.onImportCompleted,
   });
 
   final AppDatabase? database;
+  final int refreshToken;
   final Future<void> Function()? onPrepareImport;
   final DatabaseReloadCallback? onImportCompleted;
 
@@ -32,8 +34,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  late final AppDatabase _database;
-  late final bool _ownsDatabase;
+  late AppDatabase _database;
+  late bool _ownsDatabase;
   _HomeStats? _stats;
   bool _loadingStats = true;
 
@@ -44,6 +46,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     unawaited(_refreshStats());
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.database != widget.database) {
+      if (_ownsDatabase) {
+        unawaited(_database.close());
+      }
+      _ownsDatabase = widget.database == null;
+      _database = widget.database ?? AppDatabase();
+      setState(() => _loadingStats = true);
+      unawaited(_refreshStats());
+      return;
+    }
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      unawaited(_refreshStats());
+    }
   }
 
   @override

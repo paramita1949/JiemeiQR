@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 typedef DocumentsDirectoryProvider = Future<Directory> Function();
 typedef DatabaseDirectoryProvider = Future<Directory> Function();
@@ -129,20 +130,14 @@ class BackupService {
     }
 
     final backup = await createLocalBackup();
-    final tempImport = File('${target.path}.importing');
     try {
-      if (await tempImport.exists()) {
-        await tempImport.delete();
-      }
-      await incoming.copy(tempImport.path);
-      await target.delete();
-      await tempImport.rename(target.path);
+      _overwriteBusinessTables(target: target, incoming: incoming);
       return ImportResult(
         importedFromPath: incomingPath,
         backupFilePath: backup.filePath,
         backupFileName: backup.fileName,
       );
-    } on FileSystemException catch (error) {
+    } on Object catch (error) {
       throw ImportDatabaseFailedException(error);
     }
   }
@@ -155,6 +150,7 @@ class BackupService {
     }
 
     final backup = await createLocalBackup();
+    _clearBusinessTables(target);
     final sidecars = <String>[
       '${target.path}-wal',
       '${target.path}-shm',
@@ -166,13 +162,89 @@ class BackupService {
         await file.delete();
       }
     }
-    await target.delete();
 
     return ResetDatabaseResult(
       backupFileName: backup.fileName,
       resetAt: now,
     );
   }
+
+  void _clearBusinessTables(File target) {
+    final db = sqlite.sqlite3.open(target.path);
+    try {
+      db.execute('PRAGMA foreign_keys = OFF;');
+      db.execute('BEGIN IMMEDIATE;');
+      try {
+        _deleteBusinessRows(db, schema: 'main');
+        db.execute('COMMIT;');
+      } on Object {
+        db.execute('ROLLBACK;');
+        rethrow;
+      } finally {
+        db.execute('PRAGMA foreign_keys = ON;');
+      }
+      db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+    } finally {
+      db.close();
+    }
+  }
+
+  void _overwriteBusinessTables({
+    required File target,
+    required File incoming,
+  }) {
+    final db = sqlite.sqlite3.open(target.path);
+    try {
+      db.execute(
+          "ATTACH DATABASE '${_escapeSqlString(incoming.path)}' AS incoming;");
+      db.execute('PRAGMA foreign_keys = OFF;');
+      db.execute('BEGIN IMMEDIATE;');
+      try {
+        _deleteBusinessRows(db, schema: 'main');
+        _copyBusinessRows(db);
+        db.execute('COMMIT;');
+      } on Object {
+        db.execute('ROLLBACK;');
+        rethrow;
+      } finally {
+        db.execute('PRAGMA foreign_keys = ON;');
+        db.execute('DETACH DATABASE incoming;');
+      }
+      db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+    } finally {
+      db.close();
+    }
+  }
+
+  void _deleteBusinessRows(sqlite.Database db, {required String schema}) {
+    for (final table in _businessTables.reversed) {
+      db.execute('DELETE FROM $schema.$table;');
+    }
+    db.execute(
+      "DELETE FROM $schema.sqlite_sequence WHERE name IN (${_businessTables.map((table) => "'$table'").join(', ')});",
+    );
+  }
+
+  void _copyBusinessRows(sqlite.Database db) {
+    for (final table in _businessTables) {
+      final columns = _businessTableColumns[table]!;
+      db.execute(
+        'INSERT INTO main.$table (${columns.join(', ')}) '
+        'SELECT ${columns.join(', ')} FROM incoming.$table;',
+      );
+    }
+    db.execute(
+      "DELETE FROM main.sqlite_sequence WHERE name IN (${_businessTables.map((table) => "'$table'").join(', ')});",
+    );
+    for (final table in _businessTables) {
+      db.execute(
+        'INSERT OR REPLACE INTO main.sqlite_sequence(name, seq) '
+        "SELECT '$table', COALESCE(MAX(id), 0) FROM main.$table;",
+      );
+    }
+  }
+
+  String _escapeSqlString(String value) => value.replaceAll("'", "''");
 
   String _fileStamp(DateTime value) {
     String pad2(int n) => n.toString().padLeft(2, '0');
@@ -259,6 +331,71 @@ class BackupService {
   }
 }
 
+const _businessTables = <String>[
+  'products',
+  'batches',
+  'orders',
+  'order_items',
+  'stock_movements',
+];
+
+const _businessTableColumns = <String, List<String>>{
+  'products': [
+    'id',
+    'code',
+    'name',
+    'boxes_per_board',
+    'pieces_per_box',
+    'created_at',
+    'updated_at',
+  ],
+  'batches': [
+    'id',
+    'product_id',
+    'actual_batch',
+    'date_batch',
+    'initial_boxes',
+    'boxes_per_board',
+    'stacking_pattern',
+    'location',
+    'has_shipped',
+    'ts_required',
+    'remark',
+    'created_at',
+    'updated_at',
+  ],
+  'orders': [
+    'id',
+    'waybill_no',
+    'merchant_name',
+    'order_date',
+    'status',
+    'remark',
+    'created_at',
+    'updated_at',
+  ],
+  'order_items': [
+    'id',
+    'order_id',
+    'product_id',
+    'batch_id',
+    'boxes',
+    'boxes_per_board',
+    'pieces_per_box',
+    'created_at',
+  ],
+  'stock_movements': [
+    'id',
+    'batch_id',
+    'order_id',
+    'movement_date',
+    'type',
+    'boxes',
+    'remark',
+    'created_at',
+  ],
+};
+
 class BackupDraft {
   const BackupDraft({
     required this.databasePath,
@@ -330,7 +467,7 @@ class InvalidImportDatabaseException implements Exception {
 class ImportDatabaseFailedException implements Exception {
   const ImportDatabaseFailedException(this.error);
 
-  final FileSystemException error;
+  final Object error;
 
   @override
   String toString() => 'ImportDatabaseFailedException(error: $error)';

@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/home/home_screen.dart';
 import 'package:qrscan_flutter/main.dart';
 
 void main() {
@@ -91,6 +93,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('450 件'), findsOneWidget);
+  });
+
+  testWidgets('home refreshes when database instance changes', (tester) async {
+    final oldWarnSetting = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    addTearDown(() {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = oldWarnSetting;
+    });
+
+    final firstDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+    await tester.pumpWidget(
+      MaterialApp(home: HomeScreen(database: firstDatabase)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0 件'), findsOneWidget);
+    await firstDatabase.close();
+
+    final secondDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+    final productDao = ProductDao(secondDatabase);
+    final productId = await productDao.createProduct(
+      code: '20584',
+      name: '新数据库产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'BATCH',
+      dateBatch: '2029.1.1',
+      initialBoxes: 2,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: HomeScreen(database: secondDatabase)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('60 件'), findsOneWidget);
+    await secondDatabase.close();
   });
 
   testWidgets('home action opens data backup page', (tester) async {
