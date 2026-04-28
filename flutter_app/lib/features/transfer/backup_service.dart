@@ -12,6 +12,34 @@ typedef DatabaseDirectoryProvider = Future<Directory> Function();
 typedef NowProvider = DateTime Function();
 typedef RandomIntProvider = int Function(int max);
 
+enum BackupReason {
+  manual('manual'),
+  autoDaily('auto_daily'),
+  autoWeekly('auto_weekly'),
+  beforeReset('before_reset'),
+  beforeImport('before_import'),
+  beforeRestore('before_restore');
+
+  const BackupReason(this.value);
+  final String value;
+}
+
+enum BackupSchedule {
+  off('off'),
+  daily('daily'),
+  weekly('weekly');
+
+  const BackupSchedule(this.value);
+  final String value;
+
+  static BackupSchedule fromValue(String? value) {
+    return BackupSchedule.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => BackupSchedule.off,
+    );
+  }
+}
+
 class BackupService {
   const BackupService({
     required this.databaseFileName,
@@ -26,6 +54,7 @@ class BackupService {
   final DatabaseDirectoryProvider? databaseDirectoryProvider;
   final NowProvider? nowProvider;
   final RandomIntProvider? randomIntProvider;
+  static const int maxSnapshotCount = 90;
 
   BackupDraft createLocalBackupDraft() {
     final now = (nowProvider ?? DateTime.now)();
@@ -37,7 +66,9 @@ class BackupService {
     );
   }
 
-  Future<BackupResult> createLocalBackup() async {
+  Future<BackupResult> createLocalBackup({
+    BackupReason reason = BackupReason.manual,
+  }) async {
     final now = (nowProvider ?? DateTime.now)();
     final documentsDir = await _documentsDirectory();
     final source = await _databaseFile();
@@ -63,15 +94,18 @@ class BackupService {
         'databaseFileName': databaseFileName,
         'sourceDatabasePath': source.path,
         'backupDatabasePath': backupFile.path,
+        'reason': reason.value,
       }),
     );
 
-    return BackupResult(
+    final result = BackupResult(
       fileName: backupFileName,
       filePath: backupFile.path,
       infoPath: infoFile.path,
       note: '备份已生成，可用于数据备份接收端导入。',
     );
+    await _pruneBackupsByCount(maxCount: maxSnapshotCount);
+    return result;
   }
 
   Future<List<BackupSnapshot>> listLocalBackups() async {
@@ -91,6 +125,7 @@ class BackupService {
       final infoPath = p.setExtension(entity.path, '.backup_info.json');
       final infoFile = File(infoPath);
       DateTime createdAt = stat.modified;
+      var reason = BackupReason.manual;
       if (await infoFile.exists()) {
         try {
           final content = jsonDecode(await infoFile.readAsString());
@@ -100,6 +135,10 @@ class BackupService {
             if (parsed != null) {
               createdAt = parsed;
             }
+            reason = BackupReason.values.firstWhere(
+              (item) => item.value == (content['reason'] as String? ?? ''),
+              orElse: () => BackupReason.manual,
+            );
           }
         } catch (_) {
           // A damaged metadata file should not hide a valid backup snapshot.
@@ -112,6 +151,7 @@ class BackupService {
           infoPath: await infoFile.exists() ? infoFile.path : null,
           createdAt: createdAt,
           sizeBytes: stat.size,
+          reason: reason,
         ),
       );
     }
@@ -121,6 +161,105 @@ class BackupService {
 
   Future<ImportResult> restoreBackupSnapshot(String backupPath) {
     return importDatabaseFromPath(backupPath);
+  }
+
+  Future<void> deleteBackupSnapshot(String backupPath) async {
+    final backupFile = File(backupPath);
+    if (await backupFile.exists()) {
+      await backupFile.delete();
+    }
+    final infoFile = File(p.setExtension(backupPath, '.backup_info.json'));
+    if (await infoFile.exists()) {
+      await infoFile.delete();
+    }
+  }
+
+  Future<int> cleanupBackupsByCount({int keepLatest = 30}) async {
+    return _pruneBackupsByCount(maxCount: keepLatest);
+  }
+
+  Future<BackupSchedule> getBackupSchedule() async {
+    final file = await _backupSettingsFile();
+    if (!await file.exists()) {
+      return BackupSchedule.off;
+    }
+    try {
+      final content = jsonDecode(await file.readAsString());
+      if (content is Map<String, dynamic>) {
+        return BackupSchedule.fromValue(content['schedule'] as String?);
+      }
+    } catch (_) {}
+    return BackupSchedule.off;
+  }
+
+  Future<void> setBackupSchedule(BackupSchedule schedule) async {
+    final file = await _backupSettingsFile();
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+    DateTime? lastAutoBackupAt;
+    if (await file.exists()) {
+      try {
+        final previous = jsonDecode(await file.readAsString());
+        if (previous is Map<String, dynamic>) {
+          lastAutoBackupAt =
+              DateTime.tryParse(previous['lastAutoBackupAt'] as String? ?? '');
+        }
+      } catch (_) {}
+    }
+    await file.writeAsString(
+      jsonEncode({
+        'schedule': schedule.value,
+        'lastAutoBackupAt': lastAutoBackupAt?.toIso8601String(),
+      }),
+    );
+  }
+
+  Future<BackupResult?> runAutoBackupIfDue() async {
+    final file = await _backupSettingsFile();
+    final schedule = await getBackupSchedule();
+    if (schedule == BackupSchedule.off) {
+      return null;
+    }
+
+    DateTime? lastAutoBackupAt;
+    if (await file.exists()) {
+      try {
+        final content = jsonDecode(await file.readAsString());
+        if (content is Map<String, dynamic>) {
+          lastAutoBackupAt =
+              DateTime.tryParse(content['lastAutoBackupAt'] as String? ?? '');
+        }
+      } catch (_) {}
+    }
+
+    final now = (nowProvider ?? DateTime.now)();
+    final due = switch (schedule) {
+      BackupSchedule.daily => lastAutoBackupAt == null ||
+          now.difference(lastAutoBackupAt).inHours >= 24,
+      BackupSchedule.weekly => lastAutoBackupAt == null ||
+          now.difference(lastAutoBackupAt).inDays >= 7,
+      BackupSchedule.off => false,
+    };
+    if (!due) {
+      return null;
+    }
+
+    final result = await createLocalBackup(
+      reason: schedule == BackupSchedule.daily
+          ? BackupReason.autoDaily
+          : BackupReason.autoWeekly,
+    );
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+    await file.writeAsString(
+      jsonEncode({
+        'schedule': schedule.value,
+        'lastAutoBackupAt': now.toIso8601String(),
+      }),
+    );
+    return result;
   }
 
   Future<SendPackageResult> createSendPackage() async {
@@ -178,7 +317,7 @@ class BackupService {
       throw BackupSourceMissingException(target.path);
     }
 
-    final backup = await createLocalBackup();
+    final backup = await createLocalBackup(reason: BackupReason.beforeImport);
     try {
       _overwriteBusinessTables(target: target, incoming: incoming);
       return ImportResult(
@@ -198,7 +337,7 @@ class BackupService {
       throw BackupSourceMissingException(target.path);
     }
 
-    final backup = await createLocalBackup();
+    final backup = await createLocalBackup(reason: BackupReason.beforeReset);
     _clearBusinessTables(target);
     final sidecars = <String>[
       '${target.path}-wal',
@@ -333,6 +472,27 @@ class BackupService {
   Future<File> _databaseFile() async {
     final databaseDir = await _databaseDirectory();
     return File(p.join(databaseDir.path, databaseFileName));
+  }
+
+  Future<File> _backupSettingsFile() async {
+    final documentsDir = await _documentsDirectory();
+    return File(p.join(documentsDir.path, 'backups', '.backup_settings.json'));
+  }
+
+  Future<int> _pruneBackupsByCount({required int maxCount}) async {
+    if (maxCount < 1) {
+      return 0;
+    }
+    final snapshots = await listLocalBackups();
+    if (snapshots.length <= maxCount) {
+      return 0;
+    }
+    var deleted = 0;
+    for (final snapshot in snapshots.skip(maxCount)) {
+      await deleteBackupSnapshot(snapshot.filePath);
+      deleted += 1;
+    }
+    return deleted;
   }
 
   Future<File?> _resolveIncomingFile(String incomingPath) async {
@@ -477,6 +637,7 @@ class BackupSnapshot {
     required this.filePath,
     required this.createdAt,
     required this.sizeBytes,
+    required this.reason,
     this.infoPath,
   });
 
@@ -485,6 +646,7 @@ class BackupSnapshot {
   final String? infoPath;
   final DateTime createdAt;
   final int sizeBytes;
+  final BackupReason reason;
 }
 
 class BackupSourceMissingException implements Exception {

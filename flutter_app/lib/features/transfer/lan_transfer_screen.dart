@@ -34,15 +34,17 @@ class LanTransferScreen extends StatefulWidget {
 class _LanTransferScreenState extends State<LanTransferScreen> {
   late final BackupService _backupService;
   late final LanTransferService _lanTransferService;
-  late BackupDraft _backupDraft;
 
   bool _creatingBackup = false;
   bool _resettingDatabase = false;
   bool _startingSend = false;
   bool _receiving = false;
   bool _loadingBackups = true;
+  bool _cleaningBackups = false;
+  bool _applyingSchedule = false;
   String? _restoringBackupPath;
   List<BackupSnapshot> _backupSnapshots = const [];
+  BackupSchedule _backupSchedule = BackupSchedule.off;
   SendSession? _sendSession;
   String? _statusText;
 
@@ -53,8 +55,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         BackupService(databaseFileName: widget.databasePath);
     _lanTransferService = widget.lanTransferService ??
         LanTransferService(backupService: _backupService);
-    _backupDraft = _backupService.createLocalBackupDraft();
-    _loadBackupSnapshots();
+    _bootstrapBackupPanel();
   }
 
   @override
@@ -74,7 +75,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             const PageTitle(
               icon: Icons.backup_outlined,
               title: '数据备份',
-              subtitle: '两台手机同一局域网，扫码或输入配对码即可互传',
+              subtitle: '快照恢复 + 局域网互传',
             ),
             const SizedBox(height: 18),
             Row(
@@ -110,16 +111,22 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             ],
             const SizedBox(height: 16),
             _UtilityPanel(
-              backupFileName: _backupDraft.fileName,
               creatingBackup: _creatingBackup,
               resettingDatabase: _resettingDatabase,
               loadingBackups: _loadingBackups,
+              applyingSchedule: _applyingSchedule,
+              backupSchedule: _backupSchedule,
               backupSnapshots: _backupSnapshots,
               restoringBackupPath: _restoringBackupPath,
               onCreateBackup: _creatingBackup ? null : _createBackup,
               onResetDatabase:
                   _resettingDatabase ? null : _confirmAndResetDatabase,
+              onSelectSchedule: _selectBackupSchedule,
               onRestoreBackup: _confirmAndRestoreBackup,
+              onDeleteBackup: _confirmAndDeleteBackup,
+              onCleanupBackups: _confirmAndCleanupBackups,
+              cleaningBackups: _cleaningBackups,
+              onExportHint: _showPcExportHint,
             ),
           ],
         ),
@@ -422,7 +429,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _backupDraft = _backupService.createLocalBackupDraft());
+      setState(() {});
       await _loadBackupSnapshots();
       _showSnack('备份完成：${result.fileName}');
     } on BackupSourceMissingException {
@@ -498,6 +505,18 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     _showSnack('二维码内容已复制');
   }
 
+  Future<void> _bootstrapBackupPanel() async {
+    _backupSchedule = await _backupService.getBackupSchedule();
+    final autoBackup = await _backupService.runAutoBackupIfDue();
+    if (autoBackup != null) {
+      _statusText = '已自动生成备份快照';
+    }
+    await _loadBackupSnapshots();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _loadBackupSnapshots() async {
     if (mounted) {
       setState(() => _loadingBackups = true);
@@ -519,6 +538,40 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         _backupSnapshots = const [];
         _loadingBackups = false;
       });
+    }
+  }
+
+  Future<void> _selectBackupSchedule(BackupSchedule schedule) async {
+    if (_backupSchedule == schedule) {
+      return;
+    }
+    setState(() => _applyingSchedule = true);
+    try {
+      await _backupService.setBackupSchedule(schedule);
+      final autoBackup = await _backupService.runAutoBackupIfDue();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backupSchedule = schedule;
+        if (autoBackup != null) {
+          _statusText = '策略已更新，并自动生成了备份快照';
+        }
+      });
+      await _loadBackupSnapshots();
+      _showSnack(
+        switch (schedule) {
+          BackupSchedule.off => '自动备份已关闭',
+          BackupSchedule.daily => '自动备份已设置为每天一次',
+          BackupSchedule.weekly => '自动备份已设置为每周一次',
+        },
+      );
+    } catch (_) {
+      _showSnack('自动备份策略保存失败');
+    } finally {
+      if (mounted) {
+        setState(() => _applyingSchedule = false);
+      }
     }
   }
 
@@ -585,6 +638,92 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         setState(() => _restoringBackupPath = null);
       }
     }
+  }
+
+  Future<void> _confirmAndDeleteBackup(BackupSnapshot snapshot) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除备份快照'),
+        content: Text('删除 ${_formatSnapshotTime(snapshot.createdAt)} 的快照？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await _backupService.deleteBackupSnapshot(snapshot.filePath);
+      await _loadBackupSnapshots();
+      _showSnack('备份快照已删除');
+    } catch (_) {
+      _showSnack('删除失败，请稍后重试');
+    }
+  }
+
+  Future<void> _confirmAndCleanupBackups() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清理旧备份'),
+        content: const Text('将仅保留最近 30 个快照，继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('清理'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() => _cleaningBackups = true);
+    try {
+      final deleted =
+          await _backupService.cleanupBackupsByCount(keepLatest: 30);
+      await _loadBackupSnapshots();
+      _showSnack(deleted == 0 ? '无需清理' : '已清理 $deleted 个旧备份');
+    } catch (_) {
+      _showSnack('清理失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() => _cleaningBackups = false);
+      }
+    }
+  }
+
+  void _showPcExportHint() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('传到电脑'),
+        content: const Text(
+          '当前无云端时，建议用“发送”功能把备份传到同局域网接收端。'
+          '如果电脑端暂时没有接收工具，可先把备份发到另一台手机，再拷到电脑。'
+          '\n\n下一步可以做一个电脑接收小工具：扫码/配对码后直接保存 sqlite 快照。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSnack(String text) {
@@ -708,26 +847,38 @@ class _StatusCard extends StatelessWidget {
 
 class _UtilityPanel extends StatelessWidget {
   const _UtilityPanel({
-    required this.backupFileName,
     required this.creatingBackup,
     required this.resettingDatabase,
     required this.loadingBackups,
+    required this.applyingSchedule,
+    required this.backupSchedule,
     required this.backupSnapshots,
     required this.restoringBackupPath,
     required this.onCreateBackup,
     required this.onResetDatabase,
+    required this.onSelectSchedule,
     required this.onRestoreBackup,
+    required this.onDeleteBackup,
+    required this.onCleanupBackups,
+    required this.cleaningBackups,
+    required this.onExportHint,
   });
 
-  final String backupFileName;
   final bool creatingBackup;
   final bool resettingDatabase;
   final bool loadingBackups;
+  final bool applyingSchedule;
+  final BackupSchedule backupSchedule;
   final List<BackupSnapshot> backupSnapshots;
   final String? restoringBackupPath;
   final VoidCallback? onCreateBackup;
   final VoidCallback? onResetDatabase;
+  final ValueChanged<BackupSchedule> onSelectSchedule;
   final ValueChanged<BackupSnapshot> onRestoreBackup;
+  final ValueChanged<BackupSnapshot> onDeleteBackup;
+  final VoidCallback onCleanupBackups;
+  final bool cleaningBackups;
+  final VoidCallback onExportHint;
 
   @override
   Widget build(BuildContext context) {
@@ -748,15 +899,6 @@ class _UtilityPanel extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            backupFileName,
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
@@ -770,7 +912,46 @@ class _UtilityPanel extends StatelessWidget {
                 onPressed: onResetDatabase,
                 child: Text(resettingDatabase ? '重置中...' : '重置数据库'),
               ),
+              TextButton(
+                onPressed: onExportHint,
+                child: const Text('传到电脑'),
+              ),
+              TextButton(
+                onPressed: cleaningBackups ? null : onCleanupBackups,
+                child: Text(cleaningBackups ? '清理中...' : '清理旧备份'),
+              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '自动备份',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: BackupSchedule.values
+                .map(
+                  (schedule) => ChoiceChip(
+                    label: Text(
+                      switch (schedule) {
+                        BackupSchedule.off => '关闭',
+                        BackupSchedule.daily => '每天一次',
+                        BackupSchedule.weekly => '每周一次',
+                      },
+                    ),
+                    selected: schedule == backupSchedule,
+                    onSelected: applyingSchedule
+                        ? null
+                        : (_) => onSelectSchedule(schedule),
+                  ),
+                )
+                .toList(),
           ),
           const SizedBox(height: 14),
           const Divider(height: 1),
@@ -822,8 +1003,21 @@ class _UtilityPanel extends StatelessWidget {
                     snapshot: snapshot,
                     restoring: restoringBackupPath == snapshot.filePath,
                     onRestore: () => onRestoreBackup(snapshot),
+                    onDelete: () => onDeleteBackup(snapshot),
                   ),
                 ),
+          if (backupSnapshots.length > 5)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                '仅显示最近5个快照',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -835,11 +1029,13 @@ class _BackupSnapshotTile extends StatelessWidget {
     required this.snapshot,
     required this.restoring,
     required this.onRestore,
+    required this.onDelete,
   });
 
   final BackupSnapshot snapshot;
   final bool restoring;
   final VoidCallback onRestore;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -871,21 +1067,17 @@ class _BackupSnapshotTile extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _formatBytes(snapshot.sizeBytes),
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
               ],
             ),
           ),
           TextButton(
             onPressed: restoring ? null : onRestore,
             child: Text(restoring ? '恢复中' : '恢复'),
+          ),
+          IconButton(
+            tooltip: '删除备份',
+            onPressed: restoring ? null : onDelete,
+            icon: const Icon(Icons.delete_outline, size: 18),
           ),
         ],
       ),
@@ -897,14 +1089,4 @@ String _formatSnapshotTime(DateTime value) {
   String pad2(int n) => n.toString().padLeft(2, '0');
   return '${value.year}.${value.month}.${value.day} '
       '${pad2(value.hour)}:${pad2(value.minute)}';
-}
-
-String _formatBytes(int value) {
-  if (value >= 1024 * 1024) {
-    return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  if (value >= 1024) {
-    return '${(value / 1024).toStringAsFixed(1)} KB';
-  }
-  return '$value B';
 }

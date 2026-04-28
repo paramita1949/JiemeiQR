@@ -109,6 +109,7 @@ void main() {
         jsonDecode(await metadataFile.readAsString()) as Map<String, dynamic>;
     expect(metadata['databaseFileName'], 'jiemei.sqlite');
     expect(metadata['backupDatabasePath'], result.filePath);
+    expect(metadata['reason'], BackupReason.manual.value);
   });
 
   test('backup service lists snapshots by date and restores selected snapshot',
@@ -136,6 +137,7 @@ void main() {
       newer.fileName,
       older.fileName,
     ]);
+    expect(snapshots.first.reason, BackupReason.manual);
 
     final restore = await service.restoreBackupSnapshot(older.filePath);
 
@@ -278,6 +280,61 @@ void main() {
     expect(await shm.exists(), isFalse);
   });
 
+  test('backup service auto backup respects daily schedule', () async {
+    final tempDir = await Directory.systemTemp.createTemp('jiemei-auto-test-');
+    final db = File('${tempDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(db, productCode: '72067');
+    var now = DateTime(2026, 4, 26, 9, 0, 0);
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => now,
+    );
+
+    await service.setBackupSchedule(BackupSchedule.daily);
+    final first = await service.runAutoBackupIfDue();
+    final second = await service.runAutoBackupIfDue();
+    now = DateTime(2026, 4, 27, 10, 0, 0);
+    final third = await service.runAutoBackupIfDue();
+
+    expect(first, isNotNull);
+    expect(second, isNull);
+    expect(third, isNotNull);
+    final snapshots = await service.listLocalBackups();
+    expect(
+      snapshots.where((item) => item.reason == BackupReason.autoDaily).length,
+      2,
+    );
+  });
+
+  test('backup service deletes snapshot and cleans old backups', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('jiemei-cleanup-test-');
+    final db = File('${tempDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(db, productCode: '72067');
+    var now = DateTime(2026, 4, 26, 9, 0, 0);
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => now,
+    );
+
+    final a = await service.createLocalBackup();
+    now = DateTime(2026, 4, 26, 10, 0, 0);
+    await service.createLocalBackup();
+    now = DateTime(2026, 4, 26, 11, 0, 0);
+    await service.createLocalBackup();
+
+    await service.deleteBackupSnapshot(a.filePath);
+    final afterDelete = await service.listLocalBackups();
+    expect(afterDelete.length, 2);
+
+    final deleted = await service.cleanupBackupsByCount(keepLatest: 1);
+    final afterCleanup = await service.listLocalBackups();
+    expect(deleted, 1);
+    expect(afterCleanup.length, 1);
+  });
+
   testWidgets('shows simple send and receive entry points', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -290,6 +347,9 @@ void main() {
     expect(find.text('发送'), findsOneWidget);
     expect(find.text('接收'), findsOneWidget);
     expect(find.text('本地备份'), findsOneWidget);
+    expect(find.text('自动备份'), findsOneWidget);
+    expect(find.text('每天一次'), findsOneWidget);
+    expect(find.text('每周一次'), findsOneWidget);
     expect(find.textContaining('发送地址'), findsNothing);
   });
 

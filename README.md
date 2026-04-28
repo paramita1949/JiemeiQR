@@ -4,7 +4,7 @@
 
 ## 项目状态
 - 技术栈：Flutter（单栈）
-- 当前版本：`3.0.12`
+- 当前版本：`3.0.13`
 - 变更记录：[CHANGELOG.md](C:/Users/Administrator/Desktop/QRSCAN/CHANGELOG.md)
 
 ## 核心能力
@@ -33,6 +33,7 @@
 - CI 构建：`.github/workflows/flutter-android-build.yml`
 - 云编译说明：`docs/FLUTTER_GITHUB_BUILD.md`
 - Android 固定签名说明：`docs/ANDROID_RELEASE_SIGNING.md`
+- 电脑端备份接收工具（CLI）：`pc_tools/backup_receiver/`
 
 ## 本地开发
 ```bash
