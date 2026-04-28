@@ -11,6 +11,7 @@ import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -100,70 +101,64 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openHomeAction(BuildContext context, String title) async {
     if (title == 'QR箱码') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const QrEntryScreen()),
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(builder: (_) => const QrEntryScreen()),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
     if (title == '基础资料') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
           builder: (_) => BaseInfoEditScreen(database: database),
         ),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
     if (title == '库存明细') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
           builder: (_) => InventoryDetailScreen(database: database),
         ),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
     if (title == '订单信息') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
           builder: (_) => OrderListScreen(database: database),
         ),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
     if (title == '出库日历') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
           builder: (_) => OutboundCalendarScreen(database: database),
         ),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
     if (title == '局域网迁移') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
           builder: (_) => LanTransferScreen(
             onPrepareImport: widget.onPrepareImport,
             onImportCompleted: widget.onImportCompleted,
           ),
         ),
+        onRefresh: () => unawaited(_refreshStats()),
       );
-      if (mounted) {
-        unawaited(_refreshStats());
-      }
       return;
     }
   }

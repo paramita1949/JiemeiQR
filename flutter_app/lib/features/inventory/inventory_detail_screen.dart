@@ -7,6 +7,7 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -82,13 +83,15 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
+                  onPressed: () async {
+                    await pushAndRefresh(
+                      context,
+                      route: MaterialPageRoute(
                         builder: (_) => BaseInfoEditScreen(
                           database: _database,
                         ),
                       ),
+                      onRefresh: () => _refreshRows(refreshTotals: true),
                     );
                   },
                   icon: const Icon(Icons.add),

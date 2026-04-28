@@ -6,6 +6,7 @@ import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class OutboundCalendarScreen extends StatefulWidget {
@@ -306,19 +307,31 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     }
   }
 
-  void _openOrders() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
+  Future<void> _openOrders() async {
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
         builder: (_) => OrderListScreen(database: _database, dateRange: _range),
       ),
+      onRefresh: () {
+        setState(() {
+          _stateFuture = _loadState();
+        });
+      },
     );
   }
 
-  void _openInventory() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
+  Future<void> _openInventory() async {
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
         builder: (_) => InventoryDetailScreen(database: _database),
       ),
+      onRefresh: () {
+        setState(() {
+          _stateFuture = _loadState();
+        });
+      },
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:qrscan_flutter/features/orders/order_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_edit_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -254,30 +255,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _openNewWaybill() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
         builder: (_) => OrderEditScreen(database: _database),
       ),
+      onRefresh: _refreshOrders,
     );
-    if (!mounted) {
-      return;
-    }
-    _refreshOrders();
   }
 
   Future<void> _openOrderDetail(OrderSummary order) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
         builder: (_) => OrderDetailScreen(
           database: _database,
           orderId: order.id,
         ),
       ),
+      onRefresh: _refreshOrders,
     );
-    if (!mounted) {
-      return;
-    }
-    _refreshOrders();
   }
 
   void _applyQuickFilter(_OrderQuickFilter filter) {
