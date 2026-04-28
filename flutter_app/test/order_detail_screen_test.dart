@@ -130,6 +130,43 @@ void main() {
     expect(await stockDao.currentBoxesForBatch(batch.id), 80);
   });
 
+  testWidgets(
+      'reverting done to pending restores stock and clears outbound movement',
+      (tester) async {
+    final orderId = await seedOrder();
+    final batch = await database.select(database.batches).getSingle();
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('completeOrderButton')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('completeOrderButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认完成'));
+    await tester.pumpAndSettle();
+    expect(await stockDao.currentBoxesForBatch(batch.id), 80);
+
+    await tester.tap(find.text('未完成'));
+    await tester.pumpAndSettle();
+
+    final order = await (database.select(database.orders)
+          ..where((table) => table.id.equals(orderId)))
+        .getSingle();
+    expect(order.status, OrderStatus.pending);
+    expect(await stockDao.currentBoxesForBatch(batch.id), 100);
+
+    final outboundMovements = await (database.select(database.stockMovements)
+          ..where((table) => table.orderId.equals(orderId))
+          ..where(
+              (table) => table.type.equals(StockMovementType.orderOut.index)))
+        .get();
+    expect(outboundMovements, isEmpty);
+  });
+
   testWidgets('deletes one order line without deleting whole order',
       (tester) async {
     final productId = await productDao.createProduct(

@@ -125,7 +125,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _setStatus(OrderStatus status) async {
-    await _orderDao.setStatus(widget.orderId, status);
+    try {
+      await _completionService.updateStatus(
+        orderId: widget.orderId,
+        target: status,
+      );
+    } on InsufficientStockException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('库存不足，无法完成')),
+      );
+      return;
+    }
     if (!mounted) {
       return;
     }
