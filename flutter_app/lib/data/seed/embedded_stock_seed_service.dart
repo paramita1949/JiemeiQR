@@ -16,8 +16,8 @@ class EmbeddedStockSeedService {
   static const String seedAssetPath = 'assets/seed/embedded_stock_seed.json';
 
   Future<bool> seedIfDatabaseEmpty() async {
-    final existingProduct =
-        await _database.select(_database.products).getSingleOrNull();
+    final productQuery = _database.select(_database.products)..limit(1);
+    final existingProduct = await productQuery.getSingleOrNull();
     if (existingProduct != null) {
       return false;
     }

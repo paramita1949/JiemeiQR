@@ -74,4 +74,35 @@ void main() {
     expect(seeded, isFalse);
     await database.close();
   });
+
+  test('embedded stock seed skips when database has multiple products',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '72067',
+            name: '已有产品A',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '20584',
+            name: '已有产品B',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+    final service = EmbeddedStockSeedService(
+      database,
+      assetBundle: _FakeAssetBundle('[]'),
+    );
+
+    final seeded = await service.seedIfDatabaseEmpty();
+
+    expect(seeded, isFalse);
+    expect(await database.select(database.products).get(), hasLength(2));
+    await database.close();
+  });
 }

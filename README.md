@@ -4,7 +4,7 @@
 
 ## 项目状态
 - 技术栈：Flutter（单栈）
-- 当前版本：`3.0.8`
+- 当前版本：`3.0.9`
 - 变更记录：[CHANGELOG.md](C:/Users/Administrator/Desktop/QRSCAN/CHANGELOG.md)
 
 ## 核心能力

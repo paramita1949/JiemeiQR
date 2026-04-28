@@ -390,7 +390,11 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       _showSnack('接收失败，请重试');
     } finally {
       if (prepared) {
-        await widget.onImportCompleted?.call();
+        try {
+          await widget.onImportCompleted?.call();
+        } catch (_) {
+          _showSnack('数据库恢复失败，请重启应用后再试');
+        }
       }
       if (mounted) {
         setState(() => _receiving = false);
