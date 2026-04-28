@@ -277,17 +277,19 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   String _detailTitle(_CalendarState? state) {
-    if (_selectedOrderId == null) {
-      return '当日出库明细';
-    }
-    _OutboundOrderSummary? selected;
+    final selected = _selectedOrder(state);
+    return selected == null
+        ? _rangeDetailTitle(_range)
+        : '运单 ${selected.waybillNo} 出库明细';
+  }
+
+  _OutboundOrderSummary? _selectedOrder(_CalendarState? state) {
     for (final order in state?.orders ?? const <_OutboundOrderSummary>[]) {
       if (order.id == _selectedOrderId) {
-        selected = order;
-        break;
+        return order;
       }
     }
-    return selected == null ? '当日出库明细' : '运单 ${selected.waybillNo} 出库明细';
+    return null;
   }
 
   Future<void> _pickCustomRange() async {
@@ -592,6 +594,7 @@ class _OutboundDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final groups = _OutboundGroup.fromRows(rows);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -601,87 +604,215 @@ class _OutboundDetailCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (rows.isEmpty)
-            const Text('暂无出库', style: TextStyle(color: AppTheme.textSecondary))
-          else
-            ...rows.map(
-              (row) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${row.productCode} · ${row.dateBatch}',
-                            style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (row.waybillNo != null &&
-                              row.waybillNo!.isNotEmpty &&
-                              row.merchantName != null &&
-                              row.merchantName!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              '运单 ${row.waybillNo!} · 商家 ${row.merchantName!}',
-                              style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${row.boxes}箱',
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    ..._buildBoardText(row),
-                  ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
+              if (groups.isNotEmpty)
+                const Text(
+                  '按运单',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (groups.isEmpty)
+            const Text('暂无出库', style: TextStyle(color: AppTheme.textSecondary))
+          else
+            ...groups.map(_buildGroup),
         ],
       ),
     );
   }
 
-  List<Widget> _buildBoardText(_OutboundRow row) {
+  Widget _buildGroup(_OutboundGroup group) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  group.waybillTitle,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '合计 ${group.totalBoxes}箱',
+                  style: const TextStyle(
+                    color: Color(0xFF1E3A8A),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              if (group.merchantName != null &&
+                  group.merchantName!.isNotEmpty) ...[
+                Text.rich(
+                  TextSpan(
+                    text: group.merchantName!,
+                    style: const TextStyle(color: Color(0xFFDC2626)),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                '${group.rows.length}个批号',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...group.rows.map(_buildProductRow),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductRow(_OutboundRow row) {
     final boardText = BoardCalculator.format(
       boxes: row.boxes,
       boxesPerBoard: row.boxesPerBoard,
     );
-    if (boardText == '${row.boxes}箱') {
-      return const <Widget>[];
-    }
-    return [
-      const SizedBox(width: 8),
-      Text(
-        boardText,
-        style: const TextStyle(
-          color: AppTheme.textSecondary,
-          fontWeight: FontWeight.w700,
-        ),
+    final quantityText = boardText == '${row.boxes}箱'
+        ? '${row.boxes}箱'
+        : '${row.boxes}箱 · $boardText';
+    return Container(
+      margin: const EdgeInsets.only(top: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
       ),
-    ];
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${row.productCode} · ${row.dateBatch}',
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            quantityText,
+            style: const TextStyle(
+              color: AppTheme.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+class _OutboundGroup {
+  const _OutboundGroup({
+    required this.waybillTitle,
+    required this.merchantName,
+    required this.totalBoxes,
+    required this.rows,
+  });
+
+  final String waybillTitle;
+  final String? merchantName;
+  final int totalBoxes;
+  final List<_OutboundRow> rows;
+
+  static List<_OutboundGroup> fromRows(List<_OutboundRow> rows) {
+    final grouped = <String, List<_OutboundRow>>{};
+    for (final row in rows) {
+      final key = row.orderId == null
+          ? 'no-order-${row.productCode}-${row.dateBatch}'
+          : 'order-${row.orderId}';
+      grouped.putIfAbsent(key, () => <_OutboundRow>[]).add(row);
+    }
+    return grouped.values.map((groupRows) {
+      final first = groupRows.first;
+      final totalBoxes = groupRows.fold<int>(
+        0,
+        (sum, row) => sum + row.boxes,
+      );
+      return _OutboundGroup(
+        waybillTitle: first.waybillNo == null || first.waybillNo!.isEmpty
+            ? '未关联运单'
+            : '运单 ${first.waybillNo}',
+        merchantName: first.merchantName,
+        totalBoxes: totalBoxes,
+        rows: groupRows,
+      );
+    }).toList();
+  }
+}
+
+String _rangeDetailTitle(DateTimeRange range) {
+  final today = _dateOnly(DateTime.now());
+  final yesterday = today.subtract(const Duration(days: 1));
+  if (_sameDate(range.start, today) && _sameDate(range.end, today)) {
+    return '今日出库明细';
+  }
+  if (_sameDate(range.start, yesterday) && _sameDate(range.end, yesterday)) {
+    return '昨日出库明细';
+  }
+  if (_sameDate(range.start, today.subtract(const Duration(days: 6))) &&
+      _sameDate(range.end, today)) {
+    return '近7天出库明细';
+  }
+  if (_sameDate(range.start, DateTime(today.year, today.month, 1)) &&
+      _sameDate(range.end, today)) {
+    return '本月出库明细';
+  }
+  return '出库明细';
+}
+
+bool _sameDate(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);

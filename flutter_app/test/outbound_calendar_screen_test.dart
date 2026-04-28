@@ -26,15 +26,17 @@ void main() {
     await database.close();
   });
 
-  Widget buildScreen() {
+  Widget buildScreen({DateTimeRange? initialRange}) {
     return MaterialApp(
       theme: AppTheme.light(),
       home: OutboundCalendarScreen(
+        key: UniqueKey(),
         database: database,
-        initialRange: DateTimeRange(
-          start: DateTime(2026, 4, 26),
-          end: DateTime(2026, 4, 26),
-        ),
+        initialRange: initialRange ??
+            DateTimeRange(
+              start: DateTime(2026, 4, 26),
+              end: DateTime(2026, 4, 26),
+            ),
       ),
     );
   }
@@ -101,9 +103,22 @@ void main() {
     expect(find.text('库存变化 -20箱'), findsOneWidget);
     expect(find.text('订单 1单 · 20箱'), findsOneWidget);
     expect(find.text('168220019125'), findsOneWidget);
-    expect(find.text('洁美A'), findsOneWidget);
+    expect(find.text('洁美A'), findsWidgets);
+    expect(find.text('出库明细'), findsOneWidget);
+    expect(find.text('按运单'), findsOneWidget);
+    expect(find.text('运单 168220019125'), findsOneWidget);
+    expect(find.text('合计 20箱'), findsOneWidget);
     expect(find.text('72067 · 2029.9.7'), findsOneWidget);
-    expect(find.text('运单 168220019125 · 商家 洁美A'), findsOneWidget);
+    expect(find.text('运单 168220019125 · 商家 洁美A'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText() == '洁美A' &&
+            _hasRedMerchantSpan(widget.text, '洁美A'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('20箱'), findsOneWidget);
   });
 
@@ -150,8 +165,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('运单 168220019126 出库明细'), findsOneWidget);
+    expect(find.text('合计 5箱'), findsOneWidget);
     expect(find.text('20584 · 2029.8.1'), findsOneWidget);
     expect(find.text('72067 · 2029.9.7'), findsNothing);
+  });
+
+  testWidgets('uses range-aware outbound detail titles', (tester) async {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final yesterday = todayOnly.subtract(const Duration(days: 1));
+
+    await tester.pumpWidget(buildScreen(
+      initialRange: DateTimeRange(start: todayOnly, end: todayOnly),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('今日出库明细'), findsOneWidget);
+
+    await tester.pumpWidget(buildScreen(
+      initialRange: DateTimeRange(start: yesterday, end: yesterday),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('昨日出库明细'), findsOneWidget);
+
+    await tester.pumpWidget(buildScreen(
+      initialRange: DateTimeRange(
+        start: todayOnly.subtract(const Duration(days: 6)),
+        end: todayOnly,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('近7天出库明细'), findsOneWidget);
+
+    await tester.pumpWidget(buildScreen(
+      initialRange: DateTimeRange(
+        start: DateTime(todayOnly.year, todayOnly.month, 1),
+        end: todayOnly,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('本月出库明细'), findsOneWidget);
   });
 
   testWidgets('total inventory uses end-date snapshot instead of realtime',
@@ -169,6 +221,11 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('查看订单信息'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('查看订单信息'));
     await tester.pumpAndSettle();
 
@@ -198,4 +255,18 @@ void main() {
     final customY = tester.getTopLeft(find.byTooltip('自定义范围')).dy;
     expect((monthY - customY).abs(), lessThan(20));
   });
+}
+
+bool _hasRedMerchantSpan(InlineSpan span, String merchantName) {
+  if (span is TextSpan) {
+    if (span.text == merchantName &&
+        span.style?.color == const Color(0xFFDC2626)) {
+      return true;
+    }
+    return span.children?.any((child) {
+          return _hasRedMerchantSpan(child, merchantName);
+        }) ??
+        false;
+  }
+  return false;
 }

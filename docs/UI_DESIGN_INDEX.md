@@ -1,14 +1,35 @@
 # 洁美QR UI 设计稿索引
 
-更新时间：2026-04-26（V3 已补齐）
+更新时间：2026-04-28（新增真机 UI 基准稿）
 
 ## Pencil 画布
 
 当前设计稿写入：
 
 ```text
-pencil-welcome-desktop.pen
+untitled.pen
 ```
+
+## 真机 UI 基准稿（2026-04-28）
+
+这组页面根据 `pencil/` 目录下 8 张真机截图重建为可编辑 Pencil 节点，用作后续 UI 设计的真实对照基准。
+
+基准稿位于画布下方：
+
+```text
+y = 4930
+```
+
+| 页面 | Pencil 节点 ID | 位置 | 截图来源 |
+| --- | --- | --- | --- |
+| 首页总控 | `r00016` | x=-50, y=4930 | `pencil/Screenshot_20260428_060621.jpg` |
+| 基础资料 | `r0002g` | x=370, y=4930 | `pencil/Screenshot_20260428_060626.jpg` |
+| 局域网迁移 | `r0003n` | x=790, y=4930 | `pencil/Screenshot_20260428_060633.jpg` |
+| 库存明细 | `r00058` | x=1210, y=4930 | `pencil/Screenshot_20260428_060638.jpg` |
+| 出库日历 | `r00068` | x=1630, y=4930 | `pencil/Screenshot_20260428_060642.jpg` |
+| 订单信息 | `r0007b` | x=2050, y=4930 | `pencil/Screenshot_20260428_060647.jpg` |
+| 新增运单 | `r0008f` | x=2470, y=4930 | `pencil/Screenshot_20260428_060718.jpg` |
+| QR箱码生成 | `r0009p` | x=2890, y=4930 | `pencil/Screenshot_20260428_060723.jpg` |
 
 最终版位于画布下方：
 
