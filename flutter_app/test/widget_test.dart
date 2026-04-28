@@ -66,7 +66,7 @@ void main() {
     expect(find.text('订单信息'), findsOneWidget);
     expect(find.text('出库日历'), findsOneWidget);
     expect(find.text('库存明细'), findsOneWidget);
-    expect(find.text('局域网迁移'), findsOneWidget);
+    expect(find.text('数据备份'), findsOneWidget);
     expect(find.text('基础资料'), findsOneWidget);
     expect(find.text('备份导入'), findsNothing);
   });
@@ -93,16 +93,17 @@ void main() {
     expect(find.text('450 件'), findsOneWidget);
   });
 
-  testWidgets('home action opens LAN transfer page', (tester) async {
+  testWidgets('home action opens data backup page', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('局域网迁移'));
+    await tester.tap(find.text('数据备份'));
     await tester.pumpAndSettle();
 
-    expect(find.text('局域网迁移'), findsWidgets);
-    expect(find.text('发送数据库'), findsOneWidget);
-    expect(find.text('接收数据库'), findsOneWidget);
+    expect(find.text('数据备份'), findsWidgets);
+    expect(find.text('发送'), findsOneWidget);
+    expect(find.text('接收'), findsOneWidget);
+    expect(find.textContaining('发送地址'), findsNothing);
   });
 
   testWidgets('QR home action opens QR entry screen', (tester) async {

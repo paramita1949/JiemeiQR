@@ -148,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       return;
     }
-    if (title == '局域网迁移') {
+    if (title == '数据备份') {
       await pushAndRefresh(
         context,
         route: MaterialPageRoute(
@@ -349,9 +349,9 @@ class _ActionGrid extends StatelessWidget {
         color: Color(0xFFFFF4E8),
       ),
       _HomeAction(
-        icon: Icons.sync_alt_outlined,
-        title: '局域网迁移',
-        subtitle: '发送 / 接收数据库',
+        icon: Icons.backup_outlined,
+        title: '数据备份',
+        subtitle: '备份 / 迁移 / 重置',
         color: Color(0xFFEAF7FF),
       ),
       _HomeAction(

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -11,25 +12,36 @@ typedef TempDirectoryProvider = Future<Directory> Function();
 typedef HostProvider = Future<String> Function();
 
 class LanTransferService {
+  static const int defaultDiscoveryPort = 54022;
+
   LanTransferService({
     required BackupService backupService,
     HttpClientFactory? httpClientFactory,
     TempDirectoryProvider? tempDirectoryProvider,
     HostProvider? hostProvider,
     InternetAddress? bindAddress,
+    int discoveryPort = defaultDiscoveryPort,
+    InternetAddress? discoveryAddress,
   })  : _backupService = backupService,
         _httpClientFactory = httpClientFactory ?? HttpClient.new,
         _tempDirectoryProvider = tempDirectoryProvider ?? getTemporaryDirectory,
         _hostProvider = hostProvider,
-        _bindAddress = bindAddress ?? InternetAddress.anyIPv4;
+        _bindAddress = bindAddress ?? InternetAddress.anyIPv4,
+        _discoveryPort = discoveryPort,
+        _discoveryAddress =
+            discoveryAddress ?? InternetAddress('255.255.255.255');
 
   final BackupService _backupService;
   final HttpClientFactory _httpClientFactory;
   final TempDirectoryProvider _tempDirectoryProvider;
   final HostProvider? _hostProvider;
   final InternetAddress _bindAddress;
+  final int _discoveryPort;
+  final InternetAddress _discoveryAddress;
   HttpServer? _server;
   SendSession? _session;
+  RawDatagramSocket? _discoverySocket;
+  Timer? _discoveryTimer;
 
   Future<SendSession> startSendSession() async {
     if (_session != null) {
@@ -63,14 +75,89 @@ class LanTransferService {
         await request.response.close();
       }
     });
+    await _startDiscoveryBroadcast(session);
     return session;
   }
 
   Future<void> stopSendSession() async {
     _session = null;
+    _discoveryTimer?.cancel();
+    _discoveryTimer = null;
+    _discoverySocket?.close();
+    _discoverySocket = null;
     final server = _server;
     _server = null;
     await server?.close(force: true);
+  }
+
+  Future<ReceiveResult> receiveFromConnectionCode(String connectionCode) {
+    final parsed = parseConnectionCode(connectionCode);
+    return receiveFromSender(
+      baseUri: Uri.parse(parsed.baseUrl),
+      pairingCode: parsed.pairingCode,
+    );
+  }
+
+  Future<ReceiveResult> receiveByPairingCode(
+    String pairingCode, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final announcements = await discoverSenders(timeout: timeout);
+    for (final announcement in announcements) {
+      try {
+        return await receiveFromSender(
+          baseUri: announcement.baseUri,
+          pairingCode: pairingCode,
+        );
+      } on PairingCodeRejectedException {
+        // Try the next discovered sender.
+      } on SenderUnavailableException {
+        // Sender may have closed while discovery was still visible.
+      }
+    }
+    throw const SenderUnavailableException('no sender matched pairing code');
+  }
+
+  Future<List<DiscoveryAnnouncement>> discoverSenders({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final socket = await RawDatagramSocket.bind(
+      InternetAddress.anyIPv4,
+      _discoveryPort,
+      reuseAddress: true,
+      reusePort: true,
+    );
+    final found = <String, DiscoveryAnnouncement>{};
+    final completer = Completer<List<DiscoveryAnnouncement>>();
+    late final StreamSubscription<RawSocketEvent> subscription;
+    Timer? timer;
+    void finish() {
+      if (completer.isCompleted) {
+        return;
+      }
+      timer?.cancel();
+      subscription.cancel();
+      socket.close();
+      completer.complete(found.values.toList(growable: false));
+    }
+
+    subscription = socket.listen((event) {
+      if (event != RawSocketEvent.read) {
+        return;
+      }
+      Datagram? datagram;
+      while ((datagram = socket.receive()) != null) {
+        try {
+          final text = utf8.decode(datagram!.data);
+          final announcement = parseDiscoveryAnnouncement(text);
+          found[announcement.baseUri.toString()] = announcement;
+        } on Object {
+          // Ignore unrelated UDP traffic on the same network.
+        }
+      }
+    });
+    timer = Timer(timeout, finish);
+    return completer.future;
   }
 
   Future<ReceiveResult> receiveFromSender({
@@ -215,6 +302,51 @@ class LanTransferService {
     return '127.0.0.1';
   }
 
+  Future<void> _startDiscoveryBroadcast(SendSession session) async {
+    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    socket.broadcastEnabled = true;
+    _discoverySocket = socket;
+    void send() {
+      final message = buildDiscoveryAnnouncement(
+        baseUrl: session.baseUri.toString(),
+      );
+      socket.send(utf8.encode(message), _discoveryAddress, _discoveryPort);
+    }
+
+    send();
+    _discoveryTimer = Timer.periodic(const Duration(seconds: 1), (_) => send());
+  }
+
+  String buildDiscoveryAnnouncement({
+    required String baseUrl,
+  }) {
+    return jsonEncode({
+      'type': 'jiemei-transfer-advertisement',
+      'baseUrl': baseUrl,
+    });
+  }
+
+  DiscoveryAnnouncement parseDiscoveryAnnouncement(String text) {
+    final dynamic payload = jsonDecode(text);
+    if (payload is! Map<String, dynamic>) {
+      throw const DiscoveryAnnouncementParseException('payload invalid');
+    }
+    if (payload['type'] != 'jiemei-transfer-advertisement') {
+      throw const DiscoveryAnnouncementParseException('type mismatch');
+    }
+    final baseUrl = payload['baseUrl'] as String?;
+    if (baseUrl == null || baseUrl.isEmpty) {
+      throw const DiscoveryAnnouncementParseException('payload missing fields');
+    }
+    final baseUri = Uri.tryParse(baseUrl);
+    if (baseUri == null || !baseUri.hasAuthority) {
+      throw const DiscoveryAnnouncementParseException('baseUrl invalid');
+    }
+    return DiscoveryAnnouncement(
+      baseUri: baseUri,
+    );
+  }
+
   String buildConnectionCode({
     required String baseUrl,
     required String pairingCode,
@@ -313,6 +445,12 @@ class ConnectionCodeParseException implements Exception {
   final String message;
 }
 
+class DiscoveryAnnouncementParseException implements Exception {
+  const DiscoveryAnnouncementParseException(this.message);
+
+  final String message;
+}
+
 class ParsedConnectionCode {
   const ParsedConnectionCode({
     required this.baseUrl,
@@ -321,4 +459,12 @@ class ParsedConnectionCode {
 
   final String baseUrl;
   final String pairingCode;
+}
+
+class DiscoveryAnnouncement {
+  const DiscoveryAnnouncement({
+    required this.baseUri,
+  });
+
+  final Uri baseUri;
 }

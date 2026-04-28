@@ -18,6 +18,59 @@ void main() {
     expect(parsed.pairingCode, '778899');
   });
 
+  test('discovery announcement round-trip parse', () {
+    final service = LanTransferService(
+      backupService: const BackupService(databaseFileName: 'jiemei.sqlite'),
+    );
+    final message = service.buildDiscoveryAnnouncement(
+      baseUrl: 'http://192.168.1.8:54021',
+    );
+
+    final parsed = service.parseDiscoveryAnnouncement(message);
+
+    expect(parsed.baseUri, Uri.parse('http://192.168.1.8:54021'));
+    expect(message, isNot(contains('778899')));
+  });
+
+  test('connection code can receive database without manual address', () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-qr-sender-');
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-qr-receiver-');
+
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await senderDb.writeAsString('SQLite format 3\x00sender-db');
+    await receiverDb.writeAsString('SQLite format 3\x00receiver-db');
+
+    final senderService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => senderDir,
+        randomIntProvider: (_) => 456789,
+      ),
+      hostProvider: () async => '127.0.0.1',
+      bindAddress: InternetAddress.loopbackIPv4,
+    );
+    final receiverService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => receiverDir,
+      ),
+      tempDirectoryProvider: () async => receiverDir,
+    );
+
+    final session = await senderService.startSendSession();
+    final result = await receiverService.receiveFromConnectionCode(
+      session.connectionCode,
+    );
+
+    expect(result.backupFileName, isNotEmpty);
+    expect(await receiverDb.readAsString(), 'SQLite format 3\x00sender-db');
+
+    await senderService.stopSendSession();
+  });
+
   test('lan transfer service sends and receives database with backup',
       () async {
     final senderDir =

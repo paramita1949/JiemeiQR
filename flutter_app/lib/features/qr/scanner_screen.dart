@@ -8,9 +8,11 @@ class ScannerScreen extends StatefulWidget {
   const ScannerScreen({
     super.key,
     this.startFromGallery = false,
+    this.title = '扫描箱贴二维码',
   });
 
   final bool startFromGallery;
+  final String title;
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -146,7 +148,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('扫描箱贴二维码'),
+        title: Text(widget.title),
         actions: [
           IconButton(
             tooltip: '本地图片识别',

@@ -98,7 +98,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                   const SizedBox(height: 10),
                   _OutboundDetailCard(
                     title: _detailTitle(state),
-                    rows: state?.rows ?? const [],
+                    rows: _detailRows(state),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -138,14 +138,11 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     if (!selectedOrderStillVisible) {
       _selectedOrderId = null;
     }
-    final rows = _selectedOrderId == null
-        ? allRows
-        : allRows.where((row) => row.orderId == _selectedOrderId).toList();
     return _CalendarState(
       totalPieces: totalPieces,
       outboundBoxes: allRows.fold<int>(0, (sum, row) => sum + row.boxes),
       orders: orders,
-      rows: rows,
+      rows: allRows,
     );
   }
 
@@ -273,7 +270,6 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   void _selectOrder(int orderId) {
     setState(() {
       _selectedOrderId = _selectedOrderId == orderId ? null : orderId;
-      _stateFuture = _loadState();
     });
   }
 
@@ -291,6 +287,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       }
     }
     return null;
+  }
+
+  List<_OutboundRow> _detailRows(_CalendarState? state) {
+    final rows = state?.rows ?? const <_OutboundRow>[];
+    final selectedOrderId = _selectedOrderId;
+    if (selectedOrderId == null) {
+      return rows;
+    }
+    return rows.where((row) => row.orderId == selectedOrderId).toList();
   }
 
   Future<void> _pickCustomRange() async {
@@ -727,35 +732,70 @@ class _OutboundDetailCard extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              '${row.productCode} · ${row.dateBatch}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Row(
+              children: [
+                Text(
+                  row.productCode,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Text(
+                  ' · ',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Flexible(
+                  child: Text(
+                    row.dateBatch,
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(
-            width: 64,
-            child: Text(
-              quantity.boxesText,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: AppTheme.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 88,
-            child: quantity.boardText == null
-                ? const SizedBox.shrink()
-                : Row(
+          const SizedBox(width: 8),
+          quantity.boardText == null
+              ? Text(
+                  quantity.boxesText,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                )
+              : SizedBox(
+                  width: 142,
+                  child: Row(
                     children: [
+                      SizedBox(
+                        width: 52,
+                        child: Text(
+                          quantity.boxesText,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
                       const Text(
                         '·',
                         style: TextStyle(
@@ -764,7 +804,7 @@ class _OutboundDetailCard extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Expanded(
                         child: Text(
                           quantity.boardText!,
@@ -778,7 +818,7 @@ class _OutboundDetailCard extends StatelessWidget {
                       ),
                     ],
                   ),
-          ),
+                ),
         ],
       ),
     );

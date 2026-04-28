@@ -4,8 +4,10 @@ import 'dart:math';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 typedef DocumentsDirectoryProvider = Future<Directory> Function();
+typedef DatabaseDirectoryProvider = Future<Directory> Function();
 typedef NowProvider = DateTime Function();
 typedef RandomIntProvider = int Function(int max);
 
@@ -13,12 +15,14 @@ class BackupService {
   const BackupService({
     required this.databaseFileName,
     this.documentsDirectoryProvider,
+    this.databaseDirectoryProvider,
     this.nowProvider,
     this.randomIntProvider,
   });
 
   final String databaseFileName;
   final DocumentsDirectoryProvider? documentsDirectoryProvider;
+  final DatabaseDirectoryProvider? databaseDirectoryProvider;
   final NowProvider? nowProvider;
   final RandomIntProvider? randomIntProvider;
 
@@ -28,15 +32,14 @@ class BackupService {
     return BackupDraft(
       databasePath: databaseFileName,
       fileName: 'jiemei-backup-$stamp.sqlite',
-      note: '本地备份入口保留在局域网迁移页面，避免与首页入口重复。',
+      note: '本地备份入口保留在数据备份页面，避免与首页入口重复。',
     );
   }
 
   Future<BackupResult> createLocalBackup() async {
     final now = (nowProvider ?? DateTime.now)();
-    final documentsDir = await (documentsDirectoryProvider ??
-        getApplicationDocumentsDirectory)();
-    final source = File(p.join(documentsDir.path, databaseFileName));
+    final documentsDir = await _documentsDirectory();
+    final source = await _databaseFile();
     if (!await source.exists()) {
       throw BackupSourceMissingException(source.path);
     }
@@ -66,15 +69,14 @@ class BackupService {
       fileName: backupFileName,
       filePath: backupFile.path,
       infoPath: infoFile.path,
-      note: '备份已生成，可用于局域网迁移接收端导入。',
+      note: '备份已生成，可用于数据备份接收端导入。',
     );
   }
 
   Future<SendPackageResult> createSendPackage() async {
     final now = (nowProvider ?? DateTime.now)();
-    final documentsDir = await (documentsDirectoryProvider ??
-        getApplicationDocumentsDirectory)();
-    final source = File(p.join(documentsDir.path, databaseFileName));
+    final documentsDir = await _documentsDirectory();
+    final source = await _databaseFile();
     if (!await source.exists()) {
       throw BackupSourceMissingException(source.path);
     }
@@ -121,9 +123,7 @@ class BackupService {
       throw InvalidImportDatabaseException(incomingPath);
     }
 
-    final documentsDir = await (documentsDirectoryProvider ??
-        getApplicationDocumentsDirectory)();
-    final target = File(p.join(documentsDir.path, databaseFileName));
+    final target = await _databaseFile();
     if (!await target.exists()) {
       throw BackupSourceMissingException(target.path);
     }
@@ -149,9 +149,7 @@ class BackupService {
 
   Future<ResetDatabaseResult> resetDatabase() async {
     final now = (nowProvider ?? DateTime.now)();
-    final documentsDir = await (documentsDirectoryProvider ??
-        getApplicationDocumentsDirectory)();
-    final target = File(p.join(documentsDir.path, databaseFileName));
+    final target = await _databaseFile();
     if (!await target.exists()) {
       throw BackupSourceMissingException(target.path);
     }
@@ -185,6 +183,35 @@ class BackupService {
     final random = randomIntProvider ?? Random().nextInt;
     final code = random(1000000);
     return code.toString().padLeft(6, '0');
+  }
+
+  Future<Directory> _documentsDirectory() {
+    final provider = documentsDirectoryProvider;
+    if (provider != null) {
+      return provider();
+    }
+    return getApplicationDocumentsDirectory();
+  }
+
+  Future<Directory> _databaseDirectory() async {
+    final provider = databaseDirectoryProvider;
+    if (provider != null) {
+      return provider();
+    }
+    // Tests inject only the documents directory. Keep that behavior there,
+    // while Android/iOS production uses sqflite's actual database folder.
+    if (documentsDirectoryProvider != null) {
+      return documentsDirectoryProvider!();
+    }
+    if (Platform.isAndroid || Platform.isIOS) {
+      return Directory(await getDatabasesPath());
+    }
+    return _documentsDirectory();
+  }
+
+  Future<File> _databaseFile() async {
+    final databaseDir = await _databaseDirectory();
+    return File(p.join(databaseDir.path, databaseFileName));
   }
 
   Future<File?> _resolveIncomingFile(String incomingPath) async {

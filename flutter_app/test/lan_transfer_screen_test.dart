@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
@@ -24,7 +25,7 @@ void main() {
 
     expect(draft.databasePath, 'jiemei.sqlite');
     expect(draft.fileName, 'jiemei-backup-20260426-093015.sqlite');
-    expect(draft.note, contains('局域网迁移'));
+    expect(draft.note, contains('数据备份'));
 
     final backupFile = File(result.filePath);
     final metadataFile = File(result.infoPath);
@@ -36,6 +37,35 @@ void main() {
         jsonDecode(await metadataFile.readAsString()) as Map<String, dynamic>;
     expect(metadata['databaseFileName'], 'jiemei.sqlite');
     expect(metadata['backupDatabasePath'], result.filePath);
+  });
+
+  test('backup service reads source database from database directory',
+      () async {
+    final documentsDir =
+        await Directory.systemTemp.createTemp('jiemei-docs-test-');
+    final databaseDir =
+        await Directory.systemTemp.createTemp('jiemei-db-test-');
+    final sourceFile = File(p.join(databaseDir.path, 'jiemei.sqlite'));
+    await sourceFile.writeAsString('sqlite-from-db-dir');
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => documentsDir,
+      databaseDirectoryProvider: () async => databaseDir,
+      nowProvider: () => DateTime(2026, 4, 26, 9, 45, 0),
+    );
+
+    final result = await service.createLocalBackup();
+
+    final backupFile = File(result.filePath);
+    final metadataFile = File(result.infoPath);
+    expect(await backupFile.readAsString(), 'sqlite-from-db-dir');
+    expect(result.filePath, contains(documentsDir.path));
+    final metadata =
+        jsonDecode(await metadataFile.readAsString()) as Map<String, dynamic>;
+    expect(
+      p.equals(metadata['sourceDatabasePath'] as String, sourceFile.path),
+      isTrue,
+    );
   });
 
   test('backup service creates send package with manifest and pairing code',
@@ -130,7 +160,7 @@ void main() {
     expect(await shm.exists(), isFalse);
   });
 
-  testWidgets('shows send receive and backup boundary', (tester) async {
+  testWidgets('shows simple send and receive entry points', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light(),
@@ -138,11 +168,10 @@ void main() {
       ),
     );
 
-    expect(find.text('局域网迁移'), findsWidgets);
-    expect(find.text('发送数据库'), findsOneWidget);
-    expect(find.text('接收数据库'), findsOneWidget);
+    expect(find.text('数据备份'), findsWidgets);
+    expect(find.text('发送'), findsOneWidget);
+    expect(find.text('接收'), findsOneWidget);
     expect(find.text('本地备份'), findsOneWidget);
-    expect(find.text('备份/导入只在此页面处理'), findsOneWidget);
-    expect(find.textContaining('自动备份当前数据库'), findsWidgets);
+    expect(find.textContaining('发送地址'), findsNothing);
   });
 }

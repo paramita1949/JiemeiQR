@@ -109,7 +109,8 @@ void main() {
     expect(find.text('按运单'), findsNothing);
     expect(find.text('运单 168220019125'), findsOneWidget);
     expect(find.text('合计 20箱'), findsOneWidget);
-    expect(find.text('72067 · 2029.9.7'), findsOneWidget);
+    expect(find.text('72067'), findsOneWidget);
+    expect(find.text('2029.9.7'), findsOneWidget);
     expect(find.text('运单 168220019125 · 商家 洁美A'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -161,14 +162,17 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.text('20584 · 2029.8.1'), findsOneWidget);
+    expect(find.text('20584'), findsOneWidget);
+    expect(find.text('2029.8.1'), findsOneWidget);
     await tester.tap(find.text('168220019126'));
     await tester.pumpAndSettle();
 
     expect(find.text('运单 168220019126 出库明细'), findsOneWidget);
     expect(find.text('合计 5箱'), findsOneWidget);
-    expect(find.text('20584 · 2029.8.1'), findsOneWidget);
-    expect(find.text('72067 · 2029.9.7'), findsNothing);
+    expect(find.text('20584'), findsOneWidget);
+    expect(find.text('2029.8.1'), findsOneWidget);
+    expect(find.text('72067'), findsNothing);
+    expect(find.text('2029.9.7'), findsNothing);
   });
 
   testWidgets('uses range-aware outbound detail titles', (tester) async {
