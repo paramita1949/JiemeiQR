@@ -59,7 +59,7 @@ void main() {
     expect(find.text('未完成'), findsWidgets);
     expect(find.text('已拣货'), findsWidgets);
     expect(find.text('完成'), findsWidgets);
-    expect(find.text('完成 0单 · 未完成 2单 · 已拣货 1单'), findsOneWidget);
+    expect(richTextContaining('完成 0单 · 未完成 2单 · 已拣货 1单'), findsOneWidget);
     expect(find.text('备货汇总（按产品/批号/日期）'), findsNothing);
     expect(find.text('新增运单'), findsOneWidget);
     expect(find.byTooltip('日期筛选'), findsOneWidget);
