@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
@@ -24,6 +25,7 @@ class OutboundCalendarScreen extends StatefulWidget {
 
 class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   late final AppDatabase _database;
+  late final ProductDao _productDao;
   late final StockDao _stockDao;
   late final bool _ownsDatabase;
   late DateTimeRange _range;
@@ -35,6 +37,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     super.initState();
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
+    _productDao = ProductDao(_database);
     _stockDao = StockDao(_database);
     final today = _dateOnly(DateTime.now());
     _range = widget.initialRange ?? DateTimeRange(start: today, end: today);
@@ -98,6 +101,9 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                   _OutboundDetailCard(
                     title: _detailTitle(state),
                     rows: _detailRows(state),
+                    batchCodesByProductDate:
+                        state?.batchCodesByProductDate ??
+                            const <String, List<String>>{},
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -131,6 +137,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         DateTime(_range.end.year, _range.end.month, _range.end.day, 23, 59, 59);
     final totalPieces = await _stockDao.totalInventoryPiecesAt(snapshotAt);
     final allRows = await _outboundRows();
+    final batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     final orders = await _orderSummariesFromRows(allRows);
     final selectedOrderStillVisible =
         orders.any((order) => order.id == _selectedOrderId);
@@ -142,6 +149,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       outboundBoxes: allRows.fold<int>(0, (sum, row) => sum + row.boxes),
       orders: orders,
       rows: allRows,
+      batchCodesByProductDate: batchCodesByProductDate,
     );
   }
 
@@ -347,12 +355,14 @@ class _CalendarState {
     required this.outboundBoxes,
     required this.orders,
     required this.rows,
+    required this.batchCodesByProductDate,
   });
 
   final int totalPieces;
   final int outboundBoxes;
   final List<_OutboundOrderSummary> orders;
   final List<_OutboundRow> rows;
+  final Map<String, List<String>> batchCodesByProductDate;
 }
 
 class _OutboundRow {
@@ -607,16 +617,19 @@ class _OutboundDetailCard extends StatelessWidget {
   const _OutboundDetailCard({
     required this.title,
     required this.rows,
+    required this.batchCodesByProductDate,
   });
 
   final String title;
   final List<_OutboundRow> rows;
+  final Map<String, List<String>> batchCodesByProductDate;
 
   @override
   Widget build(BuildContext context) {
     final groups = _OutboundGroup.fromRows(rows);
-    final duplicateBatchKeys = _duplicateProductDateBatchKeys(rows);
-    final batchCodesByKey = _batchCodesByProductDate(rows);
+    final duplicateBatchKeys =
+        _duplicateProductDateBatchKeys(batchCodesByProductDate);
+    final batchCodesByKey = batchCodesByProductDate;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -795,25 +808,11 @@ class _OutboundDetailCard extends StatelessWidget {
   }
 }
 
-Set<String> _duplicateProductDateBatchKeys(List<_OutboundRow> rows) {
-  final batchCodesByKey = <String, Set<String>>{};
-  for (final row in rows) {
-    final key = '${row.productCode}|${row.dateBatch}';
-    batchCodesByKey.putIfAbsent(key, () => <String>{}).add(row.actualBatch);
-  }
-  return batchCodesByKey.entries
-      .where((entry) => entry.value.length > 1)
+Set<String> _duplicateProductDateBatchKeys(Map<String, List<String>> variants) {
+  return variants.entries
+      .where((entry) => entry.value.toSet().length > 1)
       .map((entry) => entry.key)
       .toSet();
-}
-
-Map<String, List<String>> _batchCodesByProductDate(List<_OutboundRow> rows) {
-  final map = <String, List<String>>{};
-  for (final row in rows) {
-    final key = '${row.productCode}|${row.dateBatch}';
-    map.putIfAbsent(key, () => <String>[]).add(row.actualBatch);
-  }
-  return map;
 }
 
 List<InlineSpan> _batchCodeSpans(

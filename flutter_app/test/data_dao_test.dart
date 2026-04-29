@@ -83,6 +83,31 @@ void main() {
     expect(batches.map((batch) => batch.boxesPerBoard), containsAll([40, 38]));
   });
 
+  test('batch code variants are loaded from all base info batches', () async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBLEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMHEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+
+    final variants = await productDao.batchCodesByProductDate();
+
+    expect(variants['72067|2029.9.7'], ['FCHBLEZ', 'FCHBMHEZ']);
+  });
+
   test('product dao rejects invalid product specs and initial stock', () async {
     expect(
       () => productDao.createProduct(

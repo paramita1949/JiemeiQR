@@ -40,6 +40,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   List<ProductInventoryOption> _productOptions = const [];
   List<Product> _products = const [];
   List<AvailableBatch> _availableBatches = const [];
+  Map<String, List<String>> _batchCodesByProductDate = const {};
   String? _draftOrderKey;
   List<OrderDetailLine> _draftLines = const [];
 
@@ -71,7 +72,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: _OrderActionBar(
-        onEnd: _endToOrderList,
+        onEnd: () => unawaited(_endToOrderList()),
         onContinue: () => _save(continueAdd: true),
         onNext: () => _save(continueAdd: false),
       ),
@@ -174,13 +175,9 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                                     children: [
                                       ..._batchCodeSpans(
                                         row.batch.actualBatch,
-                                        variants: _availableBatches
-                                            .where((item) =>
-                                                item.batch.dateBatch ==
-                                                row.batch.dateBatch)
-                                            .map((item) =>
-                                                item.batch.actualBatch)
-                                            .toList(),
+                                        variants: _batchCodesByProductDate[
+                                                '${_selectedProduct?.code ?? ''}|${row.batch.dateBatch}'] ??
+                                            const <String>[],
                                         highlightDifferences: true,
                                         normalColor: AppTheme.textPrimary,
                                       ),
@@ -222,6 +219,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                     const SizedBox(height: 8),
                     _DraftLinesCard(
                       lines: _draftLines,
+                      batchCodesByProductDate: _batchCodesByProductDate,
                       onDeleteLine: _deleteDraftLine,
                     ),
                   ],
@@ -237,6 +235,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
 
   Future<_OrderEditState> _loadState() async {
     final merchants = await _orderDao.recentMerchantNames(limit: 10);
+    _batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     _productOptions = await _productDao.productsForOrderEntry();
     _products = _productOptions.map((option) => option.product).toList();
     if (_selectedProduct == null && _products.isNotEmpty) {
@@ -299,7 +298,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _onOrderHeaderChanged();
   }
 
-  Future<void> _save({required bool continueAdd}) async {
+  Future<void> _save({
+    required bool continueAdd,
+    bool exitAfterSave = false,
+  }) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -334,6 +336,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       );
       _draftOrderKey = currentKey;
       await _reloadDraftLines(orderId: orderId, headerKey: currentKey);
+      if (exitAfterSave) {
+        if (!mounted) {
+          return;
+        }
+        Navigator.of(context).pop(true);
+        return;
+      }
     } on DuplicateOrderItemException catch (duplicate) {
       if (!mounted) {
         return;
@@ -422,8 +431,19 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     );
   }
 
-  void _endToOrderList() {
-    Navigator.of(context).pop();
+  Future<void> _endToOrderList() async {
+    if (_draftLines.isNotEmpty) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    final hasCurrentInput = _waybillNoController.text.trim().isNotEmpty ||
+        _merchantController.text.trim().isNotEmpty ||
+        _boxesController.text.trim().isNotEmpty;
+    if (!hasCurrentInput) {
+      Navigator.of(context).pop();
+      return;
+    }
+    await _save(continueAdd: false, exitAfterSave: true);
   }
 
   void _onOrderHeaderChanged() {
@@ -839,10 +859,12 @@ class _MetaChip extends StatelessWidget {
 class _DraftLinesCard extends StatelessWidget {
   const _DraftLinesCard({
     required this.lines,
+    required this.batchCodesByProductDate,
     required this.onDeleteLine,
   });
 
   final List<OrderDetailLine> lines;
+  final Map<String, List<String>> batchCodesByProductDate;
   final ValueChanged<OrderDetailLine> onDeleteLine;
 
   @override
@@ -880,11 +902,9 @@ class _DraftLinesCard extends StatelessWidget {
                           TextSpan(text: '${line.product.code} · '),
                           ..._batchCodeSpans(
                             line.batch.actualBatch,
-                            variants: allBatches
-                                .where((item) =>
-                                    item.dateBatch == line.batch.dateBatch)
-                                .map((item) => item.actualBatch)
-                                .toList(),
+                            variants: batchCodesByProductDate[
+                                    '${line.product.code}|${line.batch.dateBatch}'] ??
+                                const <String>[],
                             highlightDifferences: true,
                             normalColor: AppTheme.textPrimary,
                           ),

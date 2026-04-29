@@ -119,6 +119,36 @@ class ProductDao {
         .getSingleOrNull();
   }
 
+  Future<Map<String, List<String>>> batchCodesByProductDate() async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.code AS product_code,
+        b.date_batch AS date_batch,
+        b.actual_batch AS actual_batch
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      ORDER BY p.code ASC, b.date_batch ASC, b.actual_batch ASC
+      ''',
+      readsFrom: {
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    final result = <String, List<String>>{};
+    for (final row in rows) {
+      final productCode = row.data['product_code'] as String? ?? '';
+      final dateBatch = row.data['date_batch'] as String? ?? '';
+      final actualBatch = row.data['actual_batch'] as String? ?? '';
+      if (productCode.isEmpty || dateBatch.isEmpty || actualBatch.isEmpty) {
+        continue;
+      }
+      final key = '$productCode|$dateBatch';
+      result.putIfAbsent(key, () => <String>[]).add(actualBatch);
+    }
+    return result;
+  }
+
   Future<List<BatchRecord>> batchesForProduct(int productId) {
     return (_database.select(_database.batches)
           ..where((table) => table.productId.equals(productId))

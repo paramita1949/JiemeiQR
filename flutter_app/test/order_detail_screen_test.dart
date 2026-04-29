@@ -138,18 +138,10 @@ void main() {
       (tester) async {
     final orderId = await seedOrder();
     final batch = await database.select(database.batches).getSingle();
+    final completionService = OrderCompletionService(database);
+    await completionService.complete(orderId);
 
     await tester.pumpWidget(buildScreen(orderId));
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('completeOrderButton')),
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.byKey(const Key('completeOrderButton')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '确认完成'));
     await tester.pumpAndSettle();
     expect(await stockDao.currentBoxesForBatch(batch.id), 80);
 

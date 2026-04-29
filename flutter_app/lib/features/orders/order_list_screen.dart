@@ -723,7 +723,6 @@ class _RestockAggregateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duplicateKeys = _duplicateProductDateKeys(rows);
-    final batchCodesByKey = _batchCodesByProductDate(rows);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -768,7 +767,7 @@ class _RestockAggregateCard extends StatelessWidget {
                         ),
                         ..._batchCodeSpans(
                           row.actualBatch,
-                          variants: batchCodesByKey[key] ?? const <String>[],
+                          variants: row.batchCodeVariants,
                           highlightDifferences: duplicateKeys.contains(key),
                         ),
                         const TextSpan(
@@ -801,31 +800,17 @@ class _RestockAggregateCard extends StatelessWidget {
 }
 
 Set<String> _duplicateProductDateKeys(List<OrderRestockAggregate> rows) {
-  final batchCodesByKey = <String, Set<String>>{};
+  final keys = <String>{};
   for (final row in rows) {
     final key = _restockProductDateKey(
       productCode: row.productCode,
       dateBatch: row.dateBatch,
     );
-    batchCodesByKey.putIfAbsent(key, () => <String>{}).add(row.actualBatch);
+    if (row.batchCodeVariants.toSet().length > 1) {
+      keys.add(key);
+    }
   }
-  return batchCodesByKey.entries
-      .where((entry) => entry.value.length > 1)
-      .map((entry) => entry.key)
-      .toSet();
-}
-
-Map<String, List<String>> _batchCodesByProductDate(
-    List<OrderRestockAggregate> rows) {
-  final map = <String, List<String>>{};
-  for (final row in rows) {
-    final key = _restockProductDateKey(
-      productCode: row.productCode,
-      dateBatch: row.dateBatch,
-    );
-    map.putIfAbsent(key, () => <String>[]).add(row.actualBatch);
-  }
-  return map;
+  return keys;
 }
 
 String _restockProductDateKey({

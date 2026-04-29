@@ -315,7 +315,7 @@ void main() {
     expect(find.textContaining('批号1'), findsNothing);
   });
 
-  testWidgets('end button exits and returns to home without saving',
+  testWidgets('end button saves current waybill and returns to home',
       (tester) async {
     await seedProduct();
     await tester.pumpWidget(
@@ -357,6 +357,11 @@ void main() {
     final order = await (database.select(database.orders)
           ..where((table) => table.waybillNo.equals('END-1')))
         .getSingleOrNull();
-    expect(order, isNull);
+    expect(order, isNotNull);
+    expect(order!.status, OrderStatus.pending);
+    final item = await (database.select(database.orderItems)
+          ..where((table) => table.orderId.equals(order.id)))
+        .getSingle();
+    expect(item.boxes, 20);
   });
 }

@@ -505,18 +505,53 @@ class OrderDao {
           },
         )
         .get();
+    final variants = await _batchCodesByProductDate();
     return rows
         .map((row) {
+          final productCode = row.data['product_code'] as String? ?? '';
+          final dateBatch = row.data['date_batch'] as String? ?? '';
           return OrderRestockAggregate(
-            productCode: row.data['product_code'] as String? ?? '',
+            productCode: productCode,
             actualBatch: row.data['actual_batch'] as String? ?? '',
-            dateBatch: row.data['date_batch'] as String? ?? '',
+            dateBatch: dateBatch,
             totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
             boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
+            batchCodeVariants: variants['$productCode|$dateBatch'] ??
+                const <String>[],
           );
         })
         .where((row) => row.productCode.isNotEmpty)
         .toList();
+  }
+
+  Future<Map<String, List<String>>> _batchCodesByProductDate() async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.code AS product_code,
+        b.date_batch AS date_batch,
+        b.actual_batch AS actual_batch
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      ORDER BY p.code ASC, b.date_batch ASC, b.actual_batch ASC
+      ''',
+      readsFrom: {
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    final result = <String, List<String>>{};
+    for (final row in rows) {
+      final productCode = row.data['product_code'] as String? ?? '';
+      final dateBatch = row.data['date_batch'] as String? ?? '';
+      final actualBatch = row.data['actual_batch'] as String? ?? '';
+      if (productCode.isEmpty || dateBatch.isEmpty || actualBatch.isEmpty) {
+        continue;
+      }
+      result.putIfAbsent('$productCode|$dateBatch', () => <String>[])
+          .add(actualBatch);
+    }
+    return result;
   }
 
   Future<PagedOrderSummaries> orderSummariesPage({
@@ -864,6 +899,7 @@ class OrderRestockAggregate {
     required this.dateBatch,
     required this.totalBoxes,
     required this.boxesPerBoard,
+    required this.batchCodeVariants,
   });
 
   final String productCode;
@@ -871,6 +907,7 @@ class OrderRestockAggregate {
   final String dateBatch;
   final int totalBoxes;
   final int boxesPerBoard;
+  final List<String> batchCodeVariants;
 }
 
 class _RestockBoxesAccumulator {

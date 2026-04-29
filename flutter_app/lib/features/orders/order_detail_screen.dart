@@ -29,7 +29,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final ProductDao _productDao;
   late final OrderCompletionService _completionService;
   late final bool _ownsDatabase;
-  late Future<OrderDetail> _detailFuture;
+  late Future<_OrderDetailViewData> _detailFuture;
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _orderDao = OrderDao(_database);
     _productDao = ProductDao(_database);
     _completionService = OrderCompletionService(_database);
-    _detailFuture = _orderDao.orderDetail(widget.orderId);
+    _detailFuture = _loadDetail();
   }
 
   @override
@@ -54,16 +54,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<OrderDetail>(
+        child: FutureBuilder<_OrderDetailViewData>(
           future: _detailFuture,
           builder: (context, snapshot) {
-            final detail = snapshot.data;
+            final viewData = snapshot.data;
+            final detail = viewData?.detail;
+            final batchCodesByProductDate =
+                viewData?.batchCodesByProductDate ??
+                    const <String, List<String>>{};
             final duplicateBatchKeys = detail == null
                 ? const <String>{}
-                : _duplicateProductDateBatches(detail.lines);
-            final batchCodesByProductDate = detail == null
-                ? const <String, List<String>>{}
-                : _batchCodesByProductDate(detail.lines);
+                : _duplicateProductDateBatches(batchCodesByProductDate);
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
               children: [
@@ -112,13 +113,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         line: line,
                         highlightBatch: duplicateBatchKeys.contains(
                           _productDateKey(
-                            productId: line.product.id,
+                            productCode: line.product.code,
                             dateBatch: line.batch.dateBatch,
                           ),
                         ),
                         batchCodeVariants:
                             batchCodesByProductDate[_productDateKey(
-                                  productId: line.product.id,
+                                  productCode: line.product.code,
                                   dateBatch: line.batch.dateBatch,
                                 )] ??
                                 const <String>[],
@@ -144,6 +145,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  Future<_OrderDetailViewData> _loadDetail() async {
+    final detail = await _orderDao.orderDetail(widget.orderId);
+    final batchCodesByProductDate = await _productDao.batchCodesByProductDate();
+    return _OrderDetailViewData(
+      detail: detail,
+      batchCodesByProductDate: batchCodesByProductDate,
+    );
+  }
+
   Future<void> _setStatus(OrderStatus status) async {
     try {
       await _completionService.updateStatus(
@@ -163,7 +173,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return;
     }
     setState(() {
-      _detailFuture = _orderDao.orderDetail(widget.orderId);
+      _detailFuture = _loadDetail();
     });
   }
 
@@ -256,7 +266,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return;
     }
     setState(() {
-      _detailFuture = _orderDao.orderDetail(widget.orderId);
+      _detailFuture = _loadDetail();
     });
   }
 
@@ -305,7 +315,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return;
       }
       setState(() {
-        _detailFuture = _orderDao.orderDetail(widget.orderId);
+        _detailFuture = _loadDetail();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已删除该产品明细')),
@@ -368,7 +378,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return;
       }
       setState(() {
-        _detailFuture = _orderDao.orderDetail(widget.orderId);
+        _detailFuture = _loadDetail();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已更新产品明细')),
@@ -432,13 +442,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _detailFuture = _orderDao.orderDetail(widget.orderId);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('订单已完成')),
-    );
+    Navigator.of(context).pop(true);
   }
+}
+
+class _OrderDetailViewData {
+  const _OrderDetailViewData({
+    required this.detail,
+    required this.batchCodesByProductDate,
+  });
+
+  final OrderDetail detail;
+  final Map<String, List<String>> batchCodesByProductDate;
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -784,18 +799,8 @@ _StatusMeta _statusMeta(OrderStatus status) {
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
-Set<String> _duplicateProductDateBatches(List<OrderDetailLine> lines) {
-  final batchCodesByKey = <String, Set<String>>{};
-  for (final line in lines) {
-    final key = _productDateKey(
-      productId: line.product.id,
-      dateBatch: line.batch.dateBatch,
-    );
-    batchCodesByKey
-        .putIfAbsent(key, () => <String>{})
-        .add(line.batch.actualBatch);
-  }
-  return batchCodesByKey.entries
+Set<String> _duplicateProductDateBatches(Map<String, List<String>> variants) {
+  return variants.entries
       .where((entry) => entry.value.length > 1)
       .map((entry) => entry.key)
       .toSet();
@@ -1085,28 +1090,11 @@ class _DialogInfoChip extends StatelessWidget {
   }
 }
 
-Map<String, List<String>> _batchCodesByProductDate(
-    List<OrderDetailLine> lines) {
-  final map = <String, List<String>>{};
-  for (final line in lines) {
-    map
-        .putIfAbsent(
-          _productDateKey(
-            productId: line.product.id,
-            dateBatch: line.batch.dateBatch,
-          ),
-          () => <String>[],
-        )
-        .add(line.batch.actualBatch);
-  }
-  return map;
-}
-
 String _productDateKey({
-  required int productId,
+  required String productCode,
   required String dateBatch,
 }) {
-  return '$productId|$dateBatch';
+  return '$productCode|$dateBatch';
 }
 
 List<InlineSpan> _batchCodeSpans(

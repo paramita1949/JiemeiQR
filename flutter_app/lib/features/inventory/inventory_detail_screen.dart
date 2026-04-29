@@ -37,6 +37,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   int _total = 0;
   int? _totalPieces;
   Map<String, InventoryGroupSummary> _groupSummaries = const {};
+  Map<String, List<String>> _batchCodesByProductDate = const {};
   List<String> _quickProductCodes = const [];
   final Set<String> _collapsedProductCodes = <String>{};
   bool _collapseInitialized = false;
@@ -164,6 +165,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       queryText: _filterController.text,
       stockFilter: filter,
     );
+    final batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     final shouldRefreshTotals = refreshTotals || _totalPieces == null;
     final totalPieces = shouldRefreshTotals
         ? await _stockDao.totalInventoryPieces()
@@ -178,6 +180,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       _total = result.total;
       _totalPieces = totalPieces;
       _quickProductCodes = rankedCodes;
+      _batchCodesByProductDate = batchCodesByProductDate;
       _groupSummaries = {
         for (final summary in groupSummaries) summary.productCode: summary,
       };
@@ -345,8 +348,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
 
   List<Widget> _buildGroupedRows(List<InventoryDetailRow> rows) {
     final widgets = <Widget>[];
-    final duplicateDateKeys = _duplicateBatchDateKeys(rows);
-    final batchCodesByKey = _batchCodesByProductDate(rows);
+    final duplicateDateKeys = _duplicateBatchDateKeys(_batchCodesByProductDate);
+    final batchCodesByKey = _batchCodesByProductDate;
     String? currentProductCode;
     var currentGroupCollapsed = false;
     for (final row in rows) {
@@ -865,25 +868,11 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-Set<String> _duplicateBatchDateKeys(List<InventoryDetailRow> rows) {
-  final counts = <String, int>{};
-  for (final row in rows) {
-    final key = '${row.product.code}|${row.batch.dateBatch}';
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return counts.entries
-      .where((entry) => entry.value > 1)
+Set<String> _duplicateBatchDateKeys(Map<String, List<String>> variants) {
+  return variants.entries
+      .where((entry) => entry.value.toSet().length > 1)
       .map((entry) => entry.key)
       .toSet();
-}
-
-Map<String, List<String>> _batchCodesByProductDate(List<InventoryDetailRow> rows) {
-  final map = <String, List<String>>{};
-  for (final row in rows) {
-    final key = '${row.product.code}|${row.batch.dateBatch}';
-    map.putIfAbsent(key, () => <String>[]).add(row.batch.actualBatch);
-  }
-  return map;
 }
 
 List<InlineSpan> _batchCodeSpans(
