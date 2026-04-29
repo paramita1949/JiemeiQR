@@ -201,6 +201,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       final nextBoxes = (current?.boxes ?? 0) + movement.boxes;
       rows[key] = _OutboundRow(
         productCode: product.code,
+        actualBatch: batch.actualBatch,
         dateBatch: batch.dateBatch,
         boxesPerBoard: batch.boxesPerBoard,
         boxes: nextBoxes,
@@ -358,6 +359,7 @@ class _CalendarState {
 class _OutboundRow {
   const _OutboundRow({
     required this.productCode,
+    required this.actualBatch,
     required this.dateBatch,
     required this.boxesPerBoard,
     required this.boxes,
@@ -367,6 +369,7 @@ class _OutboundRow {
   });
 
   final String productCode;
+  final String actualBatch;
   final String dateBatch;
   final int boxesPerBoard;
   final int boxes;
@@ -613,6 +616,8 @@ class _OutboundDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final groups = _OutboundGroup.fromRows(rows);
+    final duplicateBatchKeys = _duplicateProductDateBatchKeys(rows);
+    final batchCodesByKey = _batchCodesByProductDate(rows);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -640,13 +645,23 @@ class _OutboundDetailCard extends StatelessWidget {
           if (groups.isEmpty)
             const Text('暂无出库', style: TextStyle(color: AppTheme.textSecondary))
           else
-            ...groups.map(_buildGroup),
+            ...groups.map(
+              (group) => _buildGroup(
+                group,
+                duplicateBatchKeys: duplicateBatchKeys,
+                batchCodesByKey: batchCodesByKey,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildGroup(_OutboundGroup group) {
+  Widget _buildGroup(
+    _OutboundGroup group, {
+    required Set<String> duplicateBatchKeys,
+    required Map<String, List<String>> batchCodesByKey,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(9),
@@ -714,14 +729,25 @@ class _OutboundDetailCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          ...group.rows.map(_buildProductRow),
+          ...group.rows.map(
+            (row) => _buildProductRow(
+              row,
+              duplicateBatchKeys: duplicateBatchKeys,
+              batchCodesByKey: batchCodesByKey,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProductRow(_OutboundRow row) {
+  Widget _buildProductRow(
+    _OutboundRow row, {
+    required Set<String> duplicateBatchKeys,
+    required Map<String, List<String>> batchCodesByKey,
+  }) {
     final quantity = _quantityParts(row);
+    final productDateKey = '${row.productCode}|${row.dateBatch}';
     return Container(
       margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
@@ -732,40 +758,27 @@ class _OutboundDetailCard extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Row(
-              children: [
-                Text(
-                  row.productCode,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
-                const Text(
-                  ' · ',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                children: [
+                  TextSpan(text: '${row.productCode} · '),
+                  ..._batchCodeSpans(
+                    row.actualBatch,
+                    variants:
+                        batchCodesByKey[productDateKey] ?? const <String>[],
+                    highlightDifferences:
+                        duplicateBatchKeys.contains(productDateKey),
                   ),
-                ),
-                Flexible(
-                  child: Text(
-                    row.dateBatch,
-                    maxLines: 1,
-                    overflow: TextOverflow.visible,
-                    softWrap: false,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
+                  TextSpan(text: ' · ${row.dateBatch}'),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(width: 8),
@@ -840,6 +853,70 @@ class _OutboundDetailCard extends StatelessWidget {
       boardText: boardText,
     );
   }
+}
+
+Set<String> _duplicateProductDateBatchKeys(List<_OutboundRow> rows) {
+  final batchCodesByKey = <String, Set<String>>{};
+  for (final row in rows) {
+    final key = '${row.productCode}|${row.dateBatch}';
+    batchCodesByKey.putIfAbsent(key, () => <String>{}).add(row.actualBatch);
+  }
+  return batchCodesByKey.entries
+      .where((entry) => entry.value.length > 1)
+      .map((entry) => entry.key)
+      .toSet();
+}
+
+Map<String, List<String>> _batchCodesByProductDate(List<_OutboundRow> rows) {
+  final map = <String, List<String>>{};
+  for (final row in rows) {
+    final key = '${row.productCode}|${row.dateBatch}';
+    map.putIfAbsent(key, () => <String>[]).add(row.actualBatch);
+  }
+  return map;
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+  required bool highlightDifferences,
+}) {
+  if (!highlightDifferences || variants.toSet().length <= 1) {
+    return <InlineSpan>[
+      TextSpan(
+        text: code,
+        style: const TextStyle(color: AppTheme.textPrimary),
+      ),
+    ];
+  }
+  final normalized = variants.toSet().toList()..sort();
+  final maxLength = normalized.fold<int>(
+      0, (max, item) => item.length > max ? item.length : max);
+  final differsAt = List<bool>.filled(maxLength, false);
+  for (var i = 0; i < maxLength; i += 1) {
+    String? pivot;
+    for (final value in normalized) {
+      final char = i < value.length ? value[i] : '';
+      pivot ??= char;
+      if (char != pivot) {
+        differsAt[i] = true;
+        break;
+      }
+    }
+  }
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    final isDiff = i < differsAt.length && differsAt[i];
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: isDiff ? const Color(0xFFDC2626) : AppTheme.textPrimary,
+        ),
+      ),
+    );
+  }
+  return spans;
 }
 
 class _QuantityParts {

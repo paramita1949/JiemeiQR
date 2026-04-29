@@ -722,6 +722,8 @@ class _RestockAggregateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final duplicateKeys = _duplicateProductDateKeys(rows);
+    final batchCodesByKey = _batchCodesByProductDate(rows);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -749,6 +751,10 @@ class _RestockAggregateCard extends StatelessWidget {
                 itemCount: rows.length,
                 itemBuilder: (context, index) {
                   final row = rows[index];
+                  final key = _restockProductDateKey(
+                    productCode: row.productCode,
+                    dateBatch: row.dateBatch,
+                  );
                   return RichText(
                     text: TextSpan(
                       style: const TextStyle(
@@ -758,7 +764,15 @@ class _RestockAggregateCard extends StatelessWidget {
                       ),
                       children: [
                         TextSpan(
-                          text: '${row.productCode} · ${row.actualBatch} · ',
+                          text: '${row.productCode} · ',
+                        ),
+                        ..._batchCodeSpans(
+                          row.actualBatch,
+                          variants: batchCodesByKey[key] ?? const <String>[],
+                          highlightDifferences: duplicateKeys.contains(key),
+                        ),
+                        const TextSpan(
+                          text: ' · ',
                         ),
                         TextSpan(
                           text: row.dateBatch,
@@ -784,4 +798,82 @@ class _RestockAggregateCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Set<String> _duplicateProductDateKeys(List<OrderRestockAggregate> rows) {
+  final batchCodesByKey = <String, Set<String>>{};
+  for (final row in rows) {
+    final key = _restockProductDateKey(
+      productCode: row.productCode,
+      dateBatch: row.dateBatch,
+    );
+    batchCodesByKey.putIfAbsent(key, () => <String>{}).add(row.actualBatch);
+  }
+  return batchCodesByKey.entries
+      .where((entry) => entry.value.length > 1)
+      .map((entry) => entry.key)
+      .toSet();
+}
+
+Map<String, List<String>> _batchCodesByProductDate(
+    List<OrderRestockAggregate> rows) {
+  final map = <String, List<String>>{};
+  for (final row in rows) {
+    final key = _restockProductDateKey(
+      productCode: row.productCode,
+      dateBatch: row.dateBatch,
+    );
+    map.putIfAbsent(key, () => <String>[]).add(row.actualBatch);
+  }
+  return map;
+}
+
+String _restockProductDateKey({
+  required String productCode,
+  required String dateBatch,
+}) {
+  return '$productCode|$dateBatch';
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+  required bool highlightDifferences,
+}) {
+  if (!highlightDifferences || variants.length <= 1) {
+    return <InlineSpan>[
+      TextSpan(
+        text: code,
+        style: const TextStyle(color: AppTheme.textSecondary),
+      ),
+    ];
+  }
+  final normalized = variants.toSet().toList()..sort();
+  final maxLength = normalized.fold<int>(
+      0, (max, item) => item.length > max ? item.length : max);
+  final differsAt = List<bool>.filled(maxLength, false);
+  for (var i = 0; i < maxLength; i += 1) {
+    String? pivot;
+    for (final value in normalized) {
+      final char = i < value.length ? value[i] : '';
+      pivot ??= char;
+      if (char != pivot) {
+        differsAt[i] = true;
+        break;
+      }
+    }
+  }
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    final isDiff = i < differsAt.length && differsAt[i];
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: isDiff ? const Color(0xFFDC2626) : AppTheme.textSecondary,
+        ),
+      ),
+    );
+  }
+  return spans;
 }

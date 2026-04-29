@@ -164,12 +164,31 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                             .map(
                               (row) => DropdownMenuItem(
                                 value: row.batch.id,
-                                child: Text(
-                                  _batchDisplayText(
-                                    row.batch,
-                                    allBatches: _availableBatches
-                                        .map((item) => item.batch)
-                                        .toList(),
+                                child: Text.rich(
+                                  TextSpan(
+                                    style: const TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    children: [
+                                      ..._batchCodeSpans(
+                                        row.batch.actualBatch,
+                                        variants: _availableBatches
+                                            .where((item) =>
+                                                item.batch.dateBatch ==
+                                                row.batch.dateBatch)
+                                            .map((item) =>
+                                                item.batch.actualBatch)
+                                            .toList(),
+                                        highlightDifferences: true,
+                                        normalColor: AppTheme.textPrimary,
+                                      ),
+                                      TextSpan(
+                                        text:
+                                            ' ${row.batch.dateBatch}${_batchIndexSuffix(row.batch, _availableBatches.map((item) => item.batch).toList())}',
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -200,13 +219,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                     ],
                   ),
                   if (_draftLines.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     _DraftLinesCard(
                       lines: _draftLines,
                       onDeleteLine: _deleteDraftLine,
                     ),
                   ],
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 8),
                 ],
               ),
             );
@@ -652,7 +671,7 @@ class _SectionCard extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-                  const SizedBox(height: 8),
+            const SizedBox(height: 8),
           ],
           ...children,
         ],
@@ -843,19 +862,40 @@ class _DraftLinesCard extends StatelessWidget {
             '已添加明细（${lines.length}条 / $totalBoxes箱）',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-            const SizedBox(height: 8),
+          const SizedBox(height: 8),
           ...lines.map(
             (line) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      '${line.product.code} · ${_batchDisplayText(line.batch, allBatches: allBatches)} · ${line.item.boxes}箱${_batchNeedsScan(line.batch) ? ' · TS' : ''}',
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                    child: Text.rich(
+                      TextSpan(
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          TextSpan(text: '${line.product.code} · '),
+                          ..._batchCodeSpans(
+                            line.batch.actualBatch,
+                            variants: allBatches
+                                .where((item) =>
+                                    item.dateBatch == line.batch.dateBatch)
+                                .map((item) => item.actualBatch)
+                                .toList(),
+                            highlightDifferences: true,
+                            normalColor: AppTheme.textPrimary,
+                          ),
+                          TextSpan(
+                            text:
+                                ' ${line.batch.dateBatch}${_batchIndexSuffix(line.batch, allBatches)}',
+                          ),
+                          TextSpan(text: ' · ${line.item.boxes}箱'),
+                          if (_batchNeedsScan(line.batch))
+                            const TextSpan(text: ' · TS'),
+                        ],
                       ),
                     ),
                   ),
@@ -976,26 +1016,62 @@ InputDecoration _inputDecoration(String label) {
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
-String _batchDisplayText(
-  BatchRecord batch, {
-  required List<BatchRecord> allBatches,
-}) {
-  final sameDate = allBatches
-      .where((item) => item.dateBatch == batch.dateBatch)
-      .toList()
-    ..sort((a, b) {
-      final byBatch = a.actualBatch.compareTo(b.actualBatch);
-      if (byBatch != 0) {
-        return byBatch;
-      }
-      return a.id.compareTo(b.id);
-    });
+String _batchIndexSuffix(BatchRecord batch, List<BatchRecord> allBatches) {
+  final sameDate =
+      allBatches.where((item) => item.dateBatch == batch.dateBatch).toList()
+        ..sort((a, b) {
+          final byBatch = a.actualBatch.compareTo(b.actualBatch);
+          if (byBatch != 0) {
+            return byBatch;
+          }
+          return a.id.compareTo(b.id);
+        });
   if (sameDate.length <= 1) {
-    return '${batch.actualBatch} ${batch.dateBatch}';
+    return '';
   }
   final index = sameDate.indexWhere((item) => item.id == batch.id);
-  final suffix = index >= 0 ? ' 批号${index + 1}' : '';
-  return '${batch.actualBatch} ${batch.dateBatch}$suffix';
+  return index >= 0 ? ' 批号${index + 1}' : '';
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+  required bool highlightDifferences,
+  required Color normalColor,
+}) {
+  if (!highlightDifferences || variants.toSet().length <= 1) {
+    return <InlineSpan>[
+      TextSpan(text: code, style: TextStyle(color: normalColor)),
+    ];
+  }
+  final normalized = variants.toSet().toList()..sort();
+  final maxLength = normalized.fold<int>(
+      0, (max, item) => item.length > max ? item.length : max);
+  final differsAt = List<bool>.filled(maxLength, false);
+  for (var i = 0; i < maxLength; i += 1) {
+    String? pivot;
+    for (final value in normalized) {
+      final char = i < value.length ? value[i] : '';
+      pivot ??= char;
+      if (char != pivot) {
+        differsAt[i] = true;
+        break;
+      }
+    }
+  }
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    final isDiff = i < differsAt.length && differsAt[i];
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: isDiff ? const Color(0xFFDC2626) : normalColor,
+        ),
+      ),
+    );
+  }
+  return spans;
 }
 
 bool _batchNeedsScan(BatchRecord batch) {

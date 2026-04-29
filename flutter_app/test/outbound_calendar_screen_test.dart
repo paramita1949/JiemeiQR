@@ -41,6 +41,13 @@ void main() {
     );
   }
 
+  Finder richTextContaining(String pattern) {
+    return find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText && widget.text.toPlainText().contains(pattern),
+    );
+  }
+
   Future<void> seedOutbound({bool includeNextDayOutbound = false}) async {
     final productId = await productDao.createProduct(
       code: '72067',
@@ -109,8 +116,8 @@ void main() {
     expect(find.text('按运单'), findsNothing);
     expect(find.text('运单 168220019125'), findsOneWidget);
     expect(find.text('合计 20箱'), findsOneWidget);
-    expect(find.text('72067'), findsOneWidget);
-    expect(find.text('2029.9.7'), findsOneWidget);
+    expect(richTextContaining('72067'), findsOneWidget);
+    expect(richTextContaining('2029.9.7'), findsOneWidget);
     expect(find.text('运单 168220019125 · 商家 洁美A'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -162,17 +169,17 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.text('20584'), findsOneWidget);
-    expect(find.text('2029.8.1'), findsOneWidget);
+    expect(richTextContaining('20584'), findsOneWidget);
+    expect(richTextContaining('2029.8.1'), findsOneWidget);
     await tester.tap(find.text('168220019126'));
     await tester.pumpAndSettle();
 
     expect(find.text('运单 168220019126 出库明细'), findsOneWidget);
     expect(find.text('合计 5箱'), findsOneWidget);
-    expect(find.text('20584'), findsOneWidget);
-    expect(find.text('2029.8.1'), findsOneWidget);
-    expect(find.text('72067'), findsNothing);
-    expect(find.text('2029.9.7'), findsNothing);
+    expect(richTextContaining('20584'), findsOneWidget);
+    expect(richTextContaining('2029.8.1'), findsOneWidget);
+    expect(richTextContaining('72067'), findsNothing);
+    expect(richTextContaining('2029.9.7'), findsNothing);
   });
 
   testWidgets('uses range-aware outbound detail titles', (tester) async {
@@ -259,6 +266,109 @@ void main() {
     final monthY = tester.getTopLeft(find.text('一月')).dy;
     final customY = tester.getTopLeft(find.byTooltip('自定义范围')).dy;
     expect((monthY - customY).abs(), lessThan(20));
+  });
+
+  testWidgets(
+      'highlights differing batch letters for same product-date outbound rows',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBLEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMHEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'HB-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 10,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: 'HB-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchB,
+        boxes: 12,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await stockDao.addMovement(
+      batchId: batchA,
+      orderId: Value(orderId),
+      movementDate: DateTime(2026, 4, 26),
+      type: StockMovementType.orderOut,
+      boxes: 10,
+    );
+    await stockDao.addMovement(
+      batchId: batchB,
+      orderId: Value(orderId),
+      movementDate: DateTime(2026, 4, 26),
+      type: StockMovementType.orderOut,
+      boxes: 12,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    final richTexts =
+        tester.widgetList<RichText>(find.byType(RichText)).where((widget) {
+      final plain = widget.text.toPlainText();
+      return plain.contains('FCHBLEZ') || plain.contains('FCHBMHEZ');
+    }).toList();
+    expect(richTexts, isNotEmpty);
+
+    var hasRedA = false;
+    var hasRedB = false;
+    for (final richText in richTexts) {
+      final root = richText.text;
+      if (root is! TextSpan) {
+        continue;
+      }
+      final spans = <TextSpan>[];
+      void collect(TextSpan span) {
+        spans.add(span);
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          if (child is TextSpan) {
+            collect(child);
+          }
+        }
+      }
+
+      collect(root);
+      final hasRed =
+          spans.any((span) => span.style?.color == const Color(0xFFDC2626));
+      final plain = root.toPlainText();
+      if (plain.contains('FCHBLEZ')) {
+        hasRedA = hasRed;
+      }
+      if (plain.contains('FCHBMHEZ')) {
+        hasRedB = hasRed;
+      }
+    }
+
+    expect(hasRedA, isTrue);
+    expect(hasRedB, isTrue);
   });
 }
 

@@ -58,11 +58,12 @@ void main() {
     expect(find.text('洁美'), findsOneWidget);
     expect(find.text('浙江仓订单与库存工作台'), findsOneWidget);
     expect(find.byType(RefreshIndicator), findsOneWidget);
-    expect(find.text('总库存'), findsOneWidget);
-    expect(find.text('300 件'), findsOneWidget);
-    expect(find.textContaining('今日订单'), findsOneWidget);
-    expect(find.textContaining('昨日订单'), findsOneWidget);
-    expect(find.textContaining('未完成 2 单'), findsOneWidget);
+    expect(find.text('实时库存'), findsOneWidget);
+    expect(find.text('在途货物'), findsOneWidget);
+    expect(find.text('300'), findsNWidgets(2));
+    expect(find.text('今日订单'), findsOneWidget);
+    expect(find.text('昨日订单'), findsOneWidget);
+    expect(find.text('2 单'), findsOneWidget);
 
     expect(find.text('QR箱码'), findsOneWidget);
     expect(find.text('订单信息'), findsOneWidget);
@@ -81,7 +82,7 @@ void main() {
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
-    expect(find.text('300 件'), findsOneWidget);
+    expect(find.text('300'), findsNWidgets(2));
 
     await stockDao.addMovement(
       batchId: batch.id,
@@ -92,7 +93,7 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, 400));
     await tester.pumpAndSettle();
 
-    expect(find.text('450 件'), findsOneWidget);
+    expect(find.text('450'), findsNWidgets(2));
   });
 
   testWidgets('home refreshes when database instance changes', (tester) async {
@@ -107,7 +108,7 @@ void main() {
       MaterialApp(home: HomeScreen(database: firstDatabase)),
     );
     await tester.pumpAndSettle();
-    expect(find.text('0 件'), findsOneWidget);
+    expect(find.text('0'), findsNWidgets(2));
     await firstDatabase.close();
 
     final secondDatabase = AppDatabase.forTesting(NativeDatabase.memory());
@@ -130,7 +131,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('60 件'), findsOneWidget);
+    expect(find.text('60'), findsNWidgets(2));
     await secondDatabase.close();
   });
 

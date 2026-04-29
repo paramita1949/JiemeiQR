@@ -48,8 +48,26 @@ class ProductBatchPicker extends StatelessWidget {
               .map(
                 (row) => DropdownMenuItem(
                   value: row.batch.id,
-                  child:
-                      Text('${row.batch.actualBatch} · ${row.batch.dateBatch}'),
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      children: [
+                        ..._batchCodeSpans(
+                          row.batch.actualBatch,
+                          variants: availableBatches
+                              .where((item) =>
+                                  item.batch.dateBatch == row.batch.dateBatch)
+                              .map((item) => item.batch.actualBatch)
+                              .toList(),
+                        ),
+                        TextSpan(text: ' · ${row.batch.dateBatch}'),
+                      ],
+                    ),
+                  ),
                 ),
               )
               .toList(),
@@ -98,4 +116,43 @@ InputDecoration _inputDecoration(String label) {
       borderSide: BorderSide.none,
     ),
   );
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+}) {
+  if (variants.toSet().length <= 1) {
+    return <InlineSpan>[
+      TextSpan(text: code, style: const TextStyle(color: AppTheme.textPrimary)),
+    ];
+  }
+  final normalized = variants.toSet().toList()..sort();
+  final maxLength = normalized.fold<int>(
+      0, (max, item) => item.length > max ? item.length : max);
+  final differsAt = List<bool>.filled(maxLength, false);
+  for (var i = 0; i < maxLength; i += 1) {
+    String? pivot;
+    for (final value in normalized) {
+      final char = i < value.length ? value[i] : '';
+      pivot ??= char;
+      if (char != pivot) {
+        differsAt[i] = true;
+        break;
+      }
+    }
+  }
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    final isDiff = i < differsAt.length && differsAt[i];
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: isDiff ? const Color(0xFFDC2626) : AppTheme.textPrimary,
+        ),
+      ),
+    );
+  }
+  return spans;
 }

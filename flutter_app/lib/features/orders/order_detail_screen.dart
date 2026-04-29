@@ -58,12 +58,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           future: _detailFuture,
           builder: (context, snapshot) {
             final detail = snapshot.data;
-            final duplicateBatchDates = detail == null
+            final duplicateBatchKeys = detail == null
                 ? const <String>{}
-                : _duplicateDateBatches(detail.lines);
-            final batchCodesByDate = detail == null
+                : _duplicateProductDateBatches(detail.lines);
+            final batchCodesByProductDate = detail == null
                 ? const <String, List<String>>{}
-                : _batchCodesByDate(detail.lines);
+                : _batchCodesByProductDate(detail.lines);
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
               children: [
@@ -110,10 +110,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _LineCard(
                         line: line,
-                        highlightBatch:
-                            duplicateBatchDates.contains(line.batch.dateBatch),
+                        highlightBatch: duplicateBatchKeys.contains(
+                          _productDateKey(
+                            productId: line.product.id,
+                            dateBatch: line.batch.dateBatch,
+                          ),
+                        ),
                         batchCodeVariants:
-                            batchCodesByDate[line.batch.dateBatch] ??
+                            batchCodesByProductDate[_productDateKey(
+                                  productId: line.product.id,
+                                  dateBatch: line.batch.dateBatch,
+                                )] ??
                                 const <String>[],
                         onEditLine: () => _editOrderLine(line),
                         onDeleteLine: () => _deleteOrderLine(line),
@@ -777,14 +784,19 @@ _StatusMeta _statusMeta(OrderStatus status) {
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
-Set<String> _duplicateDateBatches(List<OrderDetailLine> lines) {
-  final dateCounts = <String, int>{};
+Set<String> _duplicateProductDateBatches(List<OrderDetailLine> lines) {
+  final batchCodesByKey = <String, Set<String>>{};
   for (final line in lines) {
-    final key = line.batch.dateBatch;
-    dateCounts[key] = (dateCounts[key] ?? 0) + 1;
+    final key = _productDateKey(
+      productId: line.product.id,
+      dateBatch: line.batch.dateBatch,
+    );
+    batchCodesByKey
+        .putIfAbsent(key, () => <String>{})
+        .add(line.batch.actualBatch);
   }
-  return dateCounts.entries
-      .where((entry) => entry.value > 1)
+  return batchCodesByKey.entries
+      .where((entry) => entry.value.length > 1)
       .map((entry) => entry.key)
       .toSet();
 }
@@ -868,14 +880,21 @@ class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
             ),
             const SizedBox(height: 8),
             ...widget.editableBatches.map(
-              (row) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _BatchChoiceTile(
-                  row: row,
-                  selected: row.batch.id == _selectedBatchId,
-                  onTap: () => setState(() => _selectedBatchId = row.batch.id),
-                ),
-              ),
+              (row) {
+                final sameDateDifferentBatch =
+                    row.batch.id != selectedBatch.batch.id &&
+                        row.batch.dateBatch == selectedBatch.batch.dateBatch;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _BatchChoiceTile(
+                    row: row,
+                    selected: row.batch.id == _selectedBatchId,
+                    sameDateDifferentBatch: sameDateDifferentBatch,
+                    onTap: () =>
+                        setState(() => _selectedBatchId = row.batch.id),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             TextField(
@@ -907,18 +926,29 @@ class _BatchChoiceTile extends StatelessWidget {
   const _BatchChoiceTile({
     required this.row,
     required this.selected,
+    required this.sameDateDifferentBatch,
     required this.onTap,
   });
 
   final AvailableBatch row;
   final bool selected;
+  final bool sameDateDifferentBatch;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppTheme.primary : const Color(0xFFE5E7EB);
+    final color = selected
+        ? AppTheme.primary
+        : sameDateDifferentBatch
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFFE5E7EB);
+    final tileColor = selected
+        ? const Color(0xFFEFF6FF)
+        : sameDateDifferentBatch
+            ? const Color(0xFFFFFBEB)
+            : const Color(0xFFF8FAFC);
     return Material(
-      color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+      color: tileColor,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -956,6 +986,12 @@ class _BatchChoiceTile extends StatelessWidget {
                       children: [
                         _DialogInfoChip(text: row.batch.dateBatch),
                         _DialogInfoChip(text: '可用 ${row.availableBoxes} 箱'),
+                        if (sameDateDifferentBatch)
+                          const _DialogInfoChip(
+                            text: '同日期',
+                            textColor: Color(0xFFB45309),
+                            backgroundColor: Color(0xFFFFF3C4),
+                          ),
                       ],
                     ),
                   ],
@@ -1004,22 +1040,28 @@ class _SelectionDot extends StatelessWidget {
 }
 
 class _DialogInfoChip extends StatelessWidget {
-  const _DialogInfoChip({required this.text});
+  const _DialogInfoChip({
+    required this.text,
+    this.textColor = AppTheme.primary,
+    this.backgroundColor = Colors.white,
+  });
 
   final String text;
+  final Color textColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppTheme.primary,
+        style: TextStyle(
+          color: textColor,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
@@ -1028,14 +1070,28 @@ class _DialogInfoChip extends StatelessWidget {
   }
 }
 
-Map<String, List<String>> _batchCodesByDate(List<OrderDetailLine> lines) {
+Map<String, List<String>> _batchCodesByProductDate(
+    List<OrderDetailLine> lines) {
   final map = <String, List<String>>{};
   for (final line in lines) {
     map
-        .putIfAbsent(line.batch.dateBatch, () => <String>[])
+        .putIfAbsent(
+          _productDateKey(
+            productId: line.product.id,
+            dateBatch: line.batch.dateBatch,
+          ),
+          () => <String>[],
+        )
         .add(line.batch.actualBatch);
   }
   return map;
+}
+
+String _productDateKey({
+  required int productId,
+  required String dateBatch,
+}) {
+  return '$productId|$dateBatch';
 }
 
 List<InlineSpan> _batchCodeSpans(
