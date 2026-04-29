@@ -879,8 +879,22 @@ class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
               ),
             ),
             const SizedBox(height: 8),
+            TextField(
+              controller: _boxesController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: '箱数',
+                helperText: '当前批号可用 ${selectedBatch.availableBoxes} 箱',
+              ),
+            ),
+            const SizedBox(height: 12),
             ...widget.editableBatches.map(
               (row) {
+                final batchCodeVariants = widget.editableBatches
+                    .where(
+                        (item) => item.batch.dateBatch == row.batch.dateBatch)
+                    .map((item) => item.batch.actualBatch)
+                    .toList();
                 final sameDateDifferentBatch =
                     row.batch.id != selectedBatch.batch.id &&
                         row.batch.dateBatch == selectedBatch.batch.dateBatch;
@@ -890,20 +904,12 @@ class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
                     row: row,
                     selected: row.batch.id == _selectedBatchId,
                     sameDateDifferentBatch: sameDateDifferentBatch,
+                    batchCodeVariants: batchCodeVariants,
                     onTap: () =>
                         setState(() => _selectedBatchId = row.batch.id),
                   ),
                 );
               },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _boxesController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: '箱数',
-                helperText: '当前批号可用 ${selectedBatch.availableBoxes} 箱',
-              ),
             ),
           ],
         ),
@@ -927,12 +933,14 @@ class _BatchChoiceTile extends StatelessWidget {
     required this.row,
     required this.selected,
     required this.sameDateDifferentBatch,
+    required this.batchCodeVariants,
     required this.onTap,
   });
 
   final AvailableBatch row;
   final bool selected;
   final bool sameDateDifferentBatch;
+  final List<String> batchCodeVariants;
   final VoidCallback onTap;
 
   @override
@@ -969,15 +977,22 @@ class _BatchChoiceTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      row.batch.actualBatch,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                    Text.rich(
+                      TextSpan(
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                        children: _batchCodeSpans(
+                          row.batch.actualBatch,
+                          variants: batchCodeVariants,
+                          highlightDifferences:
+                              batchCodeVariants.toSet().length > 1,
+                        ),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Wrap(
