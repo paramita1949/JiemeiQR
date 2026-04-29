@@ -222,6 +222,31 @@ class OrderDao {
     return available < 0 ? 0 : available;
   }
 
+  Future<int> _availableBoxesForBatchExcludingItem({
+    required int batchId,
+    required int excludeItemId,
+  }) async {
+    final stockDao = StockDao(_database);
+    final currentBoxes = await stockDao.currentBoxesForBatch(batchId);
+    final pendingRow = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE oi.batch_id = ? AND o.status != ? AND oi.id != ?
+      ''',
+      variables: [
+        Variable.withInt(batchId),
+        Variable.withInt(OrderStatus.done.index),
+        Variable.withInt(excludeItemId),
+      ],
+      readsFrom: {_database.orderItems, _database.orders},
+    ).getSingleOrNull();
+    final reserved = (pendingRow?.data['reserved_boxes'] as int?) ?? 0;
+    final available = currentBoxes - reserved;
+    return available < 0 ? 0 : available;
+  }
+
   Future<int> mergeDuplicateOrderItem({
     required int itemId,
     required int appendBoxes,
@@ -311,6 +336,61 @@ class OrderDao {
       await (_database.delete(_database.orders)
             ..where((table) => table.id.equals(order.id)))
           .go();
+    });
+  }
+
+  Future<void> updateOrderItem({
+    required int itemId,
+    required int batchId,
+    required int boxes,
+    required int boxesPerBoard,
+    required int piecesPerBox,
+  }) async {
+    if (boxes <= 0 || boxes > 1000000000) {
+      throw InvalidStockQuantityException(boxes);
+    }
+    await _database.transaction(() async {
+      final item = await (_database.select(_database.orderItems)
+            ..where((table) => table.id.equals(itemId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (item == null) {
+        return;
+      }
+      final order = await (_database.select(_database.orders)
+            ..where((table) => table.id.equals(item.orderId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (order == null) {
+        return;
+      }
+      if (order.status == OrderStatus.done) {
+        throw const OrderItemUpdateNotAllowedException();
+      }
+      final availableBoxes = await _availableBoxesForBatchExcludingItem(
+        batchId: batchId,
+        excludeItemId: itemId,
+      );
+      if (boxes > availableBoxes) {
+        throw InsufficientStockException(
+          batchId: batchId,
+          requestedBoxes: boxes,
+          availableBoxes: availableBoxes,
+        );
+      }
+      await (_database.update(_database.orderItems)
+            ..where((table) => table.id.equals(itemId)))
+          .write(
+        OrderItemsCompanion(
+          batchId: Value(batchId),
+          boxes: Value(boxes),
+          boxesPerBoard: Value(boxesPerBoard),
+          piecesPerBox: Value(piecesPerBox),
+        ),
+      );
+      await (_database.update(_database.orders)
+            ..where((table) => table.id.equals(order.id)))
+          .write(OrdersCompanion(updatedAt: Value(DateTime.now())));
     });
   }
 
@@ -696,6 +776,13 @@ class OrderItemDeleteNotAllowedException implements Exception {
 
   @override
   String toString() => 'OrderItemDeleteNotAllowedException';
+}
+
+class OrderItemUpdateNotAllowedException implements Exception {
+  const OrderItemUpdateNotAllowedException();
+
+  @override
+  String toString() => 'OrderItemUpdateNotAllowedException';
 }
 
 class DuplicateOrderItemException implements Exception {

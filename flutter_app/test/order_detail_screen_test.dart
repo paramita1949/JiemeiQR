@@ -96,7 +96,9 @@ void main() {
     expect(find.text('168220019125'), findsOneWidget);
     expect(find.text('洁美A'), findsOneWidget);
     expect(find.text('未完成'), findsWidgets);
-    expect(find.text('72067 · FCHBLEZ · 2029.9.7'), findsOneWidget);
+    expect(richTextContaining('72067'), findsOneWidget);
+    expect(richTextContaining('FCHBLEZ'), findsOneWidget);
+    expect(richTextContaining('2029.9.7'), findsOneWidget);
     expect(find.text('20箱'), findsWidgets);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
     expect(find.text('TS'), findsOneWidget);
@@ -215,8 +217,8 @@ void main() {
     await tester.pumpWidget(buildScreen(orderId));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('BATCH-A'), findsOneWidget);
-    expect(find.textContaining('BATCH-B'), findsOneWidget);
+    expect(richTextContaining('BATCH-A'), findsOneWidget);
+    expect(richTextContaining('BATCH-B'), findsOneWidget);
 
     await tester.tap(find.byTooltip('删除该产品').first);
     await tester.pumpAndSettle();
@@ -224,8 +226,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('已删除该产品明细'), findsOneWidget);
-    expect(find.textContaining('BATCH-A'), findsNothing);
-    expect(find.textContaining('BATCH-B'), findsOneWidget);
+    expect(richTextContaining('BATCH-A'), findsNothing);
+    expect(richTextContaining('BATCH-B'), findsOneWidget);
     final remainOrder = await (database.select(database.orders)
           ..where((table) => table.id.equals(orderId)))
         .getSingleOrNull();
@@ -234,6 +236,72 @@ void main() {
           ..where((table) => table.orderId.equals(orderId)))
         .get();
     expect(items, hasLength(1));
+  });
+
+  testWidgets('edits one order line batch and boxes', (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'EDIT-A',
+      dateBatch: '2029.9.6',
+      initialBoxes: 100,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'EDIT-B',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'LINE-EDIT-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('编辑该产品').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('EDIT-A').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('EDIT-B').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '30');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    final item = await database.select(database.orderItems).getSingle();
+    expect(item.batchId, batchB);
+    expect(item.boxes, 30);
+    expect(find.text('已更新产品明细'), findsOneWidget);
+  });
+
+  testWidgets('shows message when deleting line from done order', (tester) async {
+    final orderId = await seedOrder();
+    await orderDao.setStatus(orderId, OrderStatus.done);
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('删除该产品').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已完成订单不允许删除单条明细'), findsOneWidget);
   });
 
   testWidgets('uses latest base-info conversion in line display',
@@ -263,4 +331,110 @@ void main() {
     expect(find.text('36箱/板 · 24件/箱'), findsOneWidget);
     expect(find.text('40箱/板 · 30件/箱'), findsNothing);
   });
+
+  testWidgets('highlights only differing batch letters for same-date batches',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBLEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMHEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'LINE-HIGHLIGHT-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: 'LINE-HIGHLIGHT-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchB,
+        boxes: 10,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    final richTexts = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .where((widget) =>
+            widget.text.toPlainText().contains('FCHBLEZ') ||
+            widget.text.toPlainText().contains('FCHBMHEZ'))
+        .toList();
+    expect(richTexts, isNotEmpty);
+
+    bool hasRedDiffForBatchA = false;
+    bool hasRedDiffForBatchB = false;
+    bool hasNormalSharedForBatchA = false;
+    bool hasNormalSharedForBatchB = false;
+    for (final richText in richTexts) {
+      final root = richText.text;
+      if (root is! TextSpan) {
+        continue;
+      }
+      final children = root.children ?? const <InlineSpan>[];
+      final text = root.toPlainText();
+      var hasRed = false;
+      var hasNormal = false;
+      for (final child in children) {
+        if (child is! TextSpan) {
+          continue;
+        }
+        if ((child.text ?? '').isEmpty) {
+          continue;
+        }
+        if (child.style?.color == const Color(0xFFDC2626)) {
+          hasRed = true;
+        }
+        if (child.style?.color == AppTheme.textPrimary) {
+          hasNormal = true;
+        }
+      }
+      if (text.contains('FCHBLEZ')) {
+        hasRedDiffForBatchA = hasRed;
+        hasNormalSharedForBatchA = hasNormal;
+      }
+      if (text.contains('FCHBMHEZ')) {
+        hasRedDiffForBatchB = hasRed;
+        hasNormalSharedForBatchB = hasNormal;
+      }
+    }
+    expect(hasRedDiffForBatchA, isTrue);
+    expect(hasRedDiffForBatchB, isTrue);
+    expect(hasNormalSharedForBatchA, isTrue);
+    expect(hasNormalSharedForBatchB, isTrue);
+  });
 }
+  Finder richTextContaining(String text) {
+    return find.byWidgetPredicate((widget) {
+      if (widget is RichText) {
+        return widget.text.toPlainText().contains(text);
+      }
+      return false;
+    });
+  }

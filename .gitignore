@@ -6,3 +6,4 @@
 !.github/workflows/flutter-android-build.yml
 !flutter_app/
 !flutter_app/**
+!CHANGELOG.md

@@ -58,7 +58,7 @@ void main() {
     expect(find.text('新增运单'), findsWidgets);
     expect(find.byKey(const Key('merchantHistoryDropdown')), findsOneWidget);
     expect(find.text('72067'), findsOneWidget);
-    expect(find.text('FCHBLEZ · 2029.9.7'), findsOneWidget);
+    expect(find.text('FCHBLEZ 2029.9.7'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('boxesField')), '3477');
     await tester.pumpAndSettle();
@@ -273,6 +273,46 @@ void main() {
           ..where((table) => table.waybillNo.equals('WB-APPEND')))
         .getSingleOrNull();
     expect(order, isNull);
+  });
+
+  testWidgets('shows batch index reminder when same product date has two batches',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: 'FCHBMEZ',
+      name: '测试产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMEZ-ALT',
+      dateBatch: '2029.9.7',
+      initialBoxes: 80,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('FCHBMEZ 2029.9.7 批号1'), findsOneWidget);
+    await tester.tap(find.text('FCHBMEZ 2029.9.7 批号1'));
+    await tester.pumpAndSettle();
+    expect(find.text('FCHBMEZ-ALT 2029.9.7 批号2'), findsOneWidget);
+  });
+
+  testWidgets('does not show batch index when only one batch on date',
+      (tester) async {
+    await seedProduct();
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('FCHBLEZ 2029.9.7'), findsOneWidget);
+    expect(find.textContaining('批号1'), findsNothing);
   });
 
   testWidgets('end button exits and returns to home without saving',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
+import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_completion_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
@@ -25,6 +26,7 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final AppDatabase _database;
   late final OrderDao _orderDao;
+  late final ProductDao _productDao;
   late final OrderCompletionService _completionService;
   late final bool _ownsDatabase;
   late Future<OrderDetail> _detailFuture;
@@ -35,6 +37,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
+    _productDao = ProductDao(_database);
     _completionService = OrderCompletionService(_database);
     _detailFuture = _orderDao.orderDetail(widget.orderId);
   }
@@ -55,6 +58,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           future: _detailFuture,
           builder: (context, snapshot) {
             final detail = snapshot.data;
+            final duplicateBatchDates =
+                detail == null ? const <String>{} : _duplicateDateBatches(detail.lines);
+            final batchCodesByDate =
+                detail == null ? const <String, List<String>>{} : _batchCodesByDate(detail.lines);
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
               children: [
@@ -101,9 +108,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _LineCard(
                         line: line,
-                        onDeleteLine: detail.order.status == OrderStatus.done
-                            ? null
-                            : () => _deleteOrderLine(line),
+                        highlightBatch:
+                            duplicateBatchDates.contains(line.batch.dateBatch),
+                        batchCodeVariants:
+                            batchCodesByDate[line.batch.dateBatch] ?? const <String>[],
+                        onEditLine: () => _editOrderLine(line),
+                        onDeleteLine: () => _deleteOrderLine(line),
                       ),
                     ),
                   ),
@@ -300,6 +310,83 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _editOrderLine(OrderDetailLine line) async {
+    final available = await _productDao.availableBatchesForProduct(
+      line.product.id,
+      excludeOrderId: line.item.orderId,
+    );
+    final editableBatches = [...available];
+    if (!editableBatches.any((item) => item.batch.id == line.batch.id)) {
+      editableBatches.insert(
+        0,
+        AvailableBatch(
+          batch: line.batch,
+          currentBoxes: line.item.boxes,
+          reservedBoxes: 0,
+        ),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    final result = await showDialog<_EditOrderLineResult>(
+      context: context,
+      builder: (context) => _EditOrderLineDialog(
+        initialBoxes: line.item.boxes,
+        initialBatchId: line.batch.id,
+        editableBatches: editableBatches,
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+    final selectedBatch = editableBatches
+        .where((item) => item.batch.id == result.batchId)
+        .firstOrNull;
+    if (selectedBatch == null) {
+      return;
+    }
+    try {
+      await _orderDao.updateOrderItem(
+        itemId: line.item.id,
+        batchId: selectedBatch.batch.id,
+        boxes: result.boxes,
+        boxesPerBoard: selectedBatch.batch.boxesPerBoard,
+        piecesPerBox: line.product.piecesPerBox,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _detailFuture = _orderDao.orderDetail(widget.orderId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已更新产品明细')),
+      );
+    } on OrderItemUpdateNotAllowedException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成订单不允许编辑明细')),
+      );
+    } on InsufficientStockException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('库存不足，无法保存修改')),
+      );
+    } on InvalidStockQuantityException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('箱数无效')),
+      );
+    }
+  }
+
   Future<void> _confirmComplete() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -476,10 +563,16 @@ class _StatusButton extends StatelessWidget {
 class _LineCard extends StatelessWidget {
   const _LineCard({
     required this.line,
+    required this.highlightBatch,
+    required this.batchCodeVariants,
+    required this.onEditLine,
     this.onDeleteLine,
   });
 
   final OrderDetailLine line;
+  final bool highlightBatch;
+  final List<String> batchCodeVariants;
+  final VoidCallback onEditLine;
   final VoidCallback? onDeleteLine;
 
   @override
@@ -500,21 +593,50 @@ class _LineCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '${line.product.code} · ${line.batch.actualBatch} · ${line.batch.dateBatch}',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: line.product.code,
+                        style: const TextStyle(color: Color(0xFFDC2626)),
+                      ),
+                      const TextSpan(
+                        text: ' · ',
+                        style: TextStyle(color: AppTheme.textPrimary),
+                      ),
+                      TextSpan(
+                        children: _batchCodeSpans(
+                          line.batch.actualBatch,
+                          variants: batchCodeVariants,
+                          highlightDifferences: highlightBatch,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: ' · ',
+                        style: TextStyle(color: AppTheme.textPrimary),
+                      ),
+                      TextSpan(
+                        text: line.batch.dateBatch,
+                        style: const TextStyle(color: Color(0xFFDC2626)),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              if (onDeleteLine != null)
-                IconButton(
-                  tooltip: '删除该产品',
-                  onPressed: onDeleteLine,
-                  icon: const Icon(Icons.delete_outline),
-                ),
+              IconButton(
+                tooltip: '编辑该产品',
+                onPressed: onEditLine,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                tooltip: '删除该产品',
+                onPressed: onDeleteLine,
+                icon: const Icon(Icons.delete_outline),
+              ),
             ],
           ),
           const SizedBox(height: 9),
@@ -523,7 +645,11 @@ class _LineCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MetricChip(text: '${line.item.boxes}箱'),
-              _MetricChip(text: boardText),
+              _MetricChip(
+                text: boardText,
+                textColor: const Color(0xFFDC2626),
+                backgroundColor: const Color(0xFFFEE2E2),
+              ),
               _MetricChip(
                 text:
                     '${line.batch.boxesPerBoard}箱/板 · ${line.product.piecesPerBox}件/箱',
@@ -622,3 +748,173 @@ _StatusMeta _statusMeta(OrderStatus status) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+Set<String> _duplicateDateBatches(List<OrderDetailLine> lines) {
+  final dateCounts = <String, int>{};
+  for (final line in lines) {
+    final key = line.batch.dateBatch;
+    dateCounts[key] = (dateCounts[key] ?? 0) + 1;
+  }
+  return dateCounts.entries
+      .where((entry) => entry.value > 1)
+      .map((entry) => entry.key)
+      .toSet();
+}
+
+class _EditOrderLineResult {
+  const _EditOrderLineResult({
+    required this.batchId,
+    required this.boxes,
+  });
+
+  final int batchId;
+  final int boxes;
+}
+
+class _EditOrderLineDialog extends StatefulWidget {
+  const _EditOrderLineDialog({
+    required this.initialBoxes,
+    required this.initialBatchId,
+    required this.editableBatches,
+  });
+
+  final int initialBoxes;
+  final int initialBatchId;
+  final List<AvailableBatch> editableBatches;
+
+  @override
+  State<_EditOrderLineDialog> createState() => _EditOrderLineDialogState();
+}
+
+class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
+  late final TextEditingController _boxesController;
+  late int _selectedBatchId;
+
+  @override
+  void initState() {
+    super.initState();
+    _boxesController = TextEditingController(
+      text: widget.initialBoxes.toString(),
+    );
+    _selectedBatchId = widget.initialBatchId;
+  }
+
+  @override
+  void dispose() {
+    _boxesController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final boxes = int.tryParse(_boxesController.text.trim());
+    if (boxes == null || boxes <= 0) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _EditOrderLineResult(batchId: _selectedBatchId, boxes: boxes),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('编辑产品明细'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<int>(
+              initialValue: _selectedBatchId,
+              decoration: const InputDecoration(labelText: '批号'),
+              items: widget.editableBatches
+                  .map(
+                    (row) => DropdownMenuItem(
+                      value: row.batch.id,
+                      child: Text(
+                        '${row.batch.actualBatch} · ${row.batch.dateBatch} · 可用${row.availableBoxes}箱',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() => _selectedBatchId = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _boxesController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: '箱数'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+}
+
+Map<String, List<String>> _batchCodesByDate(List<OrderDetailLine> lines) {
+  final map = <String, List<String>>{};
+  for (final line in lines) {
+    map.putIfAbsent(line.batch.dateBatch, () => <String>[])
+        .add(line.batch.actualBatch);
+  }
+  return map;
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+  required bool highlightDifferences,
+}) {
+  if (!highlightDifferences || variants.length <= 1) {
+    return <InlineSpan>[
+      TextSpan(
+        text: code,
+        style: const TextStyle(color: AppTheme.textPrimary),
+      ),
+    ];
+  }
+  final normalized = variants.toSet().toList()..sort();
+  final maxLength = normalized.fold<int>(0, (max, item) => item.length > max ? item.length : max);
+  final differsAt = List<bool>.filled(maxLength, false);
+  for (var i = 0; i < maxLength; i += 1) {
+    String? pivot;
+    for (final value in normalized) {
+      final char = i < value.length ? value[i] : '';
+      pivot ??= char;
+      if (char != pivot) {
+        differsAt[i] = true;
+        break;
+      }
+    }
+  }
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: i < differsAt.length && differsAt[i]
+              ? const Color(0xFFDC2626)
+              : AppTheme.textPrimary,
+        ),
+      ),
+    );
+  }
+  return spans;
+}

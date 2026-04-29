@@ -165,7 +165,12 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                               (row) => DropdownMenuItem(
                                 value: row.batch.id,
                                 child: Text(
-                                  '${row.batch.actualBatch} · ${row.batch.dateBatch}',
+                                  _batchDisplayText(
+                                    row.batch,
+                                    allBatches: _availableBatches
+                                        .map((item) => item.batch)
+                                        .toList(),
+                                  ),
                                 ),
                               ),
                             )
@@ -824,6 +829,7 @@ class _DraftLinesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalBoxes = lines.fold<int>(0, (sum, line) => sum + line.item.boxes);
+    final allBatches = lines.map((line) => line.batch).toList();
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -845,7 +851,7 @@ class _DraftLinesCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${line.product.code} · ${line.batch.dateBatch} · ${line.batch.actualBatch} · ${line.item.boxes}箱${_batchNeedsScan(line.batch) ? ' · TS' : ''}',
+                      '${line.product.code} · ${_batchDisplayText(line.batch, allBatches: allBatches)} · ${line.item.boxes}箱${_batchNeedsScan(line.batch) ? ' · TS' : ''}',
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 13,
@@ -969,6 +975,28 @@ InputDecoration _inputDecoration(String label) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+String _batchDisplayText(
+  BatchRecord batch, {
+  required List<BatchRecord> allBatches,
+}) {
+  final sameDate = allBatches
+      .where((item) => item.dateBatch == batch.dateBatch)
+      .toList()
+    ..sort((a, b) {
+      final byBatch = a.actualBatch.compareTo(b.actualBatch);
+      if (byBatch != 0) {
+        return byBatch;
+      }
+      return a.id.compareTo(b.id);
+    });
+  if (sameDate.length <= 1) {
+    return '${batch.actualBatch} ${batch.dateBatch}';
+  }
+  final index = sameDate.indexWhere((item) => item.id == batch.id);
+  final suffix = index >= 0 ? ' 批号${index + 1}' : '';
+  return '${batch.actualBatch} ${batch.dateBatch}$suffix';
+}
 
 bool _batchNeedsScan(BatchRecord batch) {
   return batch.tsRequired;
