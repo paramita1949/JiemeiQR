@@ -58,10 +58,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           future: _detailFuture,
           builder: (context, snapshot) {
             final detail = snapshot.data;
-            final duplicateBatchDates =
-                detail == null ? const <String>{} : _duplicateDateBatches(detail.lines);
-            final batchCodesByDate =
-                detail == null ? const <String, List<String>>{} : _batchCodesByDate(detail.lines);
+            final duplicateBatchDates = detail == null
+                ? const <String>{}
+                : _duplicateDateBatches(detail.lines);
+            final batchCodesByDate = detail == null
+                ? const <String, List<String>>{}
+                : _batchCodesByDate(detail.lines);
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
               children: [
@@ -111,7 +113,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         highlightBatch:
                             duplicateBatchDates.contains(line.batch.dateBatch),
                         batchCodeVariants:
-                            batchCodesByDate[line.batch.dateBatch] ?? const <String>[],
+                            batchCodesByDate[line.batch.dateBatch] ??
+                                const <String>[],
                         onEditLine: () => _editOrderLine(line),
                         onDeleteLine: () => _deleteOrderLine(line),
                       ),
@@ -591,11 +594,10 @@ class _LineCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: RichText(
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   text: TextSpan(
                     style: const TextStyle(
                       fontSize: 16,
@@ -627,15 +629,16 @@ class _LineCard extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton(
+              const SizedBox(width: 8),
+              _LineActionButton(
                 tooltip: '编辑该产品',
+                icon: Icons.edit_outlined,
                 onPressed: onEditLine,
-                icon: const Icon(Icons.edit_outlined),
               ),
-              IconButton(
+              _LineActionButton(
                 tooltip: '删除该产品',
+                icon: Icons.delete_outline,
                 onPressed: onDeleteLine,
-                icon: const Icon(Icons.delete_outline),
               ),
             ],
           ),
@@ -665,6 +668,31 @@ class _LineCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LineActionButton extends StatelessWidget {
+  const _LineActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      iconSize: 22,
+      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -817,38 +845,46 @@ class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedBatch = widget.editableBatches.firstWhere(
+      (item) => item.batch.id == _selectedBatchId,
+    );
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+      contentPadding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       title: const Text('编辑产品明细'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            DropdownButtonFormField<int>(
-              initialValue: _selectedBatchId,
-              decoration: const InputDecoration(labelText: '批号'),
-              items: widget.editableBatches
-                  .map(
-                    (row) => DropdownMenuItem(
-                      value: row.batch.id,
-                      child: Text(
-                        '${row.batch.actualBatch} · ${row.batch.dateBatch} · 可用${row.availableBoxes}箱',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() => _selectedBatchId = value);
-              },
+            const Text(
+              '选择批号',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...widget.editableBatches.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _BatchChoiceTile(
+                  row: row,
+                  selected: row.batch.id == _selectedBatchId,
+                  onTap: () => setState(() => _selectedBatchId = row.batch.id),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _boxesController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '箱数'),
+              decoration: InputDecoration(
+                labelText: '箱数',
+                helperText: '当前批号可用 ${selectedBatch.availableBoxes} 箱',
+              ),
             ),
           ],
         ),
@@ -867,10 +903,136 @@ class _EditOrderLineDialogState extends State<_EditOrderLineDialog> {
   }
 }
 
+class _BatchChoiceTile extends StatelessWidget {
+  const _BatchChoiceTile({
+    required this.row,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AvailableBatch row;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppTheme.primary : const Color(0xFFE5E7EB);
+    return Material(
+      color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: color),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SelectionDot(selected: selected),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.batch.actualBatch,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _DialogInfoChip(text: row.batch.dateBatch),
+                        _DialogInfoChip(text: '可用 ${row.availableBoxes} 箱'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionDot extends StatelessWidget {
+  const _SelectionDot({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      margin: const EdgeInsets.only(top: 1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? AppTheme.primary : const Color(0xFFCBD5E1),
+          width: 2,
+        ),
+      ),
+      child: selected
+          ? Center(
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _DialogInfoChip extends StatelessWidget {
+  const _DialogInfoChip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppTheme.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 Map<String, List<String>> _batchCodesByDate(List<OrderDetailLine> lines) {
   final map = <String, List<String>>{};
   for (final line in lines) {
-    map.putIfAbsent(line.batch.dateBatch, () => <String>[])
+    map
+        .putIfAbsent(line.batch.dateBatch, () => <String>[])
         .add(line.batch.actualBatch);
   }
   return map;
@@ -890,7 +1052,8 @@ List<InlineSpan> _batchCodeSpans(
     ];
   }
   final normalized = variants.toSet().toList()..sort();
-  final maxLength = normalized.fold<int>(0, (max, item) => item.length > max ? item.length : max);
+  final maxLength = normalized.fold<int>(
+      0, (max, item) => item.length > max ? item.length : max);
   final differsAt = List<bool>.filled(maxLength, false);
   for (var i = 0; i < maxLength; i += 1) {
     String? pivot;

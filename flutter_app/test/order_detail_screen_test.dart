@@ -290,7 +290,8 @@ void main() {
     expect(find.text('已更新产品明细'), findsOneWidget);
   });
 
-  testWidgets('shows message when deleting line from done order', (tester) async {
+  testWidgets('shows message when deleting line from done order',
+      (tester) async {
     final orderId = await seedOrder();
     await orderDao.setStatus(orderId, OrderStatus.done);
 
@@ -431,17 +432,26 @@ void main() {
     expect(hasNormalSharedForBatchB, isTrue);
   });
 
-  testWidgets('line title keeps product normal and date red in one line',
+  testWidgets(
+      'line title keeps product batch and date visible on narrow phones',
       (tester) async {
     final orderId = await seedOrder();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(buildScreen(orderId));
     await tester.pumpAndSettle();
 
     final target = tester
         .widgetList<RichText>(find.byType(RichText))
         .firstWhere((widget) => widget.text.toPlainText().contains('72067'));
-    expect(target.maxLines, 1);
-    expect(target.overflow, TextOverflow.ellipsis);
+    expect(target.maxLines, isNull);
+    expect(target.overflow, isNot(TextOverflow.ellipsis));
+    expect(target.text.toPlainText(), contains('72067'));
+    expect(target.text.toPlainText(), contains('FCHBLEZ'));
+    expect(target.text.toPlainText(), contains('2029.9.7'));
 
     final root = target.text as TextSpan;
     final children = root.children ?? const <InlineSpan>[];
@@ -454,6 +464,56 @@ void main() {
 
     expect(productSpan.style?.color, isNot(const Color(0xFFDC2626)));
     expect(dateSpan.style?.color, const Color(0xFFDC2626));
+  });
+
+  testWidgets(
+      'edit line dialog uses readable batch choices instead of compressed dropdown',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMEZ-LONG-CODE-A',
+      dateBatch: '2029.9.7',
+      initialBoxes: 3500,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FCHBMEZ-LONG-CODE-B',
+      dateBatch: '2029.9.8',
+      initialBoxes: 3480,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'LINE-EDIT-UI-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('编辑该产品').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+    expect(find.text('选择批号'), findsOneWidget);
+    expect(find.text('FCHBMEZ-LONG-CODE-A'), findsOneWidget);
+    expect(find.text('2029.9.7'), findsOneWidget);
+    expect(find.text('可用 3500 箱'), findsOneWidget);
+    expect(find.text('FCHBMEZ-LONG-CODE-B'), findsOneWidget);
+    expect(find.text('2029.9.8'), findsOneWidget);
+    expect(find.text('可用 3480 箱'), findsOneWidget);
   });
 
   test('delete order item syncs reserved boxes immediately', () async {
@@ -498,7 +558,8 @@ void main() {
     expect(await stockDao.currentBoxesForBatch(batchId), 100);
   });
 
-  test('delete done order clears outbound movement and restores stock', () async {
+  test('delete done order clears outbound movement and restores stock',
+      () async {
     final productId = await productDao.createProduct(
       code: '73002',
       name: '测试产品2',
@@ -545,11 +606,12 @@ void main() {
     expect(movementAfter, isEmpty);
   });
 }
-  Finder richTextContaining(String text) {
-    return find.byWidgetPredicate((widget) {
-      if (widget is RichText) {
-        return widget.text.toPlainText().contains(text);
-      }
-      return false;
-    });
-  }
+
+Finder richTextContaining(String text) {
+  return find.byWidgetPredicate((widget) {
+    if (widget is RichText) {
+      return widget.text.toPlainText().contains(text);
+    }
+    return false;
+  });
+}
