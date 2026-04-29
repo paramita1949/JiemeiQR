@@ -594,16 +594,16 @@ class _LineCard extends StatelessWidget {
             children: [
               Expanded(
                 child: RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   text: TextSpan(
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
                     ),
                     children: [
-                      TextSpan(
-                        text: line.product.code,
-                        style: const TextStyle(color: Color(0xFFDC2626)),
-                      ),
+                      TextSpan(text: line.product.code),
                       const TextSpan(
                         text: ' · ',
                         style: TextStyle(color: AppTheme.textPrimary),

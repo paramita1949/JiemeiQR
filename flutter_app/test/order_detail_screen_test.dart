@@ -5,6 +5,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/orders/order_completion_service.dart';
 import 'package:qrscan_flutter/features/orders/order_detail_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
@@ -428,6 +429,120 @@ void main() {
     expect(hasRedDiffForBatchB, isTrue);
     expect(hasNormalSharedForBatchA, isTrue);
     expect(hasNormalSharedForBatchB, isTrue);
+  });
+
+  testWidgets('line title keeps product normal and date red in one line',
+      (tester) async {
+    final orderId = await seedOrder();
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    final target = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .firstWhere((widget) => widget.text.toPlainText().contains('72067'));
+    expect(target.maxLines, 1);
+    expect(target.overflow, TextOverflow.ellipsis);
+
+    final root = target.text as TextSpan;
+    final children = root.children ?? const <InlineSpan>[];
+    final productSpan = children.whereType<TextSpan>().firstWhere(
+          (span) => (span.text ?? '').contains('72067'),
+        );
+    final dateSpan = children.whereType<TextSpan>().firstWhere(
+          (span) => (span.text ?? '').contains('2029.9.7'),
+        );
+
+    expect(productSpan.style?.color, isNot(const Color(0xFFDC2626)));
+    expect(dateSpan.style?.color, const Color(0xFFDC2626));
+  });
+
+  test('delete order item syncs reserved boxes immediately', () async {
+    final productId = await productDao.createProduct(
+      code: '73001',
+      name: '测试产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'RESERVE-A',
+      dateBatch: '2029.9.9',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'RESERVE-DEL-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 29),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchId,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    final itemBefore = await (database.select(database.orderItems)
+          ..where((table) => table.orderId.equals(orderId)))
+        .getSingle();
+    final rowsBefore = await stockDao.inventoryDetailRows();
+    final rowBefore = rowsBefore.firstWhere((row) => row.batch.id == batchId);
+    expect(rowBefore.reservedBoxes, 20);
+    expect(rowBefore.availableBoxes, 80);
+
+    await orderDao.deleteOrderItem(itemId: itemBefore.id);
+
+    final rowsAfter = await stockDao.inventoryDetailRows();
+    final rowAfter = rowsAfter.firstWhere((row) => row.batch.id == batchId);
+    expect(rowAfter.reservedBoxes, 0);
+    expect(rowAfter.availableBoxes, 100);
+    expect(await stockDao.currentBoxesForBatch(batchId), 100);
+  });
+
+  test('delete done order clears outbound movement and restores stock', () async {
+    final productId = await productDao.createProduct(
+      code: '73002',
+      name: '测试产品2',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'RESERVE-B',
+      dateBatch: '2029.9.10',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'RESERVE-DEL-2',
+      merchantName: '洁美B',
+      orderDate: DateTime(2026, 4, 29),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchId,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    final completionService = OrderCompletionService(database);
+    await completionService.complete(orderId);
+    expect(await stockDao.currentBoxesForBatch(batchId), 80);
+
+    final rowsDone = await stockDao.inventoryDetailRows();
+    final rowDone = rowsDone.firstWhere((row) => row.batch.id == batchId);
+    expect(rowDone.reservedBoxes, 0);
+
+    await orderDao.deleteOrder(orderId);
+
+    expect(await stockDao.currentBoxesForBatch(batchId), 100);
+    final orderAfter = await (database.select(database.orders)
+          ..where((table) => table.id.equals(orderId)))
+        .getSingleOrNull();
+    expect(orderAfter, isNull);
+    final movementAfter = await (database.select(database.stockMovements)
+          ..where((table) => table.orderId.equals(orderId)))
+        .get();
+    expect(movementAfter, isEmpty);
   });
 }
   Finder richTextContaining(String text) {
