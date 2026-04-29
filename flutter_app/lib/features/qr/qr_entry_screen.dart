@@ -14,19 +14,12 @@ class QrEntryScreen extends StatefulWidget {
 }
 
 class _QrEntryScreenState extends State<QrEntryScreen> {
-  final _manualContentController = TextEditingController();
   int _groupCount = 100;
   double _autoSlideSeconds = 1.0;
   bool _randomTailEnabled = true;
   int _randomTailDigits = 3;
   ParsedQr? _lastParsed;
   QrBuildResult? _lastBuildResult;
-
-  @override
-  void dispose() {
-    _manualContentController.dispose();
-    super.dispose();
-  }
 
   Future<void> _startScan() => _openScannerAndPreview(startFromGallery: false);
 
@@ -45,6 +38,41 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
     _parseAndPreview(result);
   }
 
+  Future<void> _startManualInput() async {
+    final controller = TextEditingController();
+    final content = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('手动输入箱码'),
+        content: TextField(
+          key: const Key('manualQrContentField'),
+          controller: controller,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: '箱码内容',
+            hintText: '00720680088454517EL3FJEZ31',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('manualQrConfirmButton'),
+            onPressed: () =>
+                Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || content == null || content.isEmpty) {
+      return;
+    }
+    _parseAndPreview(content);
+  }
+
   void _parseAndPreview(String content) {
     final parsed = QrParser.parse(content);
     if (parsed == null) {
@@ -55,10 +83,6 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
     }
     setState(() => _lastParsed = parsed);
     _openPreview();
-  }
-
-  void _previewManualContent() {
-    _parseAndPreview(_manualContentController.text.trim());
   }
 
   void _openPreview({int? startSerial}) {
@@ -190,11 +214,10 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                 subtitle: '扫描后配置生成规则',
               ),
               const SizedBox(height: 12),
-              _ScanCard(onScan: _startScan, onImportImage: _startFromGallery),
-              const SizedBox(height: 12),
-              _ManualQrCard(
-                controller: _manualContentController,
-                onPreview: _previewManualContent,
+              _ScanCard(
+                onScan: _startScan,
+                onImportImage: _startFromGallery,
+                onManualInput: _startManualInput,
               ),
               const SizedBox(height: 12),
               _GenerateParamCard(
@@ -260,51 +283,16 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   }
 }
 
-class _ManualQrCard extends StatelessWidget {
-  const _ManualQrCard({
-    required this.controller,
-    required this.onPreview,
-  });
-
-  final TextEditingController controller;
-  final VoidCallback onPreview;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      color: const Color(0xFFFFF7ED),
-      children: [
-        const _PanelTitle('手动输入箱码'),
-        const SizedBox(height: 8),
-        TextField(
-          key: const Key('manualQrContentField'),
-          controller: controller,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(
-            labelText: '箱码内容',
-            hintText: '00720680088454517EL3FJEZ31',
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            key: const Key('manualQrPreviewButton'),
-            onPressed: onPreview,
-            icon: const Icon(Icons.qr_code_2_outlined),
-            label: const Text('生成二维码预览'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ScanCard extends StatelessWidget {
-  const _ScanCard({required this.onScan, required this.onImportImage});
+  const _ScanCard({
+    required this.onScan,
+    required this.onImportImage,
+    required this.onManualInput,
+  });
 
   final VoidCallback onScan;
   final VoidCallback onImportImage;
+  final VoidCallback onManualInput;
 
   @override
   Widget build(BuildContext context) {
@@ -336,6 +324,16 @@ class _ScanCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonalIcon(
+            key: const Key('manualQrInputEntryButton'),
+            onPressed: onManualInput,
+            icon: const Icon(Icons.keyboard_outlined),
+            label: const Text('手动输入'),
+          ),
         ),
       ],
     );
