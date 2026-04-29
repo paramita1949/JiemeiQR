@@ -83,17 +83,34 @@ void main() {
     expect(find.text('库存明细'), findsWidgets);
     expect(find.text('总库存'), findsOneWidget);
     expect(find.text('2,400 件'), findsOneWidget);
-    expect(find.text('72067 · FCHBLEZ'), findsOneWidget);
-    expect(find.text('2029.9.7'), findsOneWidget);
+    expect(richTextContaining('72067 · FCHBLEZ'), findsOneWidget);
+    expect(richTextContaining('2029.9.7'), findsOneWidget);
     expect(find.text('可用 80箱'), findsOneWidget);
     expect(find.text('2板'), findsOneWidget);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
     expect(find.text('TS'), findsOneWidget);
     expect(find.text('已发过'), findsOneWidget);
     expect(find.text('随时修改'), findsOneWidget);
+    final dateRichText = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .firstWhere((widget) => widget.text.toPlainText().contains('2029.9.7'));
+    final dateSpan = dateRichText.text as TextSpan;
+    final flatSpans = <TextSpan>[];
+    void collect(TextSpan span) {
+      flatSpans.add(span);
+      for (final child in span.children ?? const <InlineSpan>[]) {
+        if (child is TextSpan) {
+          collect(child);
+        }
+      }
+    }
+
+    collect(dateSpan);
     expect(
-      tester.widget<Text>(find.text('2029.9.7')).style?.color,
-      const Color(0xFFB91C1C),
+      flatSpans.any((span) =>
+          (span.text ?? '').contains('2029.9.7') &&
+          span.style?.color == const Color(0xFFB91C1C)),
+      isTrue,
     );
     expect(
       tester.widget<Text>(find.text('已发过')).style?.color,
@@ -117,7 +134,7 @@ void main() {
     await tester.tap(find.text('零库存'));
     await tester.pumpAndSettle();
 
-    final batchFinder = find.text('20380 · ELMAXEZ');
+    final batchFinder = richTextContaining('20380 · ELMAXEZ');
     for (var i = 0; i < 2; i += 1) {
       if (batchFinder.evaluate().isNotEmpty) {
         break;
@@ -126,8 +143,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('20380 · ELMAXEZ'), findsOneWidget);
-    expect(find.text('2029.6.14'), findsOneWidget);
+    expect(richTextContaining('20380 · ELMAXEZ'), findsOneWidget);
+    expect(richTextContaining('2029.6.14'), findsOneWidget);
     expect(find.text('已空'), findsOneWidget);
 
     await tester.tap(find.byTooltip('编辑备注').first);
@@ -162,8 +179,8 @@ void main() {
     await tester.tap(find.byKey(const Key('inventory-group-72067')));
     await tester.pumpAndSettle();
 
-    final earlyY = tester.getTopLeft(find.text('2029.9.6')).dy;
-    final lateY = tester.getTopLeft(find.text('2029.9.7')).dy;
+    final earlyY = tester.getTopLeft(richTextContaining('2029.9.6')).dy;
+    final lateY = tester.getTopLeft(richTextContaining('2029.9.7')).dy;
     expect(earlyY, lessThan(lateY));
   });
 
@@ -231,19 +248,19 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('BATCH-A'), findsNothing);
-    expect(find.textContaining('BATCH-B'), findsNothing);
+    expect(richTextContaining('BATCH-A'), findsNothing);
+    expect(richTextContaining('BATCH-B'), findsNothing);
 
     await tester.tap(find.byKey(const Key('inventory-group-72067')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('BATCH-A'), findsOneWidget);
-    expect(find.textContaining('BATCH-B'), findsOneWidget);
+    expect(richTextContaining('BATCH-A'), findsOneWidget);
+    expect(richTextContaining('BATCH-B'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('inventory-group-72067')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('BATCH-A'), findsNothing);
-    expect(find.textContaining('BATCH-B'), findsNothing);
+    expect(richTextContaining('BATCH-A'), findsNothing);
+    expect(richTextContaining('BATCH-B'), findsNothing);
   });
 
   testWidgets('opens base info edit from inventory row', (tester) async {
@@ -280,7 +297,7 @@ void main() {
     await tester.tap(find.byKey(const Key('inventory-group-72067')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('DEL-BATCH'), findsOneWidget);
+    expect(richTextContaining('DEL-BATCH'), findsOneWidget);
     await tester.tap(find.byTooltip('删除批号').first);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '删除'));
@@ -291,6 +308,75 @@ void main() {
           ..where((table) => table.id.equals(batchId)))
         .getSingleOrNull();
     expect(deleted, isNull);
+  });
+
+  testWidgets('highlights only differing batch letters for same-date batches',
+      (tester) async {
+    await seedBatch(
+      code: '72067',
+      batch: 'FCHBLEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+    await seedBatch(
+      code: '72067',
+      batch: 'FCHBMHEZ',
+      dateBatch: '2029.9.7',
+      initialBoxes: 10,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory-group-72067')));
+    await tester.pumpAndSettle();
+
+    final richTexts = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .where((widget) =>
+            widget.text.toPlainText().contains('FCHBLEZ') ||
+            widget.text.toPlainText().contains('FCHBMHEZ'))
+        .toList();
+    expect(richTexts, isNotEmpty);
+
+    bool hasRedDiffForA = false;
+    bool hasRedDiffForB = false;
+    bool hasNormalSharedForA = false;
+    bool hasNormalSharedForB = false;
+
+    for (final richText in richTexts) {
+      final root = richText.text;
+      if (root is! TextSpan) {
+        continue;
+      }
+      final allSpans = <TextSpan>[];
+      void collect(TextSpan span) {
+        allSpans.add(span);
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          if (child is TextSpan) {
+            collect(child);
+          }
+        }
+      }
+
+      collect(root);
+      final hasRed = allSpans.any((span) => span.style?.color == const Color(0xFFDC2626));
+      final hasNormal =
+          allSpans.any((span) => span.style?.color == AppTheme.textPrimary);
+      final plain = root.toPlainText();
+      if (plain.contains('FCHBLEZ')) {
+        hasRedDiffForA = hasRed;
+        hasNormalSharedForA = hasNormal;
+      }
+      if (plain.contains('FCHBMHEZ')) {
+        hasRedDiffForB = hasRed;
+        hasNormalSharedForB = hasNormal;
+      }
+    }
+
+    expect(hasRedDiffForA, isTrue);
+    expect(hasRedDiffForB, isTrue);
+    expect(hasNormalSharedForA, isTrue);
+    expect(hasNormalSharedForB, isTrue);
   });
 
   testWidgets('quick product tag supports toggle unselect', (tester) async {
@@ -318,7 +404,7 @@ void main() {
 
     expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
     expect(find.byKey(const Key('inventory-group-20380')), findsNothing);
-    expect(find.textContaining('A-BATCH'), findsOneWidget);
+    expect(richTextContaining('A-BATCH'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('inventoryQuick-72067')));
     await tester.pumpAndSettle();
@@ -350,7 +436,7 @@ void main() {
 
     expect(find.byKey(const Key('inventoryFilterClearButton')), findsOneWidget);
     expect(find.byKey(const Key('inventory-group-20380')), findsNothing);
-    expect(find.textContaining('A-BATCH'), findsOneWidget);
+    expect(richTextContaining('A-BATCH'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('inventoryFilterClearButton')));
     await tester.pumpAndSettle();
@@ -358,5 +444,14 @@ void main() {
     expect(find.byKey(const Key('inventory-group-72067')), findsOneWidget);
     expect(find.byKey(const Key('inventory-group-20380')), findsOneWidget);
     expect(find.byKey(const Key('inventoryFilterClearButton')), findsNothing);
+  });
+}
+
+Finder richTextContaining(String text) {
+  return find.byWidgetPredicate((widget) {
+    if (widget is RichText) {
+      return widget.text.toPlainText().contains(text);
+    }
+    return false;
   });
 }

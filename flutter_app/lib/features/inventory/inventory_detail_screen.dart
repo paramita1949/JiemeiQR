@@ -345,6 +345,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
 
   List<Widget> _buildGroupedRows(List<InventoryDetailRow> rows) {
     final widgets = <Widget>[];
+    final duplicateDateKeys = _duplicateBatchDateKeys(rows);
+    final batchCodesByKey = _batchCodesByProductDate(rows);
     String? currentProductCode;
     var currentGroupCollapsed = false;
     for (final row in rows) {
@@ -382,6 +384,11 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
           padding: const EdgeInsets.only(bottom: 10),
           child: _InventoryRowCard(
             row: row,
+            highlightBatch: duplicateDateKeys
+                .contains('${row.product.code}|${row.batch.dateBatch}'),
+            batchCodeVariants:
+                batchCodesByKey['${row.product.code}|${row.batch.dateBatch}'] ??
+                    const <String>[],
             onEditRemark: () => _editRemark(row),
             onEditBaseInfo: () => _editBaseInfo(row),
             onDeleteBatch: () => _deleteBatch(row),
@@ -652,12 +659,16 @@ class _ProductGroupHeader extends StatelessWidget {
 class _InventoryRowCard extends StatelessWidget {
   const _InventoryRowCard({
     required this.row,
+    required this.highlightBatch,
+    required this.batchCodeVariants,
     required this.onEditRemark,
     required this.onEditBaseInfo,
     required this.onDeleteBatch,
   });
 
   final InventoryDetailRow row;
+  final bool highlightBatch;
+  final List<String> batchCodeVariants;
   final VoidCallback onEditRemark;
   final VoidCallback onEditBaseInfo;
   final VoidCallback onDeleteBatch;
@@ -686,27 +697,31 @@ class _InventoryRowCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      '${row.product.code} · ${row.batch.actualBatch}',
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+                child: RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
                     ),
-                    Text(
-                      row.batch.dateBatch,
-                      style: const TextStyle(
-                        color: Color(0xFFB91C1C),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
+                    children: [
+                      TextSpan(text: '${row.product.code} · '),
+                      TextSpan(
+                        children: _batchCodeSpans(
+                          row.batch.actualBatch,
+                          variants: batchCodeVariants,
+                          highlightDifferences: highlightBatch,
+                        ),
                       ),
-                    ),
-                  ],
+                      const TextSpan(text: ' · '),
+                      TextSpan(
+                        text: row.batch.dateBatch,
+                        style: const TextStyle(color: Color(0xFFB91C1C)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (row.isZeroStock)
@@ -848,6 +863,74 @@ class _StatusPill extends StatelessWidget {
       ),
     );
   }
+}
+
+Set<String> _duplicateBatchDateKeys(List<InventoryDetailRow> rows) {
+  final counts = <String, int>{};
+  for (final row in rows) {
+    final key = '${row.product.code}|${row.batch.dateBatch}';
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts.entries
+      .where((entry) => entry.value > 1)
+      .map((entry) => entry.key)
+      .toSet();
+}
+
+Map<String, List<String>> _batchCodesByProductDate(List<InventoryDetailRow> rows) {
+  final map = <String, List<String>>{};
+  for (final row in rows) {
+    final key = '${row.product.code}|${row.batch.dateBatch}';
+    map.putIfAbsent(key, () => <String>[]).add(row.batch.actualBatch);
+  }
+  return map;
+}
+
+List<InlineSpan> _batchCodeSpans(
+  String code, {
+  required List<String> variants,
+  required bool highlightDifferences,
+}) {
+  if (!highlightDifferences || variants.length <= 1) {
+    return [
+      TextSpan(
+        text: code,
+        style: const TextStyle(color: AppTheme.textPrimary),
+      ),
+    ];
+  }
+
+  final unique = variants.toSet().toList()..sort();
+  if (unique.length <= 1) {
+    return [
+      TextSpan(
+        text: code,
+        style: const TextStyle(color: AppTheme.textPrimary),
+      ),
+    ];
+  }
+
+  final maxLen = unique.map((item) => item.length).fold<int>(0, (a, b) => a > b ? a : b);
+  final diffIndexes = <int>{};
+  for (var i = 0; i < maxLen; i += 1) {
+    final chars = unique.map((item) => i < item.length ? item[i] : '').toSet();
+    if (chars.length > 1) {
+      diffIndexes.add(i);
+    }
+  }
+
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < code.length; i += 1) {
+    spans.add(
+      TextSpan(
+        text: code[i],
+        style: TextStyle(
+          color: diffIndexes.contains(i) ? const Color(0xFFDC2626) : AppTheme.textPrimary,
+        ),
+      ),
+    );
+  }
+  return spans;
 }
 
 class _EmptyState extends StatelessWidget {
