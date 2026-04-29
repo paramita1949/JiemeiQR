@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 
+import 'package:archive/archive.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +43,56 @@ class _NoopBackupService extends BackupService {
 
   @override
   Future<List<BackupSnapshot>> listLocalBackups() async => const [];
+}
+
+class _ShareImportBackupService extends BackupService {
+  _ShareImportBackupService()
+      : super(
+          databaseFileName: 'jiemei.sqlite',
+          nowProvider: () => DateTime(2026, 4, 30, 17, 0, 0),
+        );
+
+  int createSharePackageCalls = 0;
+  String? sharedSnapshotPath;
+  String? importedPackagePath;
+
+  final snapshot = BackupSnapshot(
+    fileName: 'jiemei-backup-20260430-160000.sqlite',
+    filePath: 'C:/tmp/jiemei-backup-20260430-160000.sqlite',
+    createdAt: DateTime(2026, 4, 30, 16, 0, 0),
+    sizeBytes: 1024,
+    reason: BackupReason.manual,
+  );
+
+  @override
+  Future<BackupSchedule> getBackupSchedule() async => BackupSchedule.off;
+
+  @override
+  Future<BackupResult?> runAutoBackupIfDue() async => null;
+
+  @override
+  Future<List<BackupSnapshot>> listLocalBackups() async => [snapshot];
+
+  @override
+  Future<SharePackageResult> createSharePackage({String? snapshotPath}) async {
+    createSharePackageCalls += 1;
+    sharedSnapshotPath = snapshotPath;
+    return SharePackageResult(
+      fileName: 'jiemei-backup-20260430-170000.jiemei',
+      filePath: 'C:/tmp/jiemei-backup-20260430-170000.jiemei',
+      createdAt: DateTime(2026, 4, 30, 17, 0, 0),
+    );
+  }
+
+  @override
+  Future<ImportResult> importSharedBackupPackage(String incomingPath) async {
+    importedPackagePath = incomingPath;
+    return const ImportResult(
+      importedFromPath: 'C:/tmp/incoming.jiemei',
+      backupFilePath: 'C:/tmp/protected.sqlite',
+      backupFileName: 'protected.sqlite',
+    );
+  }
 }
 
 class _ImmediateReceiveLanTransferService extends LanTransferService {
@@ -111,6 +162,7 @@ class _FakeSendLanTransferService extends LanTransferService {
     return SendSession(
       pairingCode: '123456',
       baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 54022),
+      baseUris: [Uri(scheme: 'http', host: '127.0.0.1', port: 54022)],
       packageDirectoryPath: '/tmp',
       manifestPath: '/tmp/manifest',
       databaseFilePath: '/tmp/jiemei.sqlite',
@@ -343,6 +395,71 @@ void main() {
     expect(manifest['pairingCode'], '123456');
   });
 
+  test('backup service creates share package with manifest and sqlite snapshot',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp('jiemei-share-test-');
+    final sourceFile = File('${tempDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(sourceFile, productCode: 'SHARE');
+
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => DateTime(2026, 4, 30, 15, 20, 0),
+    );
+
+    final package = await service.createSharePackage();
+
+    expect(package.fileName, 'jiemei-backup-20260430-152000.jiemei');
+    expect(await File(package.filePath).exists(), isTrue);
+
+    final archive = ZipDecoder().decodeBytes(
+      await File(package.filePath).readAsBytes(),
+    );
+    final names = archive.files.map((file) => file.name).toSet();
+    expect(names, contains('manifest.json'));
+    expect(names, contains('jiemei.sqlite'));
+
+    final manifestFile =
+        archive.files.singleWhere((file) => file.name == 'manifest.json');
+    final manifest = jsonDecode(
+      utf8.decode(manifestFile.content as List<int>),
+    ) as Map<String, dynamic>;
+    expect(manifest['type'], 'jiemei-backup-share');
+    expect(manifest['databaseFileName'], 'jiemei.sqlite');
+    expect(manifest['createdAt'], '2026-04-30T15:20:00.000');
+  });
+
+  test('backup service imports shared package through protected restore',
+      () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-share-sender-');
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(senderDb, productCode: 'FROM_SHARE');
+    final senderService = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => senderDir,
+      nowProvider: () => DateTime(2026, 4, 30, 15, 30, 0),
+    );
+    final package = await senderService.createSharePackage();
+
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-share-receiver-');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(receiverDb, productCode: 'CURRENT');
+    final receiverService = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => receiverDir,
+      nowProvider: () => DateTime(2026, 4, 30, 16, 0, 0),
+    );
+
+    final result =
+        await receiverService.importSharedBackupPackage(package.filePath);
+
+    expect(_productCodes(receiverDb), ['FROM_SHARE']);
+    expect(result.importedFromPath, package.filePath);
+    expect(await File(result.backupFilePath).exists(), isTrue);
+  });
+
   test('backup service imports database with sql overwrite, not file replace',
       () async {
     final tempDir =
@@ -487,14 +604,84 @@ void main() {
     );
 
     expect(find.text('数据备份'), findsWidgets);
+    expect(find.text('快照恢复 + 局域网互传'), findsNothing);
     expect(find.text('发送'), findsOneWidget);
     expect(find.text('接收'), findsOneWidget);
-    expect(find.text('本地备份'), findsOneWidget);
+    expect(find.text('生成二维码'), findsNothing);
+    expect(find.text('本地备份'), findsNothing);
+    expect(find.text('传到电脑'), findsNothing);
     expect(find.text('自动备份'), findsOneWidget);
     expect(find.text('每天一次'), findsOneWidget);
     expect(find.text('每周一次'), findsOneWidget);
     expect(find.textContaining('发送地址'), findsNothing);
     expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('backup panel uses refined advanced action layout',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: _ShareImportBackupService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('生成并分享'), findsNothing);
+    expect(find.text('高级操作'), findsNothing);
+    expect(find.text('生成备份'), findsOneWidget);
+    expect(find.text('导入备份'), findsOneWidget);
+    expect(find.text('清理备份'), findsOneWidget);
+    expect(find.text('重置数据'), findsOneWidget);
+    expect(find.textContaining('.jiemei / .sqlite'), findsOneWidget);
+    expect(find.textContaining('保留最近30个'), findsOneWidget);
+    expect(find.textContaining('重置前自动备份'), findsOneWidget);
+  });
+
+  testWidgets('shares selected snapshot and imports selected backup file',
+      (tester) async {
+    final backupService = _ShareImportBackupService();
+    String? sharedPath;
+    var reloadCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: backupService,
+          shareFile: (path, fileName) async => sharedPath = path,
+          pickImportFile: () async => 'C:/tmp/incoming.jiemei',
+          onImportCompleted: ({bool seedIfEmpty = true}) async {
+            reloadCalled = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('分享'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -480));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分享'));
+    await tester.pumpAndSettle();
+    expect(
+      backupService.sharedSnapshotPath,
+      'C:/tmp/jiemei-backup-20260430-160000.sqlite',
+    );
+    expect(sharedPath, 'C:/tmp/jiemei-backup-20260430-170000.jiemei');
+
+    expect(find.text('导入备份'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -160));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导入备份'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认导入'));
+    await tester.pumpAndSettle();
+
+    expect(backupService.importedPackagePath, 'C:/tmp/incoming.jiemei');
+    expect(reloadCalled, isTrue);
   });
 
   testWidgets('reset database reopens without seeding embedded stock',
@@ -527,7 +714,9 @@ void main() {
 
     await tester.tap(find.text('打开数据备份'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('重置数据库'));
+    await tester.drag(find.byType(ListView), const Offset(0, -220));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重置数据'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确认重置'));
     await tester.pumpAndSettle();
@@ -620,7 +809,7 @@ void main() {
     expect(find.text('接收完成'), findsOneWidget);
   });
 
-  testWidgets('send panel shows nearby waiting state and fallback pairing code',
+  testWidgets('send panel keeps status text minimal with fallback pairing code',
       (tester) async {
     final lanTransferService = _FakeSendLanTransferService();
     await tester.pumpWidget(
@@ -636,10 +825,15 @@ void main() {
     await tester.tap(find.text('发送'));
     await tester.pump();
 
-    expect(find.text('等待附近设备接收'), findsOneWidget);
+    expect(find.text('等待附近设备接收'), findsNothing);
+    expect(find.text('接收端会自动发现本机，也可用配对码兜底'), findsNothing);
+    expect(find.text('等待接收端输入并连接...'), findsNothing);
     expect(find.text('123456'), findsOneWidget);
     expect(find.text('复制二维码内容'), findsNothing);
     expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.text('停止'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('发送已停止'), findsNothing);
   });
 
   testWidgets('sender confirms nearby receive request', (tester) async {

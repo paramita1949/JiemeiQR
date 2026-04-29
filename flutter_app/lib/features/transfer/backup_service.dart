@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
@@ -55,6 +56,8 @@ class BackupService {
   final NowProvider? nowProvider;
   final RandomIntProvider? randomIntProvider;
   static const int maxSnapshotCount = 90;
+  static const Duration dailyAutoBackupInterval = Duration(hours: 24);
+  static const Duration weeklyAutoBackupInterval = Duration(days: 7);
 
   BackupDraft createLocalBackupDraft() {
     final now = (nowProvider ?? DateTime.now)();
@@ -236,9 +239,9 @@ class BackupService {
     final now = (nowProvider ?? DateTime.now)();
     final due = switch (schedule) {
       BackupSchedule.daily => lastAutoBackupAt == null ||
-          now.difference(lastAutoBackupAt).inHours >= 24,
+          now.difference(lastAutoBackupAt) >= dailyAutoBackupInterval,
       BackupSchedule.weekly => lastAutoBackupAt == null ||
-          now.difference(lastAutoBackupAt).inDays >= 7,
+          now.difference(lastAutoBackupAt) >= weeklyAutoBackupInterval,
       BackupSchedule.off => false,
     };
     if (!due) {
@@ -295,6 +298,113 @@ class BackupService {
       databaseFilePath: packageDb.path,
       manifestPath: manifestFile.path,
       pairingCode: pairingCode,
+    );
+  }
+
+  Future<SharePackageResult> createSharePackage({String? snapshotPath}) async {
+    final now = (nowProvider ?? DateTime.now)();
+    final documentsDir = await _documentsDirectory();
+    final source =
+        snapshotPath == null ? await _databaseFile() : File(snapshotPath);
+    if (!await source.exists()) {
+      throw BackupSourceMissingException(source.path);
+    }
+
+    final stamp = _fileStamp(now);
+    final shareDir = Directory(p.join(documentsDir.path, 'shares'));
+    if (!await shareDir.exists()) {
+      await shareDir.create(recursive: true);
+    }
+
+    final fileName = 'jiemei-backup-$stamp.jiemei';
+    final packageFile = File(p.join(shareDir.path, fileName));
+    final databaseBytes = await source.readAsBytes();
+    final manifestBytes = utf8.encode(
+      jsonEncode({
+        'type': 'jiemei-backup-share',
+        'version': 1,
+        'createdAt': now.toIso8601String(),
+        'databaseFileName': databaseFileName,
+        'sourceFileName': p.basename(source.path),
+      }),
+    );
+
+    final archive = Archive()
+      ..addFile(
+          ArchiveFile('manifest.json', manifestBytes.length, manifestBytes))
+      ..addFile(
+          ArchiveFile(databaseFileName, databaseBytes.length, databaseBytes));
+    final encoded = ZipEncoder().encode(archive);
+    await packageFile.writeAsBytes(encoded, flush: true);
+
+    return SharePackageResult(
+      fileName: fileName,
+      filePath: packageFile.path,
+      createdAt: now,
+    );
+  }
+
+  Future<ImportResult> importSharedBackupPackage(String incomingPath) async {
+    if (p.extension(incomingPath).toLowerCase() == '.sqlite') {
+      return importDatabaseFromPath(incomingPath);
+    }
+
+    final incoming = File(incomingPath);
+    if (!await incoming.exists()) {
+      throw ImportSourceMissingException(incomingPath);
+    }
+
+    late final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(await incoming.readAsBytes());
+    } on Object {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+
+    ArchiveFile? manifestFile;
+    ArchiveFile? databaseFile;
+    for (final file in archive.files) {
+      if (file.name == 'manifest.json') {
+        manifestFile = file;
+      } else if (p.basename(file.name) == databaseFileName) {
+        databaseFile = file;
+      }
+    }
+    if (manifestFile == null || databaseFile == null) {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+
+    try {
+      final manifest = jsonDecode(
+        utf8.decode(_archiveContentBytes(manifestFile)),
+      );
+      if (manifest is! Map<String, dynamic> ||
+          manifest['type'] != 'jiemei-backup-share') {
+        throw const FormatException('invalid manifest');
+      }
+    } on Object {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+
+    final tempDir = Directory(p.join(
+      (await _documentsDirectory()).path,
+      'imports',
+      _fileStamp((nowProvider ?? DateTime.now)()),
+    ));
+    if (!await tempDir.exists()) {
+      await tempDir.create(recursive: true);
+    }
+    final extractedDatabase = File(p.join(tempDir.path, databaseFileName));
+    await extractedDatabase.writeAsBytes(
+      _archiveContentBytes(databaseFile),
+      flush: true,
+    );
+
+    final result = await importDatabaseFromPath(extractedDatabase.path);
+    return ImportResult(
+      importedFromPath: incomingPath,
+      backupFilePath: result.backupFilePath,
+      backupFileName: result.backupFileName,
     );
   }
 
@@ -538,6 +648,8 @@ class BackupService {
     }
     return null;
   }
+
+  List<int> _archiveContentBytes(ArchiveFile file) => file.content;
 }
 
 const _businessTables = <String>[
@@ -670,6 +782,18 @@ class SendPackageResult {
   final String databaseFilePath;
   final String manifestPath;
   final String pairingCode;
+}
+
+class SharePackageResult {
+  const SharePackageResult({
+    required this.fileName,
+    required this.filePath,
+    required this.createdAt,
+  });
+
+  final String fileName;
+  final String filePath;
+  final DateTime createdAt;
 }
 
 class ImportSourceMissingException implements Exception {

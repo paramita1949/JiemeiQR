@@ -11,6 +11,7 @@ import 'backup_service.dart';
 typedef HttpClientFactory = HttpClient Function();
 typedef TempDirectoryProvider = Future<Directory> Function();
 typedef HostProvider = Future<String> Function();
+typedef HostsProvider = Future<List<String>> Function();
 
 class LanTransferService {
   static const int defaultDiscoveryPort = 54022;
@@ -20,6 +21,7 @@ class LanTransferService {
     HttpClientFactory? httpClientFactory,
     TempDirectoryProvider? tempDirectoryProvider,
     HostProvider? hostProvider,
+    HostsProvider? hostsProvider,
     InternetAddress? bindAddress,
     int discoveryPort = defaultDiscoveryPort,
     InternetAddress? discoveryAddress,
@@ -27,6 +29,7 @@ class LanTransferService {
         _httpClientFactory = httpClientFactory ?? HttpClient.new,
         _tempDirectoryProvider = tempDirectoryProvider ?? getTemporaryDirectory,
         _hostProvider = hostProvider,
+        _hostsProvider = hostsProvider,
         _bindAddress = bindAddress ?? InternetAddress.anyIPv4,
         _discoveryPort = discoveryPort,
         _discoveryAddress =
@@ -36,6 +39,7 @@ class LanTransferService {
   final HttpClientFactory _httpClientFactory;
   final TempDirectoryProvider _tempDirectoryProvider;
   final HostProvider? _hostProvider;
+  final HostsProvider? _hostsProvider;
   final InternetAddress _bindAddress;
   final int _discoveryPort;
   final InternetAddress _discoveryAddress;
@@ -62,8 +66,11 @@ class LanTransferService {
     final server = await HttpServer.bind(_bindAddress, 0);
     _server = server;
 
-    final localHost = await (_hostProvider ?? _preferredLocalHost)();
-    final baseUri = Uri.parse('http://$localHost:${server.port}');
+    final localHosts = await _preferredLocalHosts();
+    final baseUris = localHosts
+        .map((host) => Uri.parse('http://$host:${server.port}'))
+        .toList(growable: false);
+    final baseUri = baseUris.first;
     final sessionId = _randomToken(12);
     final connectionCode = buildConnectionCode(
       baseUrl: baseUri.toString(),
@@ -72,6 +79,7 @@ class LanTransferService {
     final session = SendSession(
       pairingCode: sendPackage.pairingCode,
       baseUri: baseUri,
+      baseUris: baseUris,
       packageDirectoryPath: sendPackage.packageDirectoryPath,
       manifestPath: sendPackage.manifestPath,
       databaseFilePath: sendPackage.databaseFilePath,
@@ -140,14 +148,15 @@ class LanTransferService {
     Duration approvalTimeout = const Duration(seconds: 60),
     Duration approvalPollInterval = const Duration(milliseconds: 500),
   }) async {
+    final reachableSender = await _resolveReachableSender(sender);
     final grantToken = await _requestTransferApproval(
-      sender,
+      reachableSender,
       receiverName: receiverName ?? Platform.localHostname,
       approvalTimeout: approvalTimeout,
       approvalPollInterval: approvalPollInterval,
     );
     return receiveFromSenderWithToken(
-      baseUri: sender.baseUri,
+      baseUri: reachableSender.baseUri,
       transferToken: grantToken,
     );
   }
@@ -220,7 +229,8 @@ class LanTransferService {
         try {
           final text = utf8.decode(datagram!.data);
           final announcement = parseDiscoveryAnnouncement(text);
-          found[announcement.baseUri.toString()] = announcement;
+          found['${announcement.deviceId}:${announcement.sessionId}'] =
+              announcement;
         } on Object {
           // Ignore unrelated UDP traffic on the same network.
         }
@@ -234,7 +244,8 @@ class LanTransferService {
     );
     socket.send(utf8.encode(probe), _discoveryAddress, _discoveryPort);
     timer = Timer(timeout, finish);
-    return completer.future;
+    final announcements = await completer.future;
+    return _resolveReachableSenders(announcements);
   }
 
   Future<ReceiveResult> receiveFromSender({
@@ -437,6 +448,21 @@ class LanTransferService {
 
   Future<void> _handleRequest(HttpRequest request, SendSession session) async {
     final path = request.uri.path;
+    if (request.method == 'GET' && path == '/hello') {
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(
+        jsonEncode({
+          'type': 'jiemei-transfer-hello',
+          'version': 2,
+          'sessionId': session.sessionId,
+          'deviceId': session.deviceId,
+          'deviceName': Platform.localHostname,
+          'platform': Platform.operatingSystem,
+        }),
+      );
+      await request.response.close();
+      return;
+    }
     if (request.method == 'POST' && path == '/transfer/request') {
       await _handleTransferRequest(request, session);
       return;
@@ -596,23 +622,135 @@ class LanTransferService {
     return file.path;
   }
 
-  Future<String> _preferredLocalHost() async {
+  Future<List<String>> _preferredLocalHosts() async {
+    if (_hostsProvider != null) {
+      final hosts = _rankLocalHosts(await _hostsProvider());
+      if (hosts.isNotEmpty) {
+        return hosts;
+      }
+    }
+    if (_hostProvider != null) {
+      return [await _hostProvider()];
+    }
     try {
       final interfaces = await NetworkInterface.list(
         includeLoopback: false,
         type: InternetAddressType.IPv4,
       );
+      final hosts = <_LocalHostCandidate>[];
       for (final interface in interfaces) {
         for (final address in interface.addresses) {
-          if (!address.isLoopback) {
-            return address.address;
+          final candidate = _LocalHostCandidate.tryCreate(
+            host: address.address,
+            interfaceName: interface.name,
+          );
+          if (candidate != null) {
+            hosts.add(candidate);
           }
         }
+      }
+      hosts.sort();
+      final ranked = hosts.map((candidate) => candidate.host).toList();
+      if (ranked.isNotEmpty) {
+        return ranked;
       }
     } catch (_) {
       // fallback to loopback
     }
-    return '127.0.0.1';
+    return ['127.0.0.1'];
+  }
+
+  List<String> _rankLocalHosts(List<String> hosts) {
+    final candidates = hosts
+        .map((host) => _LocalHostCandidate.tryCreate(host: host))
+        .nonNulls
+        .toList();
+    candidates.sort();
+    return candidates.map((candidate) => candidate.host).toList();
+  }
+
+  Future<List<DiscoveryAnnouncement>> _resolveReachableSenders(
+    List<DiscoveryAnnouncement> senders,
+  ) async {
+    final resolved = <DiscoveryAnnouncement>[];
+    for (final sender in senders) {
+      try {
+        resolved.add(await _resolveReachableSender(sender));
+      } on SenderUnavailableException {
+        // Keep undiscoverable stale advertisements out of the device list.
+      }
+    }
+    return resolved;
+  }
+
+  Future<DiscoveryAnnouncement> _resolveReachableSender(
+    DiscoveryAnnouncement sender,
+  ) async {
+    final candidates = sender.candidateBaseUris;
+    if (candidates.length == 1) {
+      await _verifyDiscoveryEndpoint(candidates.first, sender);
+      return sender.copyWith(baseUri: candidates.first);
+    }
+    final completer = Completer<DiscoveryAnnouncement>();
+    Object? lastError;
+    var pending = candidates.length;
+    for (final baseUri in candidates) {
+      unawaited(
+        _verifyDiscoveryEndpoint(baseUri, sender).then((_) {
+          if (!completer.isCompleted) {
+            completer.complete(sender.copyWith(baseUri: baseUri));
+          }
+        }).catchError((Object error) {
+          lastError = error;
+          pending -= 1;
+          if (pending == 0 && !completer.isCompleted) {
+            completer.completeError(
+              SenderUnavailableException(lastError.toString()),
+            );
+          }
+        }),
+      );
+    }
+    try {
+      return await completer.future;
+    } on SenderUnavailableException {
+      rethrow;
+    } on Object catch (error) {
+      throw SenderUnavailableException(error.toString());
+    }
+  }
+
+  Future<void> _verifyDiscoveryEndpoint(
+    Uri baseUri,
+    DiscoveryAnnouncement sender,
+  ) async {
+    final client = _httpClientFactory();
+    try {
+      final request = await client
+          .getUrl(baseUri.resolve('/hello'))
+          .timeout(const Duration(milliseconds: 900));
+      final response =
+          await request.close().timeout(const Duration(milliseconds: 900));
+      if (response.statusCode != HttpStatus.ok) {
+        throw SenderUnavailableException('status=${response.statusCode}');
+      }
+      final body = await utf8
+          .decodeStream(response)
+          .timeout(const Duration(milliseconds: 900));
+      final dynamic parsed = jsonDecode(body);
+      if (parsed is! Map<String, dynamic> ||
+          parsed['type'] != 'jiemei-transfer-hello' ||
+          parsed['sessionId'] != sender.sessionId ||
+          parsed['deviceId'] != sender.deviceId) {
+        throw const SenderUnavailableException('sender identity mismatch');
+      }
+    } on SenderUnavailableException {
+      rethrow;
+    } on Object catch (error) {
+      throw SenderUnavailableException(error.toString());
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<void> _startDiscoveryBroadcast(SendSession session) async {
@@ -622,6 +760,7 @@ class LanTransferService {
     void send() {
       final message = buildDiscoveryAnnouncement(
         baseUrl: session.baseUri.toString(),
+        baseUrls: session.baseUris.map((uri) => uri.toString()).toList(),
         sessionId: session.sessionId,
         deviceId: session.deviceId,
         deviceName: Platform.localHostname,
@@ -641,6 +780,7 @@ class LanTransferService {
           if (isDiscoveryProbe(text)) {
             final message = buildDiscoveryAnnouncement(
               baseUrl: session.baseUri.toString(),
+              baseUrls: session.baseUris.map((uri) => uri.toString()).toList(),
               sessionId: session.sessionId,
               deviceId: session.deviceId,
               deviceName: Platform.localHostname,
@@ -695,6 +835,7 @@ class LanTransferService {
 
   String buildDiscoveryAnnouncement({
     required String baseUrl,
+    List<String>? baseUrls,
     required String sessionId,
     required String deviceId,
     required String deviceName,
@@ -704,6 +845,7 @@ class LanTransferService {
       'type': 'jiemei-transfer-advertisement',
       'version': 2,
       'baseUrl': baseUrl,
+      if (baseUrls != null && baseUrls.isNotEmpty) 'baseUrls': baseUrls,
       'sessionId': sessionId,
       'deviceId': deviceId,
       'deviceName': deviceName,
@@ -741,13 +883,35 @@ class LanTransferService {
     if (baseUri == null || !baseUri.hasAuthority) {
       throw const DiscoveryAnnouncementParseException('baseUrl invalid');
     }
+    final baseUris = _parseBaseUris(payload['baseUrls'], fallback: baseUri);
     return DiscoveryAnnouncement(
       baseUri: baseUri,
+      baseUris: baseUris,
       sessionId: sessionId,
       deviceId: deviceId,
       deviceName: deviceName,
       platform: platform,
     );
+  }
+
+  List<Uri> _parseBaseUris(Object? value, {required Uri fallback}) {
+    if (value is! List) {
+      return [fallback];
+    }
+    final uris = <Uri>[];
+    for (final item in value) {
+      if (item is! String || item.isEmpty) {
+        continue;
+      }
+      final uri = Uri.tryParse(item);
+      if (uri != null && uri.hasAuthority && !uris.contains(uri)) {
+        uris.add(uri);
+      }
+    }
+    if (!uris.contains(fallback)) {
+      uris.insert(0, fallback);
+    }
+    return uris;
   }
 
   String buildConnectionCode({
@@ -796,6 +960,7 @@ class SendSession {
   const SendSession({
     required this.pairingCode,
     required this.baseUri,
+    required this.baseUris,
     required this.packageDirectoryPath,
     required this.manifestPath,
     required this.databaseFilePath,
@@ -806,6 +971,7 @@ class SendSession {
 
   final String pairingCode;
   final Uri baseUri;
+  final List<Uri> baseUris;
   final String packageDirectoryPath;
   final String manifestPath;
   final String databaseFilePath;
@@ -883,17 +1049,118 @@ class ParsedConnectionCode {
 class DiscoveryAnnouncement {
   const DiscoveryAnnouncement({
     required this.baseUri,
+    List<Uri>? baseUris,
     required this.sessionId,
     required this.deviceId,
     required this.deviceName,
     required this.platform,
-  });
+  }) : baseUris = baseUris ?? const [];
 
   final Uri baseUri;
+  final List<Uri> baseUris;
   final String sessionId;
   final String deviceId;
   final String deviceName;
   final String platform;
+
+  List<Uri> get candidateBaseUris {
+    if (baseUris.isEmpty) {
+      return [baseUri];
+    }
+    if (baseUris.contains(baseUri)) {
+      return baseUris;
+    }
+    return [baseUri, ...baseUris];
+  }
+
+  DiscoveryAnnouncement copyWith({Uri? baseUri}) {
+    return DiscoveryAnnouncement(
+      baseUri: baseUri ?? this.baseUri,
+      baseUris: candidateBaseUris,
+      sessionId: sessionId,
+      deviceId: deviceId,
+      deviceName: deviceName,
+      platform: platform,
+    );
+  }
+}
+
+class _LocalHostCandidate implements Comparable<_LocalHostCandidate> {
+  const _LocalHostCandidate({
+    required this.host,
+    required this.interfaceName,
+    required this.score,
+  });
+
+  final String host;
+  final String interfaceName;
+  final int score;
+
+  static _LocalHostCandidate? tryCreate({
+    required String host,
+    String interfaceName = '',
+  }) {
+    final address = InternetAddress.tryParse(host);
+    if (address == null ||
+        address.type != InternetAddressType.IPv4 ||
+        address.isLoopback ||
+        host == '0.0.0.0' ||
+        host.startsWith('169.254.')) {
+      return null;
+    }
+    return _LocalHostCandidate(
+      host: host,
+      interfaceName: interfaceName,
+      score: _score(host, interfaceName),
+    );
+  }
+
+  static int _score(String host, String interfaceName) {
+    var score = 0;
+    final name = interfaceName.toLowerCase();
+    if (_isPrivateLanAddress(host)) {
+      score += 40;
+    }
+    if (name.contains('wlan') ||
+        name.contains('wifi') ||
+        name.startsWith('en') ||
+        name.contains('ethernet') ||
+        name.startsWith('eth')) {
+      score += 30;
+    }
+    if (name.contains('tun') ||
+        name.contains('tap') ||
+        name.contains('vpn') ||
+        name.contains('ppp') ||
+        name.contains('rmnet') ||
+        name.contains('pdp') ||
+        name.contains('cell') ||
+        name.contains('wwan')) {
+      score -= 50;
+    }
+    return score;
+  }
+
+  static bool _isPrivateLanAddress(String host) {
+    final parts = host.split('.').map(int.tryParse).toList(growable: false);
+    if (parts.length != 4 || parts.any((part) => part == null)) {
+      return false;
+    }
+    final first = parts[0]!;
+    final second = parts[1]!;
+    return first == 10 ||
+        (first == 172 && second >= 16 && second <= 31) ||
+        (first == 192 && second == 168);
+  }
+
+  @override
+  int compareTo(_LocalHostCandidate other) {
+    final scoreCompare = other.score.compareTo(score);
+    if (scoreCompare != 0) {
+      return scoreCompare;
+    }
+    return host.compareTo(other.host);
+  }
 }
 
 enum TransferRequestStatus {

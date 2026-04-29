@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
@@ -7,10 +8,16 @@ import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
+import 'package:share_plus/share_plus.dart';
 
 typedef DatabaseReloadCallback = Future<void> Function({
   bool seedIfEmpty,
 });
+typedef BackupShareCallback = Future<void> Function(
+  String path,
+  String fileName,
+);
+typedef BackupImportPicker = Future<String?> Function();
 
 class LanTransferScreen extends StatefulWidget {
   const LanTransferScreen({
@@ -20,6 +27,8 @@ class LanTransferScreen extends StatefulWidget {
     this.lanTransferService,
     this.onPrepareImport,
     this.onImportCompleted,
+    this.shareFile,
+    this.pickImportFile,
   });
 
   final String databasePath;
@@ -27,6 +36,8 @@ class LanTransferScreen extends StatefulWidget {
   final LanTransferService? lanTransferService;
   final Future<void> Function()? onPrepareImport;
   final DatabaseReloadCallback? onImportCompleted;
+  final BackupShareCallback? shareFile;
+  final BackupImportPicker? pickImportFile;
 
   @override
   State<LanTransferScreen> createState() => _LanTransferScreenState();
@@ -43,7 +54,10 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   bool _loadingBackups = true;
   bool _cleaningBackups = false;
   bool _applyingSchedule = false;
+  bool _sharingBackup = false;
+  bool _importingSharedBackup = false;
   String? _restoringBackupPath;
+  String? _sharingBackupPath;
   List<BackupSnapshot> _backupSnapshots = const [];
   BackupSchedule _backupSchedule = BackupSchedule.off;
   SendSession? _sendSession;
@@ -82,7 +96,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             const PageTitle(
               icon: Icons.backup_outlined,
               title: '数据备份',
-              subtitle: '快照恢复 + 局域网互传',
             ),
             const SizedBox(height: 18),
             Row(
@@ -90,7 +103,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
                 Expanded(
                   child: _CircleActionButton(
                     title: '发送',
-                    subtitle: sending ? '正在等待接收' : '生成二维码',
+                    subtitle: sending ? '发送中' : '给其他设备',
                     icon: Icons.upload_rounded,
                     active: sending,
                     busy: _startingSend,
@@ -128,15 +141,20 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               backupSchedule: _backupSchedule,
               backupSnapshots: _backupSnapshots,
               restoringBackupPath: _restoringBackupPath,
+              sharingBackupPath: _sharingBackupPath,
               onCreateBackup: _creatingBackup ? null : _createBackup,
+              onImportSharedBackup:
+                  _importingSharedBackup ? null : _pickAndImportSharedBackup,
               onResetDatabase:
                   _resettingDatabase ? null : _confirmAndResetDatabase,
               onSelectSchedule: _selectBackupSchedule,
               onRestoreBackup: _confirmAndRestoreBackup,
+              onShareBackup: _shareBackupSnapshot,
               onDeleteBackup: _confirmAndDeleteBackup,
               onCleanupBackups: _confirmAndCleanupBackups,
               cleaningBackups: _cleaningBackups,
-              onExportHint: _showPcExportHint,
+              sharingBackup: _sharingBackup,
+              importingSharedBackup: _importingSharedBackup,
             ),
           ],
         ),
@@ -154,52 +172,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text(
-            '等待附近设备接收',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            '接收端会自动发现本机，也可用配对码兜底',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.9, end: 1),
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOutBack,
-            builder: (context, scale, child) => Transform.scale(
-              scale: scale,
-              child: child,
-            ),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDCE8FF)),
-              ),
-              child: const Text(
-                '等待接收端输入并连接...',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
           Text(
             session.pairingCode,
             style: const TextStyle(
@@ -218,7 +190,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               FilledButton.tonalIcon(
                 onPressed: _stopSend,
                 icon: const Icon(Icons.stop_circle_outlined),
-                label: const Text('停止发送'),
+                label: const Text('停止'),
               ),
             ],
           ),
@@ -275,7 +247,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
     setState(() {
       _sendSession = null;
-      _statusText = '发送已停止';
+      _statusText = null;
     });
   }
 
@@ -571,6 +543,168 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
   }
 
+  Future<void> _shareBackupSnapshot(BackupSnapshot snapshot) async {
+    await _createAndSharePackage(snapshotPath: snapshot.filePath);
+  }
+
+  Future<void> _createAndSharePackage({required String? snapshotPath}) async {
+    setState(() {
+      _sharingBackup = true;
+      _sharingBackupPath = snapshotPath;
+      _statusText = '正在生成分享备份包...';
+    });
+    try {
+      final package =
+          await _backupService.createSharePackage(snapshotPath: snapshotPath);
+      await _shareFile(package.filePath, package.fileName);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _statusText = '分享面板已打开：${package.fileName}');
+      _showSnack('请选择微信、QQ 或文件助手发送备份');
+    } on BackupSourceMissingException {
+      _showSnack('未找到备份文件，无法分享');
+      if (mounted) {
+        setState(() => _statusText = '分享失败：未找到备份文件');
+      }
+    } catch (_) {
+      _showSnack('分享失败，请稍后重试');
+      if (mounted) {
+        setState(() => _statusText = '分享失败');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sharingBackup = false;
+          _sharingBackupPath = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickAndImportSharedBackup() async {
+    final path = await _pickImportFile();
+    if (!mounted || path == null || path.trim().isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导入备份文件'),
+        content: const Text(
+          '导入会覆盖当前业务数据。导入前会自动备份当前数据，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认导入'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _importingSharedBackup = true;
+      _statusText = '正在导入分享备份...';
+      _receiveStage = _ReceiveStage.transferring;
+    });
+    var prepared = false;
+    try {
+      await widget.onPrepareImport?.call();
+      prepared = true;
+      final result = await _backupService.importSharedBackupPackage(path);
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
+      prepared = false;
+      if (!mounted) {
+        return;
+      }
+      await _loadBackupSnapshots();
+      setState(() {
+        _receiveStage = _ReceiveStage.success;
+        _statusText = '导入完成，已自动备份当前数据：${result.backupFileName}';
+      });
+      _showSnack('备份文件已导入');
+    } on ImportSourceMissingException {
+      _showSnack('未找到选择的备份文件');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on InvalidImportDatabaseException {
+      _showSnack('备份文件无效，无法导入');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on BackupSourceMissingException {
+      _showSnack('当前数据库不存在，无法导入');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on ImportDatabaseFailedException {
+      _showSnack('导入失败，请关闭占用数据库的页面后重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } catch (_) {
+      _showSnack('导入失败，请稍后重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } finally {
+      if (prepared) {
+        try {
+          await widget.onImportCompleted?.call(seedIfEmpty: false);
+        } catch (_) {
+          _showSnack('数据库恢复失败，请重启应用后再试');
+        }
+      }
+      if (mounted) {
+        setState(() => _importingSharedBackup = false);
+      }
+    }
+  }
+
+  Future<void> _shareFile(String path, String fileName) async {
+    final override = widget.shareFile;
+    if (override != null) {
+      await override(path, fileName);
+      return;
+    }
+    await SharePlus.instance.share(
+      ShareParams(
+        title: '分享洁美备份',
+        text: '洁美备份快照：$fileName',
+        files: [
+          XFile(
+            path,
+            mimeType: 'application/octet-stream',
+            name: fileName,
+          ),
+        ],
+        fileNameOverrides: [fileName],
+      ),
+    );
+  }
+
+  Future<String?> _pickImportFile() async {
+    final override = widget.pickImportFile;
+    if (override != null) {
+      return override();
+    }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jiemei', 'sqlite', 'zip'],
+      allowMultiple: false,
+    );
+    return result?.files.single.path;
+  }
+
   Future<void> _confirmAndResetDatabase() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -823,26 +957,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         setState(() => _cleaningBackups = false);
       }
     }
-  }
-
-  void _showPcExportHint() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('传到电脑'),
-        content: const Text(
-          '当前无云端时，建议用“发送”功能把备份传到同局域网接收端。'
-          '如果电脑端暂时没有接收工具，可先把备份发到另一台手机，再拷到电脑。'
-          '\n\n下一步可以做一个电脑接收小工具：扫码/配对码后直接保存 sqlite 快照。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showSnack(String text) {
@@ -1250,14 +1364,18 @@ class _UtilityPanel extends StatelessWidget {
     required this.backupSchedule,
     required this.backupSnapshots,
     required this.restoringBackupPath,
+    required this.sharingBackupPath,
     required this.onCreateBackup,
+    required this.onImportSharedBackup,
     required this.onResetDatabase,
     required this.onSelectSchedule,
     required this.onRestoreBackup,
+    required this.onShareBackup,
     required this.onDeleteBackup,
     required this.onCleanupBackups,
     required this.cleaningBackups,
-    required this.onExportHint,
+    required this.sharingBackup,
+    required this.importingSharedBackup,
   });
 
   final bool creatingBackup;
@@ -1267,14 +1385,18 @@ class _UtilityPanel extends StatelessWidget {
   final BackupSchedule backupSchedule;
   final List<BackupSnapshot> backupSnapshots;
   final String? restoringBackupPath;
+  final String? sharingBackupPath;
   final VoidCallback? onCreateBackup;
+  final VoidCallback? onImportSharedBackup;
   final VoidCallback? onResetDatabase;
   final ValueChanged<BackupSchedule> onSelectSchedule;
   final ValueChanged<BackupSnapshot> onRestoreBackup;
+  final ValueChanged<BackupSnapshot> onShareBackup;
   final ValueChanged<BackupSnapshot> onDeleteBackup;
   final VoidCallback onCleanupBackups;
   final bool cleaningBackups;
-  final VoidCallback onExportHint;
+  final bool sharingBackup;
+  final bool importingSharedBackup;
 
   @override
   Widget build(BuildContext context) {
@@ -1287,36 +1409,49 @@ class _UtilityPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '本地备份',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onCreateBackup,
+              icon: creatingBackup
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_circle_outline_rounded),
+              label: Text(creatingBackup ? '生成中...' : '生成备份'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              FilledButton.tonal(
-                onPressed: onCreateBackup,
-                child: Text(creatingBackup ? '生成中...' : '生成备份'),
-              ),
-              OutlinedButton(
-                onPressed: onResetDatabase,
-                child: Text(resettingDatabase ? '重置中...' : '重置数据库'),
-              ),
-              TextButton(
-                onPressed: onExportHint,
-                child: const Text('传到电脑'),
-              ),
-              TextButton(
-                onPressed: cleaningBackups ? null : onCleanupBackups,
-                child: Text(cleaningBackups ? '清理中...' : '清理旧备份'),
-              ),
-            ],
+          _BackupToolAction(
+            icon: Icons.file_open_rounded,
+            title: importingSharedBackup ? '导入中...' : '导入备份',
+            subtitle: '.jiemei / .sqlite',
+            color: AppTheme.primary,
+            onTap: onImportSharedBackup,
+          ),
+          const SizedBox(height: 8),
+          _BackupToolAction(
+            icon: Icons.auto_delete_outlined,
+            title: cleaningBackups ? '清理中...' : '清理备份',
+            subtitle: '保留最近30个',
+            color: const Color(0xFF0E9F6E),
+            onTap: cleaningBackups ? null : onCleanupBackups,
+          ),
+          const SizedBox(height: 8),
+          _BackupToolAction(
+            icon: Icons.warning_amber_rounded,
+            title: resettingDatabase ? '重置中...' : '重置数据',
+            subtitle: '重置前自动备份',
+            color: const Color(0xFFDC2626),
+            onTap: onResetDatabase,
           ),
           const SizedBox(height: 12),
           const Text(
@@ -1398,7 +1533,9 @@ class _UtilityPanel extends StatelessWidget {
                   (snapshot) => _BackupSnapshotTile(
                     snapshot: snapshot,
                     restoring: restoringBackupPath == snapshot.filePath,
+                    sharing: sharingBackupPath == snapshot.filePath,
                     onRestore: () => onRestoreBackup(snapshot),
+                    onShare: () => onShareBackup(snapshot),
                     onDelete: () => onDeleteBackup(snapshot),
                   ),
                 ),
@@ -1420,17 +1557,113 @@ class _UtilityPanel extends StatelessWidget {
   }
 }
 
+class _BackupToolAction extends StatelessWidget {
+  const _BackupToolAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return Material(
+      color: disabled ? const Color(0xFFF8FAFC) : const Color(0xFFFFFFFF),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: disabled
+                  ? const Color(0xFFE5E7EB)
+                  : color.withValues(alpha: .2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: disabled ? .06 : .12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: disabled ? const Color(0xFF9CA3AF) : color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: disabled
+                            ? const Color(0xFF9CA3AF)
+                            : AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: disabled ? const Color(0xFFCBD5E1) : color,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BackupSnapshotTile extends StatelessWidget {
   const _BackupSnapshotTile({
     required this.snapshot,
     required this.restoring,
+    required this.sharing,
     required this.onRestore,
+    required this.onShare,
     required this.onDelete,
   });
 
   final BackupSnapshot snapshot;
   final bool restoring;
+  final bool sharing;
   final VoidCallback onRestore;
+  final VoidCallback onShare;
   final VoidCallback onDelete;
 
   @override
@@ -1470,9 +1703,13 @@ class _BackupSnapshotTile extends StatelessWidget {
             onPressed: restoring ? null : onRestore,
             child: Text(restoring ? '恢复中' : '恢复'),
           ),
+          TextButton(
+            onPressed: restoring || sharing ? null : onShare,
+            child: Text(sharing ? '分享中' : '分享'),
+          ),
           IconButton(
             tooltip: '删除备份',
-            onPressed: restoring ? null : onDelete,
+            onPressed: restoring || sharing ? null : onDelete,
             icon: const Icon(Icons.delete_outline, size: 18),
           ),
         ],

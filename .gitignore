@@ -7,3 +7,8 @@
 !flutter_app/
 !flutter_app/**
 !CHANGELOG.md
+desktop_sync_tool/
+desktop_sync_tool/**
+desktop_sync_tool/.vs/
+desktop_sync_tool/**/bin/
+desktop_sync_tool/**/obj/
