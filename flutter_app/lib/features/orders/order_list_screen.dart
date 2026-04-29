@@ -108,12 +108,29 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
             if (_counts != null) ...[
               const SizedBox(height: 8),
-              Text(
-                '完成 ${_counts!.done}单 · 未完成 ${_counts!.unfinished}单 · 已拣货 ${_counts!.picked}单',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '完成 ${_counts!.done}单',
+                      style: const TextStyle(color: Color(0xFF16A34A)),
+                    ),
+                    const TextSpan(text: ' · '),
+                    TextSpan(
+                      text: '未完成 ${_counts!.unfinished}单',
+                      style: const TextStyle(color: Color(0xFFF97316)),
+                    ),
+                    const TextSpan(text: ' · '),
+                    TextSpan(
+                      text: '已拣货 ${_counts!.picked}单',
+                      style: const TextStyle(color: Color(0xFF2563EB)),
+                    ),
+                  ],
                 ),
               ),
             ],

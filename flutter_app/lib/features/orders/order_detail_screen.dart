@@ -104,6 +104,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   _StatusControls(
                     status: detail.order.status,
                     onChanged: _setStatus,
+                    onComplete: _confirmComplete,
                   ),
                   if (detail.order.status != OrderStatus.done) ...[
                     const SizedBox(height: 8),
@@ -140,14 +141,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ),
                   ),
-                  if (detail.order.status != OrderStatus.done) ...[
-                    const SizedBox(height: 4),
-                    FilledButton(
-                      key: const Key('completeOrderButton'),
-                      onPressed: _confirmComplete,
-                      child: const Text('完成'),
-                    ),
-                  ],
                 ],
               ],
             );
@@ -630,10 +623,12 @@ class _StatusControls extends StatelessWidget {
   const _StatusControls({
     required this.status,
     required this.onChanged,
+    required this.onComplete,
   });
 
   final OrderStatus status;
   final ValueChanged<OrderStatus> onChanged;
+  final VoidCallback onComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -656,6 +651,15 @@ class _StatusControls extends StatelessWidget {
             onTap: () => onChanged(OrderStatus.picked),
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StatusButton(
+            label: '完成',
+            color: const Color(0xFF16A34A),
+            selected: status == OrderStatus.done,
+            onTap: status == OrderStatus.done ? null : onComplete,
+          ),
+        ),
       ],
     );
   }
@@ -672,7 +676,7 @@ class _StatusButton extends StatelessWidget {
   final String label;
   final Color color;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

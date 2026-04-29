@@ -119,12 +119,7 @@ void main() {
     await tester.pumpWidget(buildScreen(orderId));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('completeOrderButton')),
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.byKey(const Key('completeOrderButton')));
+    await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '确认完成'));
     await tester.pumpAndSettle();
