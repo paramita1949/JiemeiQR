@@ -283,8 +283,9 @@ class _InventoryStatsSection extends StatelessWidget {
         loading || stats == null ? '--' : '${stats!.yesterdayOrders}';
     final pendingText =
         loading || stats == null ? '--' : '${stats!.pendingOrders}';
-    final outboundText =
-        loading || stats == null ? null : '库存变化 -${stats!.outboundBoxes}箱';
+    final outboundText = loading || stats == null || stats!.outboundBoxes == 0
+        ? null
+        : '库存变化 -${stats!.outboundBoxes}箱';
 
     return Column(
       children: [
@@ -308,9 +309,9 @@ class _InventoryStatsSection extends StatelessWidget {
                 icon: Icons.local_shipping_outlined,
                 titleColor: const Color(0xFF7C2D12),
                 valueColor: const Color(0xFF7C2D12),
-                backgroundColor: const Color(0xFFFDBA74),
+                backgroundColor: const Color(0xFFF7C488),
                 subValue: outboundText,
-                subValueColor: const Color(0xFF9A3412),
+                subValueColor: const Color(0xFFA04018),
               ),
             ),
           ],
@@ -382,11 +383,12 @@ class _InventoryStatCard extends StatelessWidget {
   final Color backgroundColor;
   final String? subValue;
   final Color subValueColor;
+  static const double _subLineHeight = 14;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 78,
+      height: 84,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -413,7 +415,7 @@ class _InventoryStatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 1),
+          const SizedBox(height: 2),
           Expanded(
             child: Align(
               alignment: Alignment.bottomLeft,
@@ -432,19 +434,22 @@ class _InventoryStatCard extends StatelessWidget {
                       height: 1.0,
                     ),
                   ),
-                  if (subValue != null) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      subValue!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: subValueColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    height: _subLineHeight,
+                    child: subValue == null
+                        ? null
+                        : Text(
+                            subValue!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: subValueColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
                 ],
               ),
             ),
