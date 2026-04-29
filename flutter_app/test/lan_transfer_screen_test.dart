@@ -44,8 +44,7 @@ class _NoopBackupService extends BackupService {
 }
 
 class _ImmediateReceiveLanTransferService extends LanTransferService {
-  _ImmediateReceiveLanTransferService()
-      : super(backupService: const _NoopBackupService());
+  _ImmediateReceiveLanTransferService() : super(backupService: const _NoopBackupService());
 
   @override
   Future<ReceiveResult> receiveByPairingCode(
@@ -56,6 +55,33 @@ class _ImmediateReceiveLanTransferService extends LanTransferService {
       importedFromPath: 'incoming.sqlite',
       backupFileName: 'received-backup.sqlite',
     );
+  }
+}
+
+class _FakeSendLanTransferService extends LanTransferService {
+  _FakeSendLanTransferService() : super(backupService: const _NoopBackupService());
+
+  bool _active = false;
+
+  @override
+  bool get hasActiveSendSession => _active;
+
+  @override
+  Future<SendSession> startSendSession() async {
+    _active = true;
+    return SendSession(
+      pairingCode: '123456',
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 54022),
+      packageDirectoryPath: '/tmp',
+      manifestPath: '/tmp/manifest',
+      databaseFilePath: '/tmp/jiemei.sqlite',
+      connectionCode: 'JM:mock',
+    );
+  }
+
+  @override
+  Future<void> stopSendSession() async {
+    _active = false;
   }
 }
 
@@ -381,6 +407,7 @@ void main() {
     expect(find.text('每天一次'), findsOneWidget);
     expect(find.text('每周一次'), findsOneWidget);
     expect(find.textContaining('发送地址'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
   });
 
   testWidgets('reset database reopens without seeding embedded stock',
@@ -461,11 +488,38 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('输入6位配对码'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '123456');
-    await tester.tap(find.text('开始接收'));
+    final fields = find.byType(TextField);
+    expect(fields, findsNWidgets(6));
+    await tester.enterText(fields.at(0), '1');
+    await tester.enterText(fields.at(1), '2');
+    await tester.enterText(fields.at(2), '3');
+    await tester.enterText(fields.at(3), '4');
+    await tester.enterText(fields.at(4), '5');
+    await tester.enterText(fields.at(5), '6');
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(find.text('接收完成'), findsOneWidget);
+  });
+
+  testWidgets('send panel shows pairing code only without QR copy action',
+      (tester) async {
+    final lanTransferService = _FakeSendLanTransferService();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: const _NoopBackupService(),
+          lanTransferService: lanTransferService,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('发送'));
+    await tester.pump();
+
+    expect(find.text('让另一台手机输入配对码'), findsOneWidget);
+    expect(find.text('复制二维码内容'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
   });
 }

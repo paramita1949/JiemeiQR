@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
@@ -47,6 +48,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   BackupSchedule _backupSchedule = BackupSchedule.off;
   SendSession? _sendSession;
   String? _statusText;
+  _ReceiveStage _receiveStage = _ReceiveStage.idle;
+  Timer? _sendSessionMonitor;
 
   @override
   void initState() {
@@ -60,6 +63,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
 
   @override
   void dispose() {
+    _sendSessionMonitor?.cancel();
     _lanTransferService.stopSendSession();
     super.dispose();
   }
@@ -105,10 +109,13 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             ),
             const SizedBox(height: 16),
             if (_sendSession != null) _buildSendPanel(_sendSession!),
-            if (_statusText != null) ...[
-              const SizedBox(height: 12),
-              _StatusCard(text: _statusText!),
-            ],
+            const SizedBox(height: 12),
+            _TransferFeedbackCard(
+              statusText: _statusText,
+              stage: _receiveStage,
+              sending: sending,
+              receiving: _receiving,
+            ),
             const SizedBox(height: 16),
             _UtilityPanel(
               creatingBackup: _creatingBackup,
@@ -145,7 +152,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
-            '让另一台手机扫码接收',
+            '让另一台手机输入配对码',
             style: TextStyle(
               color: AppTheme.textPrimary,
               fontSize: 18,
@@ -154,7 +161,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            '或者在接收端输入下面的6位配对码',
+            '接收端输入下面 6 位码后会自动配对',
             style: TextStyle(
               color: AppTheme.textSecondary,
               fontSize: 13,
@@ -162,17 +169,31 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.9, end: 1),
+            duration: const Duration(milliseconds: 700),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) => Transform.scale(
+              scale: scale,
+              child: child,
             ),
-            child: QrImageView(
-              data: session.connectionCode,
-              size: 210,
-              backgroundColor: Colors.white,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFDCE8FF)),
+              ),
+              child: const Text(
+                '等待接收端输入并连接...',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -182,7 +203,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               color: AppTheme.primary,
               fontSize: 34,
               fontWeight: FontWeight.w900,
-              letterSpacing: 5,
+              letterSpacing: 8,
             ),
           ),
           const SizedBox(height: 10),
@@ -191,11 +212,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
             spacing: 10,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
-                onPressed: _copyConnectionCode,
-                icon: const Icon(Icons.copy_rounded),
-                label: const Text('复制二维码内容'),
-              ),
               FilledButton.tonalIcon(
                 onPressed: _stopSend,
                 icon: const Icon(Icons.stop_circle_outlined),
@@ -214,7 +230,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
     setState(() {
       _startingSend = true;
-      _statusText = '正在生成发送二维码...';
+      _receiveStage = _ReceiveStage.idle;
+      _statusText = '正在生成配对会话...';
     });
     try {
       final session = await _lanTransferService.startSendSession();
@@ -223,8 +240,9 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       }
       setState(() {
         _sendSession = session;
-        _statusText = '发送已开启，请保持此页面不退出。';
+        _statusText = '发送已开启，等待接收端输入配对码。';
       });
+      _startSendSessionMonitor();
     } on BackupSourceMissingException {
       _showSnack('当前数据库不存在，无法发送');
       if (mounted) {
@@ -243,6 +261,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   }
 
   Future<void> _stopSend() async {
+    _sendSessionMonitor?.cancel();
+    _sendSessionMonitor = null;
     await _lanTransferService.stopSendSession();
     if (!mounted) {
       return;
@@ -250,6 +270,25 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     setState(() {
       _sendSession = null;
       _statusText = '发送已停止';
+    });
+  }
+
+  void _startSendSessionMonitor() {
+    _sendSessionMonitor?.cancel();
+    _sendSessionMonitor =
+        Timer.periodic(const Duration(milliseconds: 350), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_sendSession != null && !_lanTransferService.hasActiveSendSession) {
+        timer.cancel();
+        _sendSessionMonitor = null;
+        setState(() {
+          _sendSession = null;
+          _statusText = '发送完成，配对已自动结束';
+        });
+      }
     });
   }
 
@@ -317,6 +356,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   Future<void> _receiveByCodeInput() async {
     final code = await showDialog<String>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => const _PairingCodeDialog(),
     );
     final trimmed = code?.trim() ?? '';
@@ -329,7 +369,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     }
     await _receiveWithPreparation(
       () => _lanTransferService.receiveByPairingCode(trimmed),
-      progressText: '正在局域网内查找发送端...',
+      progressText: '正在校验配对码并查找发送端...',
     );
   }
 
@@ -339,13 +379,17 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   }) async {
     setState(() {
       _receiving = true;
+      _receiveStage = _ReceiveStage.pairing;
       _statusText = progressText;
     });
     var prepared = false;
     try {
       await widget.onPrepareImport?.call();
       prepared = true;
-      setState(() => _statusText = '正在接收并导入数据库...');
+      setState(() {
+        _receiveStage = _ReceiveStage.transferring;
+        _statusText = '配对成功，正在接收并导入数据库...';
+      });
       final result = await receive();
       await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
@@ -353,37 +397,71 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         return;
       }
       await _loadBackupSnapshots();
-      setState(() => _statusText = '接收完成，已自动备份：${result.backupFileName}');
+      setState(() {
+        _receiveStage = _ReceiveStage.success;
+        _statusText = '接收完成，已自动备份：${result.backupFileName}';
+        _sendSession = null;
+      });
       _showSnack('接收完成');
     } on ConnectionCodeParseException {
       _showSnack('二维码无效');
       if (mounted) {
-        setState(() => _statusText = '二维码无效');
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = '二维码无效';
+        });
       }
     } on SenderUnavailableException {
       _showSnack('未找到发送端，请确认两台手机在同一局域网');
       if (mounted) {
-        setState(() => _statusText = '未找到发送端');
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = '未找到发送端';
+        });
       }
     } on PairingCodeRejectedException {
       _showSnack('配对码错误');
       if (mounted) {
-        setState(() => _statusText = '配对码错误');
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = '配对码错误';
+        });
       }
     } on InvalidSenderManifestException {
       _showSnack('发送数据无效');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } on DatabaseDownloadFailedException {
       _showSnack('下载数据库失败，请重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } on ImportSourceMissingException {
       _showSnack('接收文件不存在');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } on InvalidImportDatabaseException {
       _showSnack('接收文件不是有效数据库');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } on BackupSourceMissingException {
       _showSnack('当前数据库不存在，无法导入');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } on ImportDatabaseFailedException {
       _showSnack('导入失败，请关闭占用数据库的页面后重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } catch (_) {
       _showSnack('接收失败，请重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
     } finally {
       if (prepared) {
         try {
@@ -470,15 +548,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         setState(() => _resettingDatabase = false);
       }
     }
-  }
-
-  Future<void> _copyConnectionCode() async {
-    final session = _sendSession;
-    if (session == null) {
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: session.connectionCode));
-    _showSnack('二维码内容已复制');
   }
 
   Future<void> _bootstrapBackupPanel() async {
@@ -719,38 +788,192 @@ class _PairingCodeDialog extends StatefulWidget {
 }
 
 class _PairingCodeDialogState extends State<_PairingCodeDialog> {
-  final TextEditingController _controller = TextEditingController();
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  bool _submitting = false;
 
   @override
   void dispose() {
-    _controller.dispose();
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    for (final focusNode in _focusNodes) {
+      focusNode.dispose();
+    }
     super.dispose();
+  }
+
+  void _onDigitChanged(int index, String value) {
+    if (_submitting) {
+      return;
+    }
+    final normalized = value.isEmpty ? '' : value[value.length - 1];
+    _controllers[index].text = normalized;
+    _controllers[index].selection = TextSelection.collapsed(
+      offset: _controllers[index].text.length,
+    );
+
+    if (normalized.isNotEmpty && index < 5) {
+      _focusNodes[index + 1].requestFocus();
+    }
+
+    final code = _controllers.map((item) => item.text).join();
+    if (code.length == 6 && !_controllers.any((item) => item.text.isEmpty)) {
+      _submitting = true;
+      Navigator.of(context).pop(code);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('输入6位配对码'),
-      content: TextField(
-        autofocus: true,
-        controller: _controller,
-        keyboardType: TextInputType.number,
-        maxLength: 6,
-        decoration: const InputDecoration(
-          hintText: '例如 456789',
-          counterText: '',
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '输入完成后将自动校验并开始配对',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(
+              6,
+              (index) => SizedBox(
+                width: 38,
+                child: TextField(
+                  autofocus: index == 0,
+                  controller: _controllers[index],
+                  focusNode: _focusNodes[index],
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  textInputAction:
+                      index == 5 ? TextInputAction.done : TextInputAction.next,
+                  maxLength: 1,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => _onDigitChanged(index, value),
+                  onTap: () => _controllers[index].selection =
+                      TextSelection.collapsed(
+                    offset: _controllers[index].text.length,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('开始接收'),
-        ),
       ],
+    );
+  }
+}
+
+enum _ReceiveStage {
+  idle,
+  pairing,
+  transferring,
+  success,
+  error,
+}
+
+class _TransferFeedbackCard extends StatelessWidget {
+  const _TransferFeedbackCard({
+    required this.statusText,
+    required this.stage,
+    required this.sending,
+    required this.receiving,
+  });
+
+  final String? statusText;
+  final _ReceiveStage stage;
+  final bool sending;
+  final bool receiving;
+
+  @override
+  Widget build(BuildContext context) {
+    if (statusText == null && !sending && !receiving) {
+      return const SizedBox.shrink();
+    }
+    final icon = switch (stage) {
+      _ReceiveStage.pairing => Icons.sync_rounded,
+      _ReceiveStage.transferring => Icons.cloud_download_rounded,
+      _ReceiveStage.success => Icons.check_circle_rounded,
+      _ReceiveStage.error => Icons.error_outline_rounded,
+      _ReceiveStage.idle => sending
+          ? Icons.wifi_tethering_rounded
+          : Icons.info_outline_rounded,
+    };
+    final color = switch (stage) {
+      _ReceiveStage.success => const Color(0xFF0E9F6E),
+      _ReceiveStage.error => const Color(0xFFDC2626),
+      _ReceiveStage.pairing || _ReceiveStage.transferring => AppTheme.primary,
+      _ReceiveStage.idle => AppTheme.primary,
+    };
+    final showProgress = stage == _ReceiveStage.pairing ||
+        stage == _ReceiveStage.transferring ||
+        receiving ||
+        sending;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF7FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  statusText ?? '等待操作',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (showProgress) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: const LinearProgressIndicator(minHeight: 4),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -833,32 +1056,6 @@ class _CircleActionButton extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF7FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppTheme.primary,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
         ),
       ),
     );

@@ -148,6 +148,7 @@ void main() {
         File('${receiverDir.path}/backups/${receiveResult.backupFileName}');
     expect(await backupFile.exists(), isTrue);
     expect(_productCodes(backupFile), ['RECEIVER']);
+    expect(senderService.hasActiveSendSession, isFalse);
 
     await senderService.stopSendSession();
   });

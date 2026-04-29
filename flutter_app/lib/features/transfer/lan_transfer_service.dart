@@ -42,11 +42,15 @@ class LanTransferService {
   SendSession? _session;
   RawDatagramSocket? _discoverySocket;
   Timer? _discoveryTimer;
+  bool _databaseDelivered = false;
+
+  bool get hasActiveSendSession => _session != null;
 
   Future<SendSession> startSendSession() async {
     if (_session != null) {
       return _session!;
     }
+    _databaseDelivered = false;
     final sendPackage = await _backupService.createSendPackage();
     final server = await HttpServer.bind(_bindAddress, 0);
     _server = server;
@@ -81,6 +85,7 @@ class LanTransferService {
 
   Future<void> stopSendSession() async {
     _session = null;
+    _databaseDelivered = false;
     _discoveryTimer?.cancel();
     _discoveryTimer = null;
     _discoverySocket?.close();
@@ -247,6 +252,10 @@ class LanTransferService {
       request.response.headers.contentType = ContentType.binary;
       await request.response.addStream(file.openRead());
       await request.response.close();
+      if (!_databaseDelivered) {
+        _databaseDelivered = true;
+        unawaited(stopSendSession());
+      }
       return;
     }
 
