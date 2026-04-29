@@ -812,7 +812,12 @@ class _ProductMeta extends StatelessWidget {
             textColor: const Color(0xFF92400E),
             backgroundColor: const Color(0xFFFFF7ED),
           ),
-        if (boardText != null) _MetaChip(text: '需 $boardText'),
+        if (boardText != null)
+          _MetaChip(
+            text: '需 $boardText',
+            textColor: const Color(0xFFDC2626),
+            backgroundColor: const Color(0xFFFEE2E2),
+          ),
         _MetaChip(text: specText),
         if (tsRequired)
           const _MetaChip(

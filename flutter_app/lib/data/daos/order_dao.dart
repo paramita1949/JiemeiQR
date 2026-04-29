@@ -201,6 +201,62 @@ class OrderDao {
     });
   }
 
+  Future<void> appendItemToOrder({
+    required int orderId,
+    required PendingOrderItemInput item,
+  }) async {
+    if (item.boxes <= 0 || item.boxes > 1000000000) {
+      throw InvalidStockQuantityException(item.boxes);
+    }
+    final availableBoxes = await _availableBoxesForBatch(item.batchId);
+    if (item.boxes > availableBoxes) {
+      throw InsufficientStockException(
+        batchId: item.batchId,
+        requestedBoxes: item.boxes,
+        availableBoxes: availableBoxes,
+      );
+    }
+    await _database.transaction(() async {
+      final order = await (_database.select(_database.orders)
+            ..where((table) => table.id.equals(orderId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (order == null) {
+        return;
+      }
+      if (order.status == OrderStatus.done) {
+        throw const OrderItemUpdateNotAllowedException();
+      }
+      final duplicateItem = await (_database.select(_database.orderItems)
+            ..where((table) =>
+                table.orderId.equals(orderId) &
+                table.productId.equals(item.productId) &
+                table.batchId.equals(item.batchId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (duplicateItem != null) {
+        throw DuplicateOrderItemException(
+          orderId: orderId,
+          itemId: duplicateItem.id,
+          currentBoxes: duplicateItem.boxes,
+          productId: item.productId,
+          batchId: item.batchId,
+        );
+      }
+      await addOrderItem(
+        orderId: orderId,
+        productId: item.productId,
+        batchId: item.batchId,
+        boxes: item.boxes,
+        boxesPerBoard: item.boxesPerBoard,
+        piecesPerBox: item.piecesPerBox,
+      );
+      await (_database.update(_database.orders)
+            ..where((table) => table.id.equals(orderId)))
+          .write(OrdersCompanion(updatedAt: Value(DateTime.now())));
+    });
+  }
+
   Future<int> _availableBoxesForBatch(int batchId) async {
     final stockDao = StockDao(_database);
     final currentBoxes = await stockDao.currentBoxesForBatch(batchId);

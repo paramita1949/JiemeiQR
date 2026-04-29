@@ -103,6 +103,7 @@ void main() {
     expect(find.text('20箱'), findsWidgets);
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
     expect(find.text('TS'), findsOneWidget);
+    expect(find.byKey(const Key('addOrderLineButton')), findsOneWidget);
 
     await tester.tap(find.text('已拣货'));
     await tester.pumpAndSettle();
@@ -229,6 +230,62 @@ void main() {
           ..where((table) => table.orderId.equals(orderId)))
         .get();
     expect(items, hasLength(1));
+  });
+
+  testWidgets('can append a new product line from order detail dialog',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'APPEND-A',
+      dateBatch: '2029.9.6',
+      initialBoxes: 100,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'APPEND-B',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final orderId = await orderDao.createPendingWaybill(
+      waybillNo: 'LINE-APPEND-1',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 20,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen(orderId));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('addOrderLineButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('APPEND-A').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('APPEND-B').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('addLineBoxesField')), '30');
+    await tester.tap(find.byKey(const Key('addLineConfirmButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已新增产品明细'), findsOneWidget);
+    final items = await (database.select(database.orderItems)
+          ..where((table) => table.orderId.equals(orderId)))
+        .get();
+    expect(items, hasLength(2));
+    final appended = items.where((item) => item.batchId == batchB).toList();
+    expect(appended, hasLength(1));
+    expect(appended.single.boxes, 30);
   });
 
   testWidgets('edits one order line batch and boxes', (tester) async {

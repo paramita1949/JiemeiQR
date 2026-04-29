@@ -65,6 +65,8 @@ void main() {
 
     expect(find.text('可用 3477箱'), findsOneWidget);
     expect(find.text('需 86板+37箱'), findsOneWidget);
+    final boardChipText = tester.widget<Text>(find.text('需 86板+37箱'));
+    expect(boardChipText.style?.color, const Color(0xFFDC2626));
     expect(find.text('40箱/板 · 30件/箱'), findsOneWidget);
   });
 

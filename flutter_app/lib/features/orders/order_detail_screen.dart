@@ -105,6 +105,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     status: detail.order.status,
                     onChanged: _setStatus,
                   ),
+                  if (detail.order.status != OrderStatus.done) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonalIcon(
+                        key: const Key('addOrderLineButton'),
+                        onPressed: () => _openAddOrderLine(detail),
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增产品'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   ...detail.lines.map(
                     (line) => Padding(
@@ -443,6 +455,109 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return;
     }
     Navigator.of(context).pop(true);
+  }
+
+  Future<void> _openAddOrderLine(OrderDetail detail) async {
+    final productOptions = await _productDao.productsForOrderEntry();
+    if (!mounted) {
+      return;
+    }
+    if (productOptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有可新增的产品库存')),
+      );
+      return;
+    }
+    final result = await showDialog<_AddOrderLineResult>(
+      context: context,
+      builder: (context) => _AddOrderLineDialog(
+        productDao: _productDao,
+        productOptions: productOptions,
+        orderId: detail.order.id,
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+    try {
+      await _orderDao.appendItemToOrder(
+        orderId: detail.order.id,
+        item: PendingOrderItemInput(
+          productId: result.product.id,
+          batchId: result.batch.batch.id,
+          boxes: result.boxes,
+          boxesPerBoard: result.batch.batch.boxesPerBoard,
+          piecesPerBox: result.product.piecesPerBox,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _detailFuture = _loadDetail();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已新增产品明细')),
+      );
+    } on DuplicateOrderItemException catch (duplicate) {
+      if (!mounted) {
+        return;
+      }
+      final shouldMerge = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('重复明细'),
+          content: const Text('同一运单下该产品批号已添加，是否累加箱数？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('累加'),
+            ),
+          ],
+        ),
+      );
+      if (shouldMerge != true) {
+        return;
+      }
+      await _orderDao.mergeDuplicateOrderItem(
+        itemId: duplicate.itemId,
+        appendBoxes: result.boxes,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _detailFuture = _loadDetail();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已累加到原明细')),
+      );
+    } on OrderItemUpdateNotAllowedException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成订单不允许新增明细')),
+      );
+    } on InsufficientStockException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('库存不足，无法新增明细')),
+      );
+    } on InvalidStockQuantityException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('箱数无效')),
+      );
+    }
   }
 }
 
@@ -814,6 +929,196 @@ class _EditOrderLineResult {
 
   final int batchId;
   final int boxes;
+}
+
+class _AddOrderLineResult {
+  const _AddOrderLineResult({
+    required this.product,
+    required this.batch,
+    required this.boxes,
+  });
+
+  final Product product;
+  final AvailableBatch batch;
+  final int boxes;
+}
+
+class _AddOrderLineDialog extends StatefulWidget {
+  const _AddOrderLineDialog({
+    required this.productDao,
+    required this.productOptions,
+    required this.orderId,
+  });
+
+  final ProductDao productDao;
+  final List<ProductInventoryOption> productOptions;
+  final int orderId;
+
+  @override
+  State<_AddOrderLineDialog> createState() => _AddOrderLineDialogState();
+}
+
+class _AddOrderLineDialogState extends State<_AddOrderLineDialog> {
+  late final TextEditingController _boxesController;
+  late Product _selectedProduct;
+  List<AvailableBatch> _availableBatches = const <AvailableBatch>[];
+  AvailableBatch? _selectedBatch;
+  bool _loadingBatches = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _boxesController = TextEditingController();
+    _selectedProduct = widget.productOptions.first.product;
+    _loadBatches(_selectedProduct.id);
+  }
+
+  @override
+  void dispose() {
+    _boxesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBatches(int productId) async {
+    setState(() => _loadingBatches = true);
+    final batches = await widget.productDao.availableBatchesForProduct(
+      productId,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _availableBatches = batches;
+      _selectedBatch = batches.isEmpty ? null : batches.first;
+      _loadingBatches = false;
+    });
+  }
+
+  void _submit() {
+    final selectedBatch = _selectedBatch;
+    final boxes = int.tryParse(_boxesController.text.trim());
+    if (selectedBatch == null || boxes == null || boxes <= 0) {
+      return;
+    }
+    if (boxes > selectedBatch.availableBoxes) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _AddOrderLineResult(
+        product: _selectedProduct,
+        batch: selectedBatch,
+        boxes: boxes,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedBatch = _selectedBatch;
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+      contentPadding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      title: const Text('新增产品明细'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<int>(
+              key: const Key('addLineProductDropdown'),
+              initialValue: _selectedProduct.id,
+              decoration: const InputDecoration(labelText: '产品'),
+              items: widget.productOptions
+                  .map(
+                    (option) => DropdownMenuItem<int>(
+                      value: option.product.id,
+                      child: Text(
+                          '${option.product.code}（可用${option.currentBoxes}箱）'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (id) {
+                if (id == null) {
+                  return;
+                }
+                final next = widget.productOptions
+                    .where((option) => option.product.id == id)
+                    .map((option) => option.product)
+                    .firstOrNull;
+                if (next == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedProduct = next;
+                });
+                _loadBatches(id);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const Key('addLineBoxesField'),
+              controller: _boxesController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: '箱数',
+                helperText: selectedBatch == null
+                    ? '当前产品无可用批号'
+                    : '当前批号可用 ${selectedBatch.availableBoxes} 箱',
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (_loadingBatches)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_availableBatches.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('当前产品无可用批号'),
+              )
+            else
+              ..._availableBatches.map(
+                (row) {
+                  final batchCodeVariants = _availableBatches
+                      .where(
+                          (item) => item.batch.dateBatch == row.batch.dateBatch)
+                      .map((item) => item.batch.actualBatch)
+                      .toList();
+                  final selected = row.batch.id == _selectedBatch?.batch.id;
+                  final sameDateDifferentBatch = selectedBatch != null &&
+                      row.batch.id != selectedBatch.batch.id &&
+                      row.batch.dateBatch == selectedBatch.batch.dateBatch;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _BatchChoiceTile(
+                      row: row,
+                      selected: selected,
+                      sameDateDifferentBatch: sameDateDifferentBatch,
+                      batchCodeVariants: batchCodeVariants,
+                      onTap: () => setState(() => _selectedBatch = row),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('addLineConfirmButton'),
+          onPressed: _submit,
+          child: const Text('新增'),
+        ),
+      ],
+    );
+  }
 }
 
 class _EditOrderLineDialog extends StatefulWidget {
