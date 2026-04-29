@@ -74,6 +74,31 @@ void main() {
     expect(message, isNot(contains('778899')));
   });
 
+  test('discovery announcement keeps multiple endpoint candidates', () {
+    final service = LanTransferService(
+      backupService: const BackupService(databaseFileName: 'jiemei.sqlite'),
+    );
+    final message = service.buildDiscoveryAnnouncement(
+      baseUrl: 'http://10.8.0.4:54021',
+      baseUrls: const [
+        'http://10.8.0.4:54021',
+        'http://192.168.1.8:54021',
+      ],
+      sessionId: 'session-1',
+      deviceId: 'device-1',
+      deviceName: '仓库手机',
+      platform: 'android',
+    );
+
+    final parsed = service.parseDiscoveryAnnouncement(message);
+
+    expect(parsed.baseUri, Uri.parse('http://10.8.0.4:54021'));
+    expect(parsed.baseUris, [
+      Uri.parse('http://10.8.0.4:54021'),
+      Uri.parse('http://192.168.1.8:54021'),
+    ]);
+  });
+
   test('connection code can receive database without manual address', () async {
     final senderDir =
         await Directory.systemTemp.createTemp('jiemei-qr-sender-');
@@ -206,6 +231,59 @@ void main() {
     );
     final request = await requestFuture;
     expect(request.receiverName, '接收手机');
+    await senderService.approveTransferRequest(request.id);
+    final receiveResult = await receiveFuture;
+
+    expect(_productCodes(receiverDb), ['SENDER']);
+    expect(receiveResult.backupFileName, isNotEmpty);
+
+    await senderService.stopSendSession();
+  });
+
+  test('discovered sender tries reachable candidate when first endpoint fails',
+      () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-candidates-sender-');
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-candidates-receiver-');
+
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(senderDb, productCode: 'SENDER');
+    await _createBusinessDatabase(receiverDb, productCode: 'RECEIVER');
+
+    final senderService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => senderDir,
+        randomIntProvider: (_) => 236789,
+      ),
+      hostProvider: () async => '127.0.0.1',
+      bindAddress: InternetAddress.loopbackIPv4,
+    );
+    final receiverService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => receiverDir,
+      ),
+      tempDirectoryProvider: () async => receiverDir,
+    );
+
+    final session = await senderService.startSendSession();
+    final requestFuture = senderService.transferRequests.first;
+    final receiveFuture = receiverService.receiveFromDiscoveredSender(
+      DiscoveryAnnouncement(
+        baseUri: Uri.parse('http://127.0.0.1:1'),
+        baseUris: [Uri.parse('http://127.0.0.1:1'), session.baseUri],
+        sessionId: session.sessionId,
+        deviceId: session.deviceId,
+        deviceName: '仓库手机',
+        platform: 'android',
+      ),
+      receiverName: '接收手机',
+      approvalPollInterval: const Duration(milliseconds: 20),
+    );
+    final request = await requestFuture;
     await senderService.approveTransferRequest(request.id);
     final receiveResult = await receiveFuture;
 
