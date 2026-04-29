@@ -5,7 +5,6 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
-import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -746,7 +745,6 @@ class _OutboundDetailCard extends StatelessWidget {
     required Set<String> duplicateBatchKeys,
     required Map<String, List<String>> batchCodesByKey,
   }) {
-    final quantity = _quantityParts(row);
     final productDateKey = '${row.productCode}|${row.dateBatch}';
     return Container(
       margin: const EdgeInsets.only(top: 5),
@@ -782,75 +780,17 @@ class _OutboundDetailCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          quantity.boardText == null
-              ? Text(
-                  quantity.boxesText,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: AppTheme.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                )
-              : SizedBox(
-                  width: 142,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 52,
-                        child: Text(
-                          quantity.boxesText,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      const Text(
-                        '·',
-                        style: TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          quantity.boardText!,
-                          textAlign: TextAlign.left,
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+          Text(
+            '${row.boxes}箱',
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: AppTheme.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
-    );
-  }
-
-  _QuantityParts _quantityParts(_OutboundRow row) {
-    final boardText = BoardCalculator.format(
-      boxes: row.boxes,
-      boxesPerBoard: row.boxesPerBoard,
-    );
-    if (boardText == '${row.boxes}箱') {
-      return _QuantityParts(
-        boxesText: '${row.boxes}箱',
-        boardText: null,
-      );
-    }
-    return _QuantityParts(
-      boxesText: '${row.boxes}箱',
-      boardText: boardText,
     );
   }
 }
@@ -917,16 +857,6 @@ List<InlineSpan> _batchCodeSpans(
     );
   }
   return spans;
-}
-
-class _QuantityParts {
-  const _QuantityParts({
-    required this.boxesText,
-    required this.boardText,
-  });
-
-  final String boxesText;
-  final String? boardText;
 }
 
 class _OutboundGroup {
