@@ -28,7 +28,12 @@ void main() {
     await tester.pumpWidget(buildScreen());
     expect(find.text('基础资料'), findsOneWidget);
     expect(find.text('板数'), findsNothing);
-    expect(find.text('产品信息'), findsNothing);
+    expect(find.text('产品信息'), findsOneWidget);
+    expect(find.text('批号与库存'), findsOneWidget);
+    expect(find.text('规格与库位'), findsOneWidget);
+    expect(find.text('点历史编号，只填充产品编号和产品名称'), findsNothing);
+    expect(find.text('产品、批号、规格与库位维护'), findsNothing);
+    expect(find.text('需要逐箱扫码时开启'), findsNothing);
 
     await tester.enterText(find.byKey(const Key('productCodeField')), '72067');
     await tester.enterText(
@@ -42,6 +47,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '104310');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '40');
     await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '30');
+    await tester.ensureVisible(find.byKey(const Key('tsScanSegmentedButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('是'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('locationField')), '4楼-后-右');
@@ -166,6 +173,50 @@ void main() {
     expect(_fieldText(tester, const Key('productNameField')), '六神花露水195ML');
   });
 
+  testWidgets('quick product chips fill only code and name', (tester) async {
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '72067',
+            name: '六神花露水195ML',
+            boxesPerBoard: 40,
+            piecesPerBox: 30,
+          ),
+        );
+    await database.into(database.products).insert(
+          ProductsCompanion.insert(
+            code: '20380',
+            name: '洁美日用',
+            boxesPerBoard: 50,
+            piecesPerBox: 30,
+          ),
+        );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('quickProductChip-72067')), findsOneWidget);
+    expect(find.byKey(const Key('quickProductChip-20380')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('actualBatchField')), 'NEWBAT');
+    await tester.enterText(find.byKey(const Key('dateBatchField')), '2030.1.1');
+    await tester.enterText(find.byKey(const Key('stockPiecesField')), '600');
+    await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '20');
+    await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '10');
+
+    await tester.ensureVisible(find.byKey(const Key('quickProductChip-72067')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('quickProductChip-72067')));
+    await tester.pumpAndSettle();
+
+    expect(_fieldText(tester, const Key('productCodeField')), '72067');
+    expect(_fieldText(tester, const Key('productNameField')), '六神花露水195ML');
+    expect(_fieldText(tester, const Key('actualBatchField')), 'NEWBAT');
+    expect(_fieldText(tester, const Key('dateBatchField')), '2030.1.1');
+    expect(_fieldText(tester, const Key('stockPiecesField')), '600');
+    expect(_fieldText(tester, const Key('boxesPerBoardField')), '20');
+    expect(_fieldText(tester, const Key('piecesPerBoxField')), '10');
+  });
+
   testWidgets('rejects stock pieces that are not whole boxes', (tester) async {
     await tester.pumpWidget(buildScreen());
 
@@ -286,6 +337,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('stockPiecesField')), '3600');
     await tester.enterText(find.byKey(const Key('boxesPerBoardField')), '36');
     await tester.enterText(find.byKey(const Key('piecesPerBoxField')), '24');
+    await tester.ensureVisible(find.byKey(const Key('tsScanSegmentedButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('否'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('locationField')), '新库位');
@@ -351,6 +404,8 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.byKey(const Key('saveBaseInfoButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('saveBaseInfoButton')));
     await tester.pumpAndSettle();
 
@@ -395,6 +450,8 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.byKey(const Key('saveBaseInfoButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('saveBaseInfoButton')));
     await tester.pumpAndSettle();
 

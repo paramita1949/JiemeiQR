@@ -171,7 +171,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('基础资料'), findsWidgets);
-    expect(find.text('产品信息'), findsNothing);
+    expect(find.text('产品信息'), findsOneWidget);
+    expect(find.text('批号与库存'), findsOneWidget);
     expect(find.text('板数'), findsNothing);
     expect(find.byTooltip('扫码快速录入'), findsOneWidget);
   });
