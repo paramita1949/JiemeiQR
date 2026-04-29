@@ -33,8 +33,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/seed/embedded_stock_seed.json
 
 flutter_launcher_icons:
   android: true

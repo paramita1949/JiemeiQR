@@ -1,10 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
-import 'package:qrscan_flutter/data/seed/embedded_stock_seed_service.dart';
-import 'package:qrscan_flutter/data/seed/startup_seed_service.dart';
 import 'package:qrscan_flutter/features/home/home_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
@@ -32,11 +28,6 @@ class _QrScanAppState extends State<QrScanApp> {
   void initState() {
     super.initState();
     _database = widget.database ?? AppDatabase();
-    if (widget.database == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_seedInBackground());
-      });
-    }
   }
 
   @override
@@ -45,19 +36,6 @@ class _QrScanAppState extends State<QrScanApp> {
       _database.close();
     }
     super.dispose();
-  }
-
-  Future<void> _seedInBackground() async {
-    try {
-      final seeded = await StartupSeedService(database: _database)
-          .seedOnlyOnFirstInstall();
-      if (!mounted || !seeded) {
-        return;
-      }
-      setState(() => _databaseVersion += 1);
-    } catch (error) {
-      debugPrint('seed failed: $error');
-    }
   }
 
   @override
@@ -97,9 +75,6 @@ class _QrScanAppState extends State<QrScanApp> {
       return;
     }
     _database = AppDatabase();
-    if (seedIfEmpty) {
-      await EmbeddedStockSeedService(_database).seedIfDatabaseEmpty();
-    }
     if (!mounted) {
       return;
     }
