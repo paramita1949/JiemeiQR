@@ -217,6 +217,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final pendingOrders = (countsData['pending_count'] as int?) ?? 0;
     final todayOrders = (countsData['today_count'] as int?) ?? 0;
     final yesterdayOrders = (countsData['yesterday_count'] as int?) ?? 0;
+    final outboundRow = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM(boxes), 0) AS outbound_boxes
+      FROM stock_movements
+      WHERE type = ?
+        AND movement_date BETWEEN ? AND ?
+      ''',
+      variables: [
+        Variable.withInt(StockMovementType.orderOut.index),
+        Variable.withDateTime(todayStart),
+        Variable.withDateTime(todayEnd),
+      ],
+    ).getSingleOrNull();
+    final outboundBoxes = (outboundRow?.data['outbound_boxes'] as int?) ?? 0;
 
     return _HomeStats(
       totalPieces: totalPieces,
@@ -224,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       todayOrders: todayOrders,
       yesterdayOrders: yesterdayOrders,
       pendingOrders: pendingOrders,
+      outboundBoxes: outboundBoxes,
     );
   }
 
@@ -268,6 +283,8 @@ class _InventoryStatsSection extends StatelessWidget {
         loading || stats == null ? '--' : '${stats!.yesterdayOrders}';
     final pendingText =
         loading || stats == null ? '--' : '${stats!.pendingOrders}';
+    final outboundText =
+        loading || stats == null ? null : '库存变化 -${stats!.outboundBoxes}箱';
 
     return Column(
       children: [
@@ -292,6 +309,8 @@ class _InventoryStatsSection extends StatelessWidget {
                 titleColor: const Color(0xFF7C2D12),
                 valueColor: const Color(0xFF7C2D12),
                 backgroundColor: const Color(0xFFFDBA74),
+                subValue: outboundText,
+                subValueColor: const Color(0xFF9A3412),
               ),
             ),
           ],
@@ -351,6 +370,8 @@ class _InventoryStatCard extends StatelessWidget {
     required this.titleColor,
     required this.valueColor,
     required this.backgroundColor,
+    this.subValue,
+    this.subValueColor = const Color(0xFF64748B),
   });
 
   final String title;
@@ -359,11 +380,13 @@ class _InventoryStatCard extends StatelessWidget {
   final Color titleColor;
   final Color valueColor;
   final Color backgroundColor;
+  final String? subValue;
+  final Color subValueColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 76,
+      height: 78,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -390,20 +413,39 @@ class _InventoryStatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Expanded(
             child: Align(
               alignment: Alignment.bottomLeft,
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: valueColor,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                  height: 1.0,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: valueColor,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                    ),
+                  ),
+                  if (subValue != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      subValue!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: subValueColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -468,6 +510,7 @@ class _HomeStats {
     required this.todayOrders,
     required this.yesterdayOrders,
     required this.pendingOrders,
+    required this.outboundBoxes,
   });
 
   final int totalPieces;
@@ -475,6 +518,7 @@ class _HomeStats {
   final int todayOrders;
   final int yesterdayOrders;
   final int pendingOrders;
+  final int outboundBoxes;
 }
 
 class _ActionGrid extends StatelessWidget {
