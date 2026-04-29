@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -44,7 +45,8 @@ class _NoopBackupService extends BackupService {
 }
 
 class _ImmediateReceiveLanTransferService extends LanTransferService {
-  _ImmediateReceiveLanTransferService() : super(backupService: const _NoopBackupService());
+  _ImmediateReceiveLanTransferService()
+      : super(backupService: const _NoopBackupService());
 
   @override
   Future<ReceiveResult> receiveByPairingCode(
@@ -58,8 +60,45 @@ class _ImmediateReceiveLanTransferService extends LanTransferService {
   }
 }
 
+class _NearbyReceiveLanTransferService extends LanTransferService {
+  _NearbyReceiveLanTransferService()
+      : super(backupService: const _NoopBackupService());
+
+  DiscoveryAnnouncement? selectedSender;
+
+  @override
+  Future<List<DiscoveryAnnouncement>> discoverSenders({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    return [
+      DiscoveryAnnouncement(
+        baseUri: Uri(scheme: 'http', host: '192.168.1.8', port: 54022),
+        sessionId: 'session-1',
+        deviceId: 'device-1',
+        deviceName: '仓库手机',
+        platform: 'android',
+      ),
+    ];
+  }
+
+  @override
+  Future<ReceiveResult> receiveFromDiscoveredSender(
+    DiscoveryAnnouncement sender, {
+    String? receiverName,
+    Duration approvalTimeout = const Duration(seconds: 60),
+    Duration approvalPollInterval = const Duration(milliseconds: 500),
+  }) async {
+    selectedSender = sender;
+    return const ReceiveResult(
+      importedFromPath: 'incoming.sqlite',
+      backupFileName: 'nearby-backup.sqlite',
+    );
+  }
+}
+
 class _FakeSendLanTransferService extends LanTransferService {
-  _FakeSendLanTransferService() : super(backupService: const _NoopBackupService());
+  _FakeSendLanTransferService()
+      : super(backupService: const _NoopBackupService());
 
   bool _active = false;
 
@@ -76,12 +115,60 @@ class _FakeSendLanTransferService extends LanTransferService {
       manifestPath: '/tmp/manifest',
       databaseFilePath: '/tmp/jiemei.sqlite',
       connectionCode: 'JM:mock',
+      sessionId: 'session-1',
+      deviceId: 'device-1',
     );
   }
 
   @override
   Future<void> stopSendSession() async {
     _active = false;
+  }
+}
+
+class _ConfirmingSendLanTransferService extends _FakeSendLanTransferService {
+  final StreamController<TransferRequest> _requests =
+      StreamController<TransferRequest>.broadcast();
+  String? approvedRequestId;
+  String? rejectedRequestId;
+
+  @override
+  Stream<TransferRequest> get transferRequests => _requests.stream;
+
+  void emitRequest() {
+    _requests.add(
+      TransferRequest(
+        id: 'request-1',
+        receiverDeviceId: 'receiver-1',
+        receiverName: '仓库手机B',
+        requestedAt: DateTime(2026, 4, 29, 9, 0),
+      ),
+    );
+  }
+
+  @override
+  Future<bool> approveTransferRequest(String requestId) async {
+    approvedRequestId = requestId;
+    return true;
+  }
+
+  @override
+  Future<bool> rejectTransferRequest(String requestId) async {
+    rejectedRequestId = requestId;
+    return true;
+  }
+}
+
+class _RejectingNearbyReceiveLanTransferService
+    extends _NearbyReceiveLanTransferService {
+  @override
+  Future<ReceiveResult> receiveFromDiscoveredSender(
+    DiscoveryAnnouncement sender, {
+    String? receiverName,
+    Duration approvalTimeout = const Duration(seconds: 60),
+    Duration approvalPollInterval = const Duration(milliseconds: 500),
+  }) async {
+    throw const TransferRequestRejectedException('request rejected');
   }
 }
 
@@ -502,7 +589,38 @@ void main() {
     expect(find.text('接收完成'), findsOneWidget);
   });
 
-  testWidgets('send panel shows pairing code only without QR copy action',
+  testWidgets('receive lists nearby devices before fallback pairing code',
+      (tester) async {
+    final lanTransferService = _NearbyReceiveLanTransferService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: const _NoopBackupService(),
+          lanTransferService: lanTransferService,
+          onPrepareImport: () async {},
+          onImportCompleted: ({bool seedIfEmpty = true}) async {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('接收'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现附近设备'), findsOneWidget);
+    expect(find.text('仓库手机'), findsOneWidget);
+    expect(find.text('扫码接收'), findsOneWidget);
+    expect(find.text('输入6位配对码'), findsOneWidget);
+
+    await tester.tap(find.text('仓库手机'));
+    await tester.pumpAndSettle();
+
+    expect(lanTransferService.selectedSender?.deviceName, '仓库手机');
+    expect(find.text('接收完成'), findsOneWidget);
+  });
+
+  testWidgets('send panel shows nearby waiting state and fallback pairing code',
       (tester) async {
     final lanTransferService = _FakeSendLanTransferService();
     await tester.pumpWidget(
@@ -518,8 +636,57 @@ void main() {
     await tester.tap(find.text('发送'));
     await tester.pump();
 
-    expect(find.text('让另一台手机输入配对码'), findsOneWidget);
+    expect(find.text('等待附近设备接收'), findsOneWidget);
+    expect(find.text('123456'), findsOneWidget);
     expect(find.text('复制二维码内容'), findsNothing);
     expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('sender confirms nearby receive request', (tester) async {
+    final lanTransferService = _ConfirmingSendLanTransferService();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: const _NoopBackupService(),
+          lanTransferService: lanTransferService,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('发送'));
+    await tester.pump();
+    lanTransferService.emitRequest();
+    await tester.pump();
+
+    expect(find.text('接收请求'), findsOneWidget);
+    expect(find.textContaining('仓库手机B'), findsOneWidget);
+    await tester.tap(find.text('允许'));
+    await tester.pump();
+
+    expect(lanTransferService.approvedRequestId, 'request-1');
+  });
+
+  testWidgets('nearby receive shows sender rejection explicitly',
+      (tester) async {
+    final lanTransferService = _RejectingNearbyReceiveLanTransferService();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: const _NoopBackupService(),
+          lanTransferService: lanTransferService,
+          onPrepareImport: () async {},
+          onImportCompleted: ({bool seedIfEmpty = true}) async {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('接收'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('仓库手机'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('对方已拒绝'), findsWidgets);
   });
 }

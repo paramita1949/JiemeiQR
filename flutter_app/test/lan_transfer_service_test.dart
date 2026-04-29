@@ -52,17 +52,25 @@ void main() {
     expect(parsed.pairingCode, '778899');
   });
 
-  test('discovery announcement round-trip parse', () {
+  test('discovery announcement includes public device details only', () {
     final service = LanTransferService(
       backupService: const BackupService(databaseFileName: 'jiemei.sqlite'),
     );
     final message = service.buildDiscoveryAnnouncement(
       baseUrl: 'http://192.168.1.8:54021',
+      sessionId: 'session-1',
+      deviceId: 'device-1',
+      deviceName: '仓库手机',
+      platform: 'android',
     );
 
     final parsed = service.parseDiscoveryAnnouncement(message);
 
     expect(parsed.baseUri, Uri.parse('http://192.168.1.8:54021'));
+    expect(parsed.sessionId, 'session-1');
+    expect(parsed.deviceId, 'device-1');
+    expect(parsed.deviceName, '仓库手机');
+    expect(parsed.platform, 'android');
     expect(message, isNot(contains('778899')));
   });
 
@@ -149,6 +157,113 @@ void main() {
     expect(await backupFile.exists(), isTrue);
     expect(_productCodes(backupFile), ['RECEIVER']);
     expect(senderService.hasActiveSendSession, isFalse);
+
+    await senderService.stopSendSession();
+  });
+
+  test(
+      'lan transfer service receives from discovered sender without code input',
+      () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-nearby-sender-');
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-nearby-receiver-');
+
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(senderDb, productCode: 'SENDER');
+    await _createBusinessDatabase(receiverDb, productCode: 'RECEIVER');
+
+    final senderService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => senderDir,
+        randomIntProvider: (_) => 234567,
+      ),
+      hostProvider: () async => '127.0.0.1',
+      bindAddress: InternetAddress.loopbackIPv4,
+    );
+    final receiverService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => receiverDir,
+      ),
+      tempDirectoryProvider: () async => receiverDir,
+    );
+
+    final session = await senderService.startSendSession();
+    final requestFuture = senderService.transferRequests.first;
+    final receiveFuture = receiverService.receiveFromDiscoveredSender(
+      DiscoveryAnnouncement(
+        baseUri: session.baseUri,
+        sessionId: session.sessionId,
+        deviceId: session.deviceId,
+        deviceName: '仓库手机',
+        platform: 'android',
+      ),
+      receiverName: '接收手机',
+      approvalPollInterval: const Duration(milliseconds: 20),
+    );
+    final request = await requestFuture;
+    expect(request.receiverName, '接收手机');
+    await senderService.approveTransferRequest(request.id);
+    final receiveResult = await receiveFuture;
+
+    expect(_productCodes(receiverDb), ['SENDER']);
+    expect(receiveResult.backupFileName, isNotEmpty);
+
+    await senderService.stopSendSession();
+  });
+
+  test('discovered sender receive fails when sender rejects request', () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-reject-nearby-sender-');
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-reject-nearby-receiver-');
+
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(senderDb, productCode: 'SENDER');
+    await _createBusinessDatabase(receiverDb, productCode: 'RECEIVER');
+
+    final senderService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => senderDir,
+        randomIntProvider: (_) => 345123,
+      ),
+      hostProvider: () async => '127.0.0.1',
+      bindAddress: InternetAddress.loopbackIPv4,
+    );
+    final receiverService = LanTransferService(
+      backupService: BackupService(
+        databaseFileName: 'jiemei.sqlite',
+        documentsDirectoryProvider: () async => receiverDir,
+      ),
+      tempDirectoryProvider: () async => receiverDir,
+    );
+
+    final session = await senderService.startSendSession();
+    final requestFuture = senderService.transferRequests.first;
+    final receiveFuture = receiverService.receiveFromDiscoveredSender(
+      DiscoveryAnnouncement(
+        baseUri: session.baseUri,
+        sessionId: session.sessionId,
+        deviceId: session.deviceId,
+        deviceName: '仓库手机',
+        platform: 'android',
+      ),
+      receiverName: '接收手机',
+      approvalPollInterval: const Duration(milliseconds: 20),
+    );
+    final request = await requestFuture;
+    await senderService.rejectTransferRequest(request.id);
+
+    await expectLater(
+      receiveFuture,
+      throwsA(isA<TransferRequestRejectedException>()),
+    );
+    expect(_productCodes(receiverDb), ['RECEIVER']);
 
     await senderService.stopSendSession();
   });

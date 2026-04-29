@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -43,8 +44,14 @@ class LanTransferService {
   RawDatagramSocket? _discoverySocket;
   Timer? _discoveryTimer;
   bool _databaseDelivered = false;
+  final String _deviceId = _randomToken(12);
+  final StreamController<TransferRequest> _transferRequestsController =
+      StreamController<TransferRequest>.broadcast();
+  final Map<String, _PendingTransferRequest> _pendingTransferRequests = {};
 
   bool get hasActiveSendSession => _session != null;
+  Stream<TransferRequest> get transferRequests =>
+      _transferRequestsController.stream;
 
   Future<SendSession> startSendSession() async {
     if (_session != null) {
@@ -57,6 +64,7 @@ class LanTransferService {
 
     final localHost = await (_hostProvider ?? _preferredLocalHost)();
     final baseUri = Uri.parse('http://$localHost:${server.port}');
+    final sessionId = _randomToken(12);
     final connectionCode = buildConnectionCode(
       baseUrl: baseUri.toString(),
       pairingCode: sendPackage.pairingCode,
@@ -68,6 +76,8 @@ class LanTransferService {
       manifestPath: sendPackage.manifestPath,
       databaseFilePath: sendPackage.databaseFilePath,
       connectionCode: connectionCode,
+      sessionId: sessionId,
+      deviceId: _deviceId,
     );
     _session = session;
 
@@ -90,6 +100,7 @@ class LanTransferService {
     _discoveryTimer = null;
     _discoverySocket?.close();
     _discoverySocket = null;
+    _pendingTransferRequests.clear();
     final server = _server;
     _server = null;
     await server?.close(force: true);
@@ -123,15 +134,69 @@ class LanTransferService {
     throw const SenderUnavailableException('no sender matched pairing code');
   }
 
+  Future<ReceiveResult> receiveFromDiscoveredSender(
+    DiscoveryAnnouncement sender, {
+    String? receiverName,
+    Duration approvalTimeout = const Duration(seconds: 60),
+    Duration approvalPollInterval = const Duration(milliseconds: 500),
+  }) async {
+    final grantToken = await _requestTransferApproval(
+      sender,
+      receiverName: receiverName ?? Platform.localHostname,
+      approvalTimeout: approvalTimeout,
+      approvalPollInterval: approvalPollInterval,
+    );
+    return receiveFromSenderWithToken(
+      baseUri: sender.baseUri,
+      transferToken: grantToken,
+    );
+  }
+
+  Future<bool> approveTransferRequest(String requestId) async {
+    final pending = _pendingTransferRequests[requestId];
+    if (pending == null) {
+      return false;
+    }
+    pending.status = TransferRequestStatus.approved;
+    pending.grantToken = _randomToken(18);
+    return true;
+  }
+
+  Future<bool> rejectTransferRequest(String requestId) async {
+    final pending = _pendingTransferRequests[requestId];
+    if (pending == null) {
+      return false;
+    }
+    pending.status = TransferRequestStatus.rejected;
+    return true;
+  }
+
   Future<List<DiscoveryAnnouncement>> discoverSenders({
     Duration timeout = const Duration(seconds: 3),
   }) async {
-    final socket = await RawDatagramSocket.bind(
-      InternetAddress.anyIPv4,
-      _discoveryPort,
-      reuseAddress: true,
-      reusePort: true,
-    );
+    late final RawDatagramSocket socket;
+    if (Platform.isWindows) {
+      socket = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        _discoveryPort,
+        reuseAddress: true,
+      );
+    } else {
+      try {
+        socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          _discoveryPort,
+          reuseAddress: true,
+          reusePort: true,
+        );
+      } on Object {
+        socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          _discoveryPort,
+          reuseAddress: true,
+        );
+      }
+    }
     final found = <String, DiscoveryAnnouncement>{};
     final completer = Completer<List<DiscoveryAnnouncement>>();
     late final StreamSubscription<RawSocketEvent> subscription;
@@ -161,6 +226,13 @@ class LanTransferService {
         }
       }
     });
+    socket.broadcastEnabled = true;
+    final probe = buildDiscoveryProbe(
+      deviceId: _deviceId,
+      deviceName: Platform.localHostname,
+      platform: Platform.operatingSystem,
+    );
+    socket.send(utf8.encode(probe), _discoveryAddress, _discoveryPort);
     timer = Timer(timeout, finish);
     return completer.future;
   }
@@ -201,6 +273,42 @@ class LanTransferService {
     }
   }
 
+  Future<ReceiveResult> receiveFromSenderWithToken({
+    required Uri baseUri,
+    required String transferToken,
+  }) async {
+    final client = _httpClientFactory();
+    try {
+      final manifestResponse = await _getWithTransferToken(
+        client: client,
+        uri: baseUri.resolve('/manifest'),
+        transferToken: transferToken,
+      );
+      final manifestBody = await utf8.decodeStream(manifestResponse);
+      final manifest = _parseManifest(manifestBody);
+      final databasePath = manifest['databasePath'] as String?;
+      if (databasePath == null || databasePath.isEmpty) {
+        throw const InvalidSenderManifestException('databasePath missing');
+      }
+      final dbFileName = p.basename(databasePath);
+      final dbResponse = await _getWithTransferToken(
+        client: client,
+        uri: baseUri.resolve('/database/$dbFileName'),
+        transferToken: transferToken,
+      );
+      final incomingPath = await _saveIncomingFile(dbResponse, dbFileName);
+      final importResult = await _backupService.importDatabaseFromPath(
+        incomingPath,
+      );
+      return ReceiveResult(
+        importedFromPath: incomingPath,
+        backupFileName: importResult.backupFileName,
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<HttpClientResponse> _getWithPairingCode({
     required HttpClient client,
     required Uri uri,
@@ -225,15 +333,127 @@ class LanTransferService {
     return response;
   }
 
+  Future<HttpClientResponse> _getWithTransferToken({
+    required HttpClient client,
+    required Uri uri,
+    required String transferToken,
+  }) async {
+    HttpClientRequest request;
+    try {
+      request = await client.getUrl(uri);
+    } on SocketException catch (error) {
+      throw SenderUnavailableException(error.toString());
+    }
+    request.headers.set('x-transfer-token', transferToken);
+    final response = await request.close();
+    if (response.statusCode == HttpStatus.forbidden) {
+      throw const TransferRequestRejectedException('transfer token rejected');
+    }
+    if (response.statusCode != HttpStatus.ok) {
+      throw DatabaseDownloadFailedException(
+        'status=${response.statusCode}, uri=$uri',
+      );
+    }
+    return response;
+  }
+
+  Future<String> _requestTransferApproval(
+    DiscoveryAnnouncement sender, {
+    required String receiverName,
+    required Duration approvalTimeout,
+    required Duration approvalPollInterval,
+  }) async {
+    final client = _httpClientFactory();
+    final requestId = _randomToken(12);
+    try {
+      HttpClientRequest request;
+      try {
+        request = await client.postUrl(
+          sender.baseUri.resolve('/transfer/request'),
+        );
+      } on SocketException catch (error) {
+        throw SenderUnavailableException(error.toString());
+      }
+      final payload = utf8.encode(
+        jsonEncode({
+          'requestId': requestId,
+          'sessionId': sender.sessionId,
+          'receiverDeviceId': _deviceId,
+          'receiverName': receiverName,
+        }),
+      );
+      request.headers.contentType = ContentType.json;
+      request.headers.contentLength = payload.length;
+      request.add(payload);
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.accepted) {
+        throw DatabaseDownloadFailedException(
+          'status=${response.statusCode}, uri=${sender.baseUri}',
+        );
+      }
+
+      final deadline = DateTime.now().add(approvalTimeout);
+      while (DateTime.now().isBefore(deadline)) {
+        final statusRequest = await client.getUrl(
+          sender.baseUri.resolve('/transfer/request/$requestId'),
+        );
+        final statusResponse = await statusRequest.close();
+        if (statusResponse.statusCode == HttpStatus.notFound) {
+          throw const SenderUnavailableException('transfer request missing');
+        }
+        if (statusResponse.statusCode != HttpStatus.ok) {
+          throw DatabaseDownloadFailedException(
+            'status=${statusResponse.statusCode}, uri=${sender.baseUri}',
+          );
+        }
+        final body = await utf8.decodeStream(statusResponse);
+        final dynamic parsed = jsonDecode(body);
+        if (parsed is! Map<String, dynamic>) {
+          throw const InvalidSenderManifestException(
+            'transfer request status invalid',
+          );
+        }
+        final status = parsed['status'] as String?;
+        if (status == TransferRequestStatus.approved.name) {
+          final grantToken = parsed['grantToken'] as String?;
+          if (grantToken == null || grantToken.isEmpty) {
+            throw const InvalidSenderManifestException('grantToken missing');
+          }
+          return grantToken;
+        }
+        if (status == TransferRequestStatus.rejected.name) {
+          throw const TransferRequestRejectedException('request rejected');
+        }
+        if (status == TransferRequestStatus.expired.name) {
+          throw const TransferRequestExpiredException('request expired');
+        }
+        await Future<void>.delayed(approvalPollInterval);
+      }
+      throw const TransferRequestExpiredException('request timed out');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<void> _handleRequest(HttpRequest request, SendSession session) async {
+    final path = request.uri.path;
+    if (request.method == 'POST' && path == '/transfer/request') {
+      await _handleTransferRequest(request, session);
+      return;
+    }
+    if (request.method == 'GET' && path.startsWith('/transfer/request/')) {
+      await _handleTransferRequestStatus(request);
+      return;
+    }
+
     final code = request.headers.value('x-pairing-code');
-    if (code != session.pairingCode) {
+    final token = request.headers.value('x-transfer-token');
+    if (code != session.pairingCode && !_isApprovedTransferToken(token)) {
       request.response.statusCode = HttpStatus.forbidden;
       await request.response.close();
       return;
     }
 
-    final path = request.uri.path;
     if (path == '/manifest') {
       request.response.headers.contentType = ContentType.json;
       await request.response.addStream(File(session.manifestPath).openRead());
@@ -261,6 +481,90 @@ class LanTransferService {
 
     request.response.statusCode = HttpStatus.notFound;
     await request.response.close();
+  }
+
+  Future<void> _handleTransferRequest(
+    HttpRequest request,
+    SendSession session,
+  ) async {
+    final body = await utf8.decodeStream(request);
+    final dynamic parsed = jsonDecode(body);
+    if (parsed is! Map<String, dynamic>) {
+      request.response.statusCode = HttpStatus.badRequest;
+      await request.response.close();
+      return;
+    }
+    if (parsed['sessionId'] != session.sessionId) {
+      request.response.statusCode = HttpStatus.forbidden;
+      await request.response.close();
+      return;
+    }
+    final requestId = parsed['requestId'] as String?;
+    final receiverDeviceId = parsed['receiverDeviceId'] as String?;
+    final receiverName = parsed['receiverName'] as String?;
+    if (requestId == null ||
+        requestId.isEmpty ||
+        receiverDeviceId == null ||
+        receiverDeviceId.isEmpty ||
+        receiverName == null ||
+        receiverName.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      await request.response.close();
+      return;
+    }
+    final transferRequest = TransferRequest(
+      id: requestId,
+      receiverDeviceId: receiverDeviceId,
+      receiverName: receiverName,
+      requestedAt: DateTime.now(),
+    );
+    _pendingTransferRequests[requestId] = _PendingTransferRequest(
+      request: transferRequest,
+    );
+    _transferRequestsController.add(transferRequest);
+    await _writeJson(request.response, HttpStatus.accepted, {
+      'requestId': requestId,
+      'status': TransferRequestStatus.pending.name,
+    });
+  }
+
+  Future<void> _handleTransferRequestStatus(HttpRequest request) async {
+    final requestId = request.uri.pathSegments.last;
+    final pending = _pendingTransferRequests[requestId];
+    if (pending == null) {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+    await _writeJson(request.response, HttpStatus.ok, {
+      'requestId': requestId,
+      'status': pending.status.name,
+      if (pending.grantToken != null) 'grantToken': pending.grantToken,
+    });
+  }
+
+  bool _isApprovedTransferToken(String? token) {
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+    return _pendingTransferRequests.values.any(
+      (pending) =>
+          pending.status == TransferRequestStatus.approved &&
+          pending.grantToken == token,
+    );
+  }
+
+  Future<void> _writeJson(
+    HttpResponse response,
+    int statusCode,
+    Map<String, Object?> body,
+  ) async {
+    final data = utf8.encode(jsonEncode(body));
+    response.statusCode = statusCode;
+    response.headers.contentType = ContentType.json;
+    response.headers.contentLength = data.length;
+    response.add(data);
+    await response.close();
   }
 
   Map<String, dynamic> _parseManifest(String body) {
@@ -312,26 +616,98 @@ class LanTransferService {
   }
 
   Future<void> _startDiscoveryBroadcast(SendSession session) async {
-    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final socket = await _bindDiscoverySocket();
     socket.broadcastEnabled = true;
     _discoverySocket = socket;
     void send() {
       final message = buildDiscoveryAnnouncement(
         baseUrl: session.baseUri.toString(),
+        sessionId: session.sessionId,
+        deviceId: session.deviceId,
+        deviceName: Platform.localHostname,
+        platform: Platform.operatingSystem,
       );
       socket.send(utf8.encode(message), _discoveryAddress, _discoveryPort);
     }
 
+    socket.listen((event) {
+      if (event != RawSocketEvent.read) {
+        return;
+      }
+      Datagram? datagram;
+      while ((datagram = socket.receive()) != null) {
+        try {
+          final text = utf8.decode(datagram!.data);
+          if (isDiscoveryProbe(text)) {
+            final message = buildDiscoveryAnnouncement(
+              baseUrl: session.baseUri.toString(),
+              sessionId: session.sessionId,
+              deviceId: session.deviceId,
+              deviceName: Platform.localHostname,
+              platform: Platform.operatingSystem,
+            );
+            socket.send(utf8.encode(message), datagram.address, datagram.port);
+          }
+        } on Object {
+          // Ignore unrelated UDP traffic.
+        }
+      }
+    });
     send();
     _discoveryTimer = Timer.periodic(const Duration(seconds: 1), (_) => send());
   }
 
+  Future<RawDatagramSocket> _bindDiscoverySocket() {
+    if (Platform.isWindows) {
+      return RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        _discoveryPort,
+        reuseAddress: true,
+      );
+    }
+    return RawDatagramSocket.bind(
+      InternetAddress.anyIPv4,
+      _discoveryPort,
+      reuseAddress: true,
+      reusePort: true,
+    );
+  }
+
+  String buildDiscoveryProbe({
+    required String deviceId,
+    required String deviceName,
+    required String platform,
+  }) {
+    return jsonEncode({
+      'type': 'jiemei-transfer-probe',
+      'version': 2,
+      'deviceId': deviceId,
+      'deviceName': deviceName,
+      'platform': platform,
+    });
+  }
+
+  bool isDiscoveryProbe(String text) {
+    final dynamic payload = jsonDecode(text);
+    return payload is Map<String, dynamic> &&
+        payload['type'] == 'jiemei-transfer-probe';
+  }
+
   String buildDiscoveryAnnouncement({
     required String baseUrl,
+    required String sessionId,
+    required String deviceId,
+    required String deviceName,
+    required String platform,
   }) {
     return jsonEncode({
       'type': 'jiemei-transfer-advertisement',
+      'version': 2,
       'baseUrl': baseUrl,
+      'sessionId': sessionId,
+      'deviceId': deviceId,
+      'deviceName': deviceName,
+      'platform': platform,
     });
   }
 
@@ -347,12 +723,30 @@ class LanTransferService {
     if (baseUrl == null || baseUrl.isEmpty) {
       throw const DiscoveryAnnouncementParseException('payload missing fields');
     }
+    final sessionId = payload['sessionId'] as String?;
+    final deviceId = payload['deviceId'] as String?;
+    final deviceName = payload['deviceName'] as String?;
+    final platform = payload['platform'] as String?;
+    if (sessionId == null ||
+        sessionId.isEmpty ||
+        deviceId == null ||
+        deviceId.isEmpty ||
+        deviceName == null ||
+        deviceName.isEmpty ||
+        platform == null ||
+        platform.isEmpty) {
+      throw const DiscoveryAnnouncementParseException('payload missing fields');
+    }
     final baseUri = Uri.tryParse(baseUrl);
     if (baseUri == null || !baseUri.hasAuthority) {
       throw const DiscoveryAnnouncementParseException('baseUrl invalid');
     }
     return DiscoveryAnnouncement(
       baseUri: baseUri,
+      sessionId: sessionId,
+      deviceId: deviceId,
+      deviceName: deviceName,
+      platform: platform,
     );
   }
 
@@ -406,6 +800,8 @@ class SendSession {
     required this.manifestPath,
     required this.databaseFilePath,
     required this.connectionCode,
+    required this.sessionId,
+    required this.deviceId,
   });
 
   final String pairingCode;
@@ -414,6 +810,8 @@ class SendSession {
   final String manifestPath;
   final String databaseFilePath;
   final String connectionCode;
+  final String sessionId;
+  final String deviceId;
 }
 
 class ReceiveResult {
@@ -434,6 +832,18 @@ class SenderUnavailableException implements Exception {
 
 class PairingCodeRejectedException implements Exception {
   const PairingCodeRejectedException();
+}
+
+class TransferRequestRejectedException implements Exception {
+  const TransferRequestRejectedException(this.message);
+
+  final String message;
+}
+
+class TransferRequestExpiredException implements Exception {
+  const TransferRequestExpiredException(this.message);
+
+  final String message;
 }
 
 class InvalidSenderManifestException implements Exception {
@@ -473,7 +883,56 @@ class ParsedConnectionCode {
 class DiscoveryAnnouncement {
   const DiscoveryAnnouncement({
     required this.baseUri,
+    required this.sessionId,
+    required this.deviceId,
+    required this.deviceName,
+    required this.platform,
   });
 
   final Uri baseUri;
+  final String sessionId;
+  final String deviceId;
+  final String deviceName;
+  final String platform;
+}
+
+enum TransferRequestStatus {
+  pending,
+  approved,
+  rejected,
+  expired,
+}
+
+class TransferRequest {
+  const TransferRequest({
+    required this.id,
+    required this.receiverDeviceId,
+    required this.receiverName,
+    required this.requestedAt,
+  });
+
+  final String id;
+  final String receiverDeviceId;
+  final String receiverName;
+  final DateTime requestedAt;
+}
+
+class _PendingTransferRequest {
+  _PendingTransferRequest({
+    required this.request,
+  });
+
+  final TransferRequest request;
+  TransferRequestStatus status = TransferRequestStatus.pending;
+  String? grantToken;
+}
+
+String _randomToken(int length) {
+  const alphabet =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  final random = Random.secure();
+  return List.generate(
+    length,
+    (_) => alphabet[random.nextInt(alphabet.length)],
+  ).join();
 }

@@ -50,6 +50,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   String? _statusText;
   _ReceiveStage _receiveStage = _ReceiveStage.idle;
   Timer? _sendSessionMonitor;
+  StreamSubscription<TransferRequest>? _transferRequestSubscription;
+  bool _showingTransferRequest = false;
 
   @override
   void initState() {
@@ -64,6 +66,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   @override
   void dispose() {
     _sendSessionMonitor?.cancel();
+    _transferRequestSubscription?.cancel();
     _lanTransferService.stopSendSession();
     super.dispose();
   }
@@ -98,7 +101,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
                 Expanded(
                   child: _CircleActionButton(
                     title: '接收',
-                    subtitle: '扫码 / 配对码',
+                    subtitle: '附近设备',
                     icon: Icons.download_rounded,
                     active: _receiving,
                     busy: _receiving,
@@ -152,7 +155,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
-            '让另一台手机输入配对码',
+            '等待附近设备接收',
             style: TextStyle(
               color: AppTheme.textPrimary,
               fontSize: 18,
@@ -161,7 +164,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            '接收端输入下面 6 位码后会自动配对',
+            '接收端会自动发现本机，也可用配对码兜底',
             style: TextStyle(
               color: AppTheme.textSecondary,
               fontSize: 13,
@@ -240,8 +243,9 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       }
       setState(() {
         _sendSession = session;
-        _statusText = '发送已开启，等待接收端输入配对码。';
+        _statusText = '发送已开启，等待附近设备连接。';
       });
+      _listenForTransferRequests();
       _startSendSessionMonitor();
     } on BackupSourceMissingException {
       _showSnack('当前数据库不存在，无法发送');
@@ -263,6 +267,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   Future<void> _stopSend() async {
     _sendSessionMonitor?.cancel();
     _sendSessionMonitor = null;
+    await _transferRequestSubscription?.cancel();
+    _transferRequestSubscription = null;
     await _lanTransferService.stopSendSession();
     if (!mounted) {
       return;
@@ -292,50 +298,102 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     });
   }
 
-  Future<void> _showReceiveOptions() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 6, 18, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '接收数据',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => Navigator.of(context).pop('scan'),
-                icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('扫码接收'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pop('code'),
-                icon: const Icon(Icons.pin_rounded),
-                label: const Text('输入6位配对码'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted || action == null) {
+  void _listenForTransferRequests() {
+    _transferRequestSubscription?.cancel();
+    _transferRequestSubscription =
+        _lanTransferService.transferRequests.listen((request) {
+      unawaited(_handleTransferRequest(request));
+    });
+  }
+
+  Future<void> _handleTransferRequest(TransferRequest request) async {
+    if (!mounted || _showingTransferRequest) {
       return;
     }
-    if (action == 'scan') {
+    _showingTransferRequest = true;
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('接收请求'),
+        content: Text('${request.receiverName} 请求接收当前数据库，是否允许？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('拒绝'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('允许'),
+          ),
+        ],
+      ),
+    );
+    _showingTransferRequest = false;
+    if (approved == true) {
+      await _lanTransferService.approveTransferRequest(request.id);
+      if (mounted) {
+        setState(() => _statusText = '已允许 ${request.receiverName} 接收数据');
+      }
+    } else {
+      await _lanTransferService.rejectTransferRequest(request.id);
+      if (mounted) {
+        setState(() => _statusText = '已拒绝 ${request.receiverName} 的请求');
+      }
+    }
+  }
+
+  Future<void> _showReceiveOptions() async {
+    setState(() {
+      _receiving = true;
+      _receiveStage = _ReceiveStage.pairing;
+      _statusText = '正在搜索附近设备...';
+    });
+    List<DiscoveryAnnouncement> senders = const [];
+    try {
+      senders = await _lanTransferService.discoverSenders(
+        timeout: const Duration(seconds: 2),
+      );
+    } catch (_) {
+      senders = const [];
+    } finally {
+      if (mounted) {
+        setState(() {
+          _receiving = false;
+          _receiveStage = _ReceiveStage.idle;
+          _statusText =
+              senders.isEmpty ? '未发现附近设备' : '发现 ${senders.length} 台附近设备';
+        });
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+
+    final choice = await showModalBottomSheet<_ReceiveChoice>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _ReceiveOptionsSheet(
+        senders: senders,
+      ),
+    );
+    if (!mounted || choice == null) {
+      return;
+    }
+    if (choice.action == _ReceiveAction.nearby && choice.sender != null) {
+      await _receiveFromNearby(choice.sender!);
+    } else if (choice.action == _ReceiveAction.scan) {
       await _scanAndReceive();
-    } else if (action == 'code') {
+    } else if (choice.action == _ReceiveAction.code) {
       await _receiveByCodeInput();
     }
+  }
+
+  Future<void> _receiveFromNearby(DiscoveryAnnouncement sender) async {
+    await _receiveWithPreparation(
+      () => _lanTransferService.receiveFromDiscoveredSender(sender),
+      progressText: '正在连接 ${sender.deviceName}...',
+    );
   }
 
   Future<void> _scanAndReceive() async {
@@ -425,6 +483,22 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         setState(() {
           _receiveStage = _ReceiveStage.error;
           _statusText = '配对码错误';
+        });
+      }
+    } on TransferRequestRejectedException {
+      _showSnack('对方已拒绝');
+      if (mounted) {
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = '对方已拒绝';
+        });
+      }
+    } on TransferRequestExpiredException {
+      _showSnack('对方确认超时');
+      if (mounted) {
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = '对方确认超时';
         });
       }
     } on InvalidSenderManifestException {
@@ -871,8 +945,8 @@ class _PairingCodeDialogState extends State<_PairingCodeDialog> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (value) => _onDigitChanged(index, value),
-                  onTap: () => _controllers[index].selection =
-                      TextSelection.collapsed(
+                  onTap: () =>
+                      _controllers[index].selection = TextSelection.collapsed(
                     offset: _controllers[index].text.length,
                   ),
                 ),
@@ -887,6 +961,112 @@ class _PairingCodeDialogState extends State<_PairingCodeDialog> {
           child: const Text('取消'),
         ),
       ],
+    );
+  }
+}
+
+enum _ReceiveAction {
+  nearby,
+  scan,
+  code,
+}
+
+class _ReceiveChoice {
+  const _ReceiveChoice(this.action, {this.sender});
+
+  final _ReceiveAction action;
+  final DiscoveryAnnouncement? sender;
+}
+
+class _ReceiveOptionsSheet extends StatelessWidget {
+  const _ReceiveOptionsSheet({
+    required this.senders,
+  });
+
+  final List<DiscoveryAnnouncement> senders;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 6, 18, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              '发现附近设备',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (senders.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: const Text(
+                  '未发现正在发送的设备',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              )
+            else
+              ...senders.map(
+                (sender) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    leading: const Icon(
+                      Icons.devices_rounded,
+                      color: AppTheme.primary,
+                    ),
+                    title: Text(
+                      sender.deviceName,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    subtitle: Text(sender.baseUri.host),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).pop(
+                      _ReceiveChoice(_ReceiveAction.nearby, sender: sender),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(
+                const _ReceiveChoice(_ReceiveAction.scan),
+              ),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              label: const Text('扫码接收'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(
+                const _ReceiveChoice(_ReceiveAction.code),
+              ),
+              icon: const Icon(Icons.pin_rounded),
+              label: const Text('输入6位配对码'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -922,9 +1102,8 @@ class _TransferFeedbackCard extends StatelessWidget {
       _ReceiveStage.transferring => Icons.cloud_download_rounded,
       _ReceiveStage.success => Icons.check_circle_rounded,
       _ReceiveStage.error => Icons.error_outline_rounded,
-      _ReceiveStage.idle => sending
-          ? Icons.wifi_tethering_rounded
-          : Icons.info_outline_rounded,
+      _ReceiveStage.idle =>
+        sending ? Icons.wifi_tethering_rounded : Icons.info_outline_rounded,
     };
     final color = switch (stage) {
       _ReceiveStage.success => const Color(0xFF0E9F6E),
