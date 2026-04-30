@@ -18,6 +18,11 @@ void main() {
         tencentSecretId: 'sid',
         tencentSecretKey: 'skey',
         tencentRegion: 'ap-shanghai',
+        aliyunAccessKeyId: 'ak',
+        aliyunAccessKeySecret: 'as',
+        aliyunEndpoint: 'ocr-api.cn-hangzhou.aliyuncs.com',
+        baiduApiKey: 'bak',
+        baiduSecretKey: 'bsk',
       ),
     );
 
@@ -28,6 +33,10 @@ void main() {
     expect(loaded.tencentSecretId, 'sid');
     expect(loaded.tencentSecretKey, 'skey');
     expect(loaded.tencentRegion, 'ap-shanghai');
+    expect(loaded.aliyunAccessKeyId, 'ak');
+    expect(loaded.aliyunAccessKeySecret, 'as');
+    expect(loaded.baiduApiKey, 'bak');
+    expect(loaded.baiduSecretKey, 'bsk');
   });
 
   test('uses Gemini 3 Flash preview as default model', () async {
@@ -42,5 +51,7 @@ void main() {
     expect(loaded.geminiApiKey, '');
     expect(loaded.geminiModel, 'gemini-3-flash-preview');
     expect(loaded.tencentRegion, AiOcrConfig.defaultTencentRegion);
+    expect(loaded.aliyunEndpoint, AiOcrConfig.defaultAliyunEndpoint);
+    expect(loaded.baiduApiKey, '');
   });
 }

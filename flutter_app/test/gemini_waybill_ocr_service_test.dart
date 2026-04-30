@@ -90,6 +90,11 @@ void main() {
         tencentSecretId: '',
         tencentSecretKey: '',
         tencentRegion: AiOcrConfig.defaultTencentRegion,
+        aliyunAccessKeyId: '',
+        aliyunAccessKeySecret: '',
+        aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
+        baiduApiKey: '',
+        baiduSecretKey: '',
       ),
     );
     Uri? capturedUri;

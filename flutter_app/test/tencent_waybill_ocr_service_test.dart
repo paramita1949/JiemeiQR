@@ -59,6 +59,11 @@ void main() {
         tencentSecretId: 'saved-id',
         tencentSecretKey: 'saved-key',
         tencentRegion: 'ap-shanghai',
+        aliyunAccessKeyId: '',
+        aliyunAccessKeySecret: '',
+        aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
+        baiduApiKey: '',
+        baiduSecretKey: '',
       ),
     );
     final image = await File('${Directory.systemTemp.path}/tencent-config.jpg')

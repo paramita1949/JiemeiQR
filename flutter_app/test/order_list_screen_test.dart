@@ -106,7 +106,8 @@ void main() {
     expect(find.text('RANGE-2'), findsNothing);
   });
 
-  testWidgets('quick filter starts from 未完成 then 今日/昨日/一周/一月', (tester) async {
+  testWidgets('exception filter sits after 完成 on the status row',
+      (tester) async {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
     final labels = find.text('未完成');
@@ -116,6 +117,11 @@ void main() {
     expect(find.text('昨日'), findsOneWidget);
     expect(find.text('一周'), findsOneWidget);
     expect(find.text('一月'), findsOneWidget);
+
+    final donePosition = tester.getTopLeft(find.text('完成').first);
+    final exceptionPosition = tester.getTopLeft(find.text('异常'));
+    expect(exceptionPosition.dy, donePosition.dy);
+    expect(exceptionPosition.dx, greaterThan(donePosition.dx));
   });
 
   testWidgets('exception quick filter shows orders triggered by batch edit',

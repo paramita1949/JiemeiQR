@@ -71,6 +71,8 @@ void main() {
     expect(find.text('库存明细'), findsOneWidget);
     expect(find.text('数据备份'), findsOneWidget);
     expect(find.text('基础资料'), findsOneWidget);
+    expect(find.text('AI识别'), findsOneWidget);
+    expect(find.text('AI智能填单'), findsOneWidget);
     expect(find.text('备份导入'), findsNothing);
   });
 
@@ -223,19 +225,53 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('AI配置'),
+      find.text('AI识别'),
       120,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('AI配置'));
+    await tester.tap(find.text('AI识别'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
 
     expect(find.text('AI配置'), findsWidgets);
+    expect(find.text('默认使用'), findsOneWidget);
+    expect(find.text('当前启用'), findsOneWidget);
+    expect(find.text('谷歌'), findsWidgets);
+    expect(find.text('腾讯'), findsWidgets);
+    expect(find.text('阿里'), findsWidgets);
+    expect(find.text('百度'), findsWidgets);
+    expect(find.text('阿里OCR'), findsNothing);
+    expect(find.text('百度OCR'), findsNothing);
+    expect(find.byKey(const Key('providerHorizontalList')), findsOneWidget);
+
+    expect(find.text('识别密钥'), findsOneWidget);
     expect(find.text('Gemini API Key'), findsOneWidget);
     expect(find.text('Gemini 模型'), findsOneWidget);
-    expect(find.text('腾讯OCR'), findsOneWidget);
+    expect(find.text('腾讯OCR'), findsNothing);
+    expect(find.text('腾讯 SecretId'), findsNothing);
+    expect(find.text('腾讯 SecretKey'), findsNothing);
+    expect(find.text('腾讯地域'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('providerCard-tencent')));
+    await tester.pumpAndSettle();
     expect(find.text('腾讯 SecretId'), findsOneWidget);
+    expect(find.text('腾讯 SecretKey'), findsOneWidget);
+    expect(find.text('Gemini API Key'), findsNothing);
+
+    await tester.drag(
+        find.byKey(const Key('providerHorizontalList')), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('providerCard-aliyun')));
+    await tester.pumpAndSettle();
+    expect(find.text('阿里 AccessKeyId'), findsOneWidget);
+    expect(find.text('阿里 AccessKeySecret'), findsOneWidget);
+    expect(find.text('阿里接入点'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('providerCard-baidu')));
+    await tester.pumpAndSettle();
+    expect(find.text('百度 API Key'), findsOneWidget);
+    expect(find.text('百度 Secret Key'), findsOneWidget);
+    expect(find.text('阿里 AccessKeyId'), findsNothing);
   });
 }

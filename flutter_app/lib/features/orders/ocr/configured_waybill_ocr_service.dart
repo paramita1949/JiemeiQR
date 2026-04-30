@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/aliyun_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/baidu_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/tencent_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
@@ -19,6 +21,12 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     if (config.usesTencentOcr) {
       return TencentWaybillOcrService(configStore: configStore)
           .recognize(image);
+    }
+    if (config.usesAliyunOcr) {
+      return AliyunWaybillOcrService(configStore: configStore).recognize(image);
+    }
+    if (config.usesBaiduOcr) {
+      return BaiduWaybillOcrService(configStore: configStore).recognize(image);
     }
     return GeminiWaybillOcrService(configStore: configStore).recognize(image);
   }

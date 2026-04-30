@@ -94,6 +94,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
             const SizedBox(height: 14),
             _StatusTabs(
               selected: _status,
+              exceptionSelected: _quickFilter == _OrderQuickFilter.exception,
+              onExceptionSelected: () =>
+                  _applyQuickFilter(_OrderQuickFilter.exception),
               onChanged: (status) {
                 setState(() {
                   _status = status;
@@ -403,12 +406,6 @@ class _QuickFilterChips extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           _QuickChip(
-            label: '异常',
-            selected: selected == _OrderQuickFilter.exception,
-            onTap: () => onSelected(_OrderQuickFilter.exception),
-          ),
-          const SizedBox(width: 8),
-          _QuickChip(
             label: '今日',
             selected: selected == _OrderQuickFilter.today,
             onTap: () => onSelected(_OrderQuickFilter.today),
@@ -491,11 +488,15 @@ String _weekdayLabel(DateTime date) {
 class _StatusTabs extends StatelessWidget {
   const _StatusTabs({
     required this.selected,
+    required this.exceptionSelected,
     required this.onChanged,
+    required this.onExceptionSelected,
   });
 
   final OrderStatus? selected;
+  final bool exceptionSelected;
   final ValueChanged<OrderStatus?> onChanged;
+  final VoidCallback onExceptionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -529,6 +530,13 @@ class _StatusTabs extends StatelessWidget {
             color: const Color(0xFF16A34A),
             selected: selected == OrderStatus.done,
             onTap: () => onChanged(OrderStatus.done),
+          ),
+          const SizedBox(width: 8),
+          _StatusButton(
+            label: '异常',
+            color: const Color(0xFFDC2626),
+            selected: exceptionSelected,
+            onTap: onExceptionSelected,
           ),
         ],
       ),

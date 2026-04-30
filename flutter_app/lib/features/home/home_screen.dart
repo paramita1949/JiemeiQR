@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       return;
     }
-    if (title == 'AI配置') {
+    if (title == 'AI识别') {
       await pushAndRefresh(
         context,
         route: MaterialPageRoute(
@@ -585,8 +585,8 @@ class _ActionGrid extends StatelessWidget {
       ),
       _HomeAction(
         icon: Icons.tune_outlined,
-        title: 'AI配置',
-        subtitle: 'Gemini / 腾讯OCR',
+        title: 'AI识别',
+        subtitle: 'AI智能填单',
         color: Color(0xFFF0FDF4),
       ),
     ];
