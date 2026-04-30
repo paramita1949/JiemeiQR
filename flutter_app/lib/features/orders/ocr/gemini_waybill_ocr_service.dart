@@ -147,7 +147,7 @@ const _ocrPrompt = '''
 - rows: 表格每一行的 productCode、productName、actualBatch、dateBatch、boxes
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
 不同实际批号必须作为不同原始行输出。
-读不清的字段返回空字符串或0，并在warnings写原因。
+读不清的字段返回空字符串或0，并在warnings用中文写原因。
 ''';
 
 const _responseSchema = {

@@ -190,15 +190,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
       status: _status,
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
       offset: 0,
       limit: _pageSize,
     );
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
-    final restockAggregates = await _orderDao.orderRestockAggregates(
-      status: _status,
-      dateRange: _dateRange,
-      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
-    );
+    final restockAggregates = _quickFilter == _OrderQuickFilter.exception
+        ? const <OrderRestockAggregate>[]
+        : await _orderDao.orderRestockAggregates(
+            status: _status,
+            dateRange: _dateRange,
+            unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+          );
     if (!mounted) {
       return;
     }
@@ -221,6 +224,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       status: _status,
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
       offset: _orders.length,
       limit: _pageSize,
     );
@@ -238,6 +242,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
   String _dateRangeText() {
     if (_quickFilter == _OrderQuickFilter.pendingOnly) {
       return '未完成';
+    }
+    if (_quickFilter == _OrderQuickFilter.exception) {
+      return '异常订单';
     }
     final range = _dateRange;
     if (range == null) {
@@ -304,6 +311,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
         case _OrderQuickFilter.pendingOnly:
           _dateRange = null;
           _status = null;
+        case _OrderQuickFilter.exception:
+          _dateRange = null;
+          _status = null;
         case _OrderQuickFilter.today:
           _dateRange = _singleDayRange(DateTime.now());
           _status = null;
@@ -361,7 +371,15 @@ DateTimeRange _singleDayRange(DateTime date) {
   return DateTimeRange(start: day, end: day);
 }
 
-enum _OrderQuickFilter { today, yesterday, week, month, pendingOnly, custom }
+enum _OrderQuickFilter {
+  today,
+  yesterday,
+  week,
+  month,
+  pendingOnly,
+  exception,
+  custom,
+}
 
 class _QuickFilterChips extends StatelessWidget {
   const _QuickFilterChips({
@@ -382,6 +400,12 @@ class _QuickFilterChips extends StatelessWidget {
             label: '未完成',
             selected: selected == _OrderQuickFilter.pendingOnly,
             onTap: () => onSelected(_OrderQuickFilter.pendingOnly),
+          ),
+          const SizedBox(width: 8),
+          _QuickChip(
+            label: '异常',
+            selected: selected == _OrderQuickFilter.exception,
+            onTap: () => onSelected(_OrderQuickFilter.exception),
           ),
           const SizedBox(width: 8),
           _QuickChip(
@@ -654,6 +678,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ),
                 if (order.hasTsRequired) const _TsPill(),
+                if (order.hasException) const _ExceptionPill(),
                 if (order.itemCount == 1 && order.locationsText.isNotEmpty)
                   Text(
                     '库位 ${order.locationsText}',
@@ -828,6 +853,29 @@ Set<String> _duplicateProductDateKeys(List<OrderRestockAggregate> rows) {
     }
   }
   return keys;
+}
+
+class _ExceptionPill extends StatelessWidget {
+  const _ExceptionPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF97316).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Text(
+        '异常',
+        style: TextStyle(
+          color: Color(0xFFC2410C),
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
 }
 
 String _restockProductDateKey({

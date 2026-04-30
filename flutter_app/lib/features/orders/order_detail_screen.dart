@@ -808,6 +808,12 @@ class _LineCard extends StatelessWidget {
                     '${line.batch.boxesPerBoard}箱/板 · ${line.product.piecesPerBox}件/箱',
               ),
               _MetricChip(text: '库位 ${line.batch.location ?? '--'}'),
+              if (line.item.isException)
+                const _MetricChip(
+                  text: '异常',
+                  textColor: Color(0xFFC2410C),
+                  backgroundColor: Color(0xFFFFEDD5),
+                ),
               if (line.batch.tsRequired)
                 const _MetricChip(
                   text: 'TS',

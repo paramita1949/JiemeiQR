@@ -111,10 +111,97 @@ void main() {
     await tester.pumpAndSettle();
     final labels = find.text('未完成');
     expect(labels, findsWidgets);
+    expect(find.text('异常'), findsOneWidget);
     expect(find.text('今日'), findsOneWidget);
     expect(find.text('昨日'), findsOneWidget);
     expect(find.text('一周'), findsOneWidget);
     expect(find.text('一月'), findsOneWidget);
+  });
+
+  testWidgets('exception quick filter shows orders triggered by batch edit',
+      (tester) async {
+    final productId = await productDao.createProduct(
+      code: '72067',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final batchA = await productDao.createBatch(
+      productId: productId,
+      actualBatch: '123',
+      dateBatch: '2029.1.1',
+      initialBoxes: 100,
+    );
+    final batchB = await productDao.createBatch(
+      productId: productId,
+      actualBatch: '124',
+      dateBatch: '2029.01.01',
+      initialBoxes: 100,
+    );
+    final batchC = await productDao.createBatch(
+      productId: productId,
+      actualBatch: '125',
+      dateBatch: '2029.1.2',
+      initialBoxes: 100,
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'ERR-A',
+      merchantName: '洁美A',
+      orderDate: DateTime.now(),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchA,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    final doneOrderId = await orderDao.createPendingWaybill(
+      waybillNo: 'ERR-B',
+      merchantName: '洁美B',
+      orderDate: DateTime.now(),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchB,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+    await orderDao.setStatus(doneOrderId, OrderStatus.done);
+    await orderDao.createPendingWaybill(
+      waybillNo: 'OK-C',
+      merchantName: '洁美C',
+      orderDate: DateTime.now(),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: batchC,
+        boxes: 2,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    await productDao.updateBaseInfoEntry(
+      batchId: batchA,
+      code: '72067',
+      name: '六神花露水195ML',
+      actualBatch: '123A',
+      dateBatch: '2029.1.1',
+      currentBoxes: 100,
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+      tsRequired: false,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('异常').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('ERR-A'), findsOneWidget);
+    expect(find.text('ERR-B'), findsOneWidget);
+    expect(find.text('OK-C'), findsNothing);
   });
 
   testWidgets('new waybill button opens edit screen', (tester) async {

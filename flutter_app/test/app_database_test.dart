@@ -19,8 +19,8 @@ void main() {
     await database.close();
   });
 
-  test('database starts at schema version 4', () {
-    expect(database.schemaVersion, 4);
+  test('database starts at schema version 5', () {
+    expect(database.schemaVersion, 5);
   });
 
   test('creates product and batch records', () async {
@@ -146,7 +146,7 @@ void main() {
     expect(await productDao.hasTsRequiredBatches(productId), isTrue);
   });
 
-  test('migrates v1 database to v4 without data loss', () async {
+  test('migrates v1 database to v5 without data loss', () async {
     final oldWarnSetting = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() {
@@ -243,7 +243,7 @@ void main() {
 
     final versionRow =
         await migrated.customSelect('PRAGMA user_version;').getSingle();
-    expect(versionRow.data['user_version'], 4);
+    expect(versionRow.data['user_version'], 5);
 
     final tsRequired = await migrated.customSelect(
       'SELECT ts_required FROM batches WHERE id = ?',
@@ -251,9 +251,18 @@ void main() {
     ).getSingle();
     expect(tsRequired.data['ts_required'], 0);
 
-    final orderIndexRows = await migrated.customSelect(
-      "PRAGMA index_list('orders');",
-    ).get();
+    final isException = await migrated
+        .customSelect(
+          'SELECT is_exception FROM order_items LIMIT 1',
+        )
+        .getSingleOrNull();
+    expect(isException, isNull);
+
+    final orderIndexRows = await migrated
+        .customSelect(
+          "PRAGMA index_list('orders');",
+        )
+        .get();
     expect(
       orderIndexRows.any(
         (row) => row.data['name'] == 'idx_orders_status_order_date',
@@ -261,9 +270,11 @@ void main() {
       isTrue,
     );
 
-    final movementIndexRows = await migrated.customSelect(
-      "PRAGMA index_list('stock_movements');",
-    ).get();
+    final movementIndexRows = await migrated
+        .customSelect(
+          "PRAGMA index_list('stock_movements');",
+        )
+        .get();
     expect(
       movementIndexRows.any(
         (row) => row.data['name'] == 'idx_movements_type_date_batch',

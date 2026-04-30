@@ -69,33 +69,44 @@ class WaybillOcrMatcher {
   }
 
   Future<BatchRecord?> _matchBatch(Product product, WaybillOcrRow row) async {
-    final batches = await _productDao.availableBatchesForProduct(product.id);
+    final batches = await _productDao.batchesForProduct(product.id);
     final actualBatch = _norm(row.actualBatch);
-    final dateBatch = _norm(row.dateBatch);
+    final dateBatch = _dateBatchKey(row.dateBatch);
+    if (dateBatch.isNotEmpty) {
+      final byDate = batches
+          .where((batch) => _dateBatchKey(batch.dateBatch) == dateBatch)
+          .toList();
+      if (byDate.length == 1) {
+        return byDate.single;
+      }
+      if (byDate.length > 1) {
+        if (actualBatch.isNotEmpty) {
+          final byActual = byDate
+              .where((batch) => _norm(batch.actualBatch) == actualBatch)
+              .toList();
+          if (byActual.length == 1) {
+            return byActual.single;
+          }
+        }
+        return null;
+      }
+    }
     if (actualBatch.isNotEmpty) {
       final exact = batches
-          .where((batch) => _norm(batch.batch.actualBatch) == actualBatch)
+          .where((batch) => _norm(batch.actualBatch) == actualBatch)
           .toList();
       if (exact.length == 1) {
-        return exact.single.batch;
+        return exact.single;
       }
       if (exact.length > 1 && dateBatch.isNotEmpty) {
         final withDate = exact
-            .where((batch) => _norm(batch.batch.dateBatch) == dateBatch)
+            .where((batch) => _dateBatchKey(batch.dateBatch) == dateBatch)
             .toList();
         if (withDate.length == 1) {
-          return withDate.single.batch;
+          return withDate.single;
         }
       }
-      return exact.isNotEmpty ? exact.first.batch : null;
-    }
-    if (dateBatch.isNotEmpty) {
-      final byDate = batches
-          .where((batch) => _norm(batch.batch.dateBatch) == dateBatch)
-          .toList();
-      if (byDate.length == 1) {
-        return byDate.single.batch;
-      }
+      return exact.isNotEmpty ? exact.first : null;
     }
     return null;
   }
@@ -165,6 +176,19 @@ String _norm(String value) {
       .toUpperCase()
       .replaceAll(RegExp(r'\s+'), '')
       .replaceAll('。', '.');
+}
+
+String _dateBatchKey(String value) {
+  final normalized = _norm(value);
+  final match = RegExp(r'(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})日?')
+      .firstMatch(normalized);
+  if (match == null) {
+    return normalized;
+  }
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  return '$year.$month.$day';
 }
 
 DateTime? _parseDate(String value) {

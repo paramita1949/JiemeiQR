@@ -443,13 +443,17 @@ class OrderDao {
       if (order == null) {
         return;
       }
-      if (order.status == OrderStatus.done) {
+      final canCorrectCompletedException =
+          order.status == OrderStatus.done && item.isException;
+      if (order.status == OrderStatus.done && !canCorrectCompletedException) {
         throw const OrderItemUpdateNotAllowedException();
       }
-      final availableBoxes = await _availableBoxesForBatchExcludingItem(
-        batchId: batchId,
-        excludeItemId: itemId,
-      );
+      final availableBoxes = canCorrectCompletedException
+          ? await StockDao(_database).currentBoxesForBatch(batchId)
+          : await _availableBoxesForBatchExcludingItem(
+              batchId: batchId,
+              excludeItemId: itemId,
+            );
       if (boxes > availableBoxes) {
         throw InsufficientStockException(
           batchId: batchId,
@@ -465,8 +469,22 @@ class OrderDao {
           boxes: Value(boxes),
           boxesPerBoard: Value(boxesPerBoard),
           piecesPerBox: Value(piecesPerBox),
+          isException: const Value(false),
         ),
       );
+      if (canCorrectCompletedException) {
+        await (_database.update(_database.stockMovements)
+              ..where((table) =>
+                  table.orderId.equals(order.id) &
+                  table.batchId.equals(item.batchId) &
+                  table.type.equals(StockMovementType.orderOut.index)))
+            .write(
+          StockMovementsCompanion(
+            batchId: Value(batchId),
+            boxes: Value(boxes),
+          ),
+        );
+      }
       await (_database.update(_database.orders)
             ..where((table) => table.id.equals(order.id)))
           .write(OrdersCompanion(updatedAt: Value(DateTime.now())));
@@ -638,9 +656,25 @@ class OrderDao {
     OrderStatus? status,
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
+    bool exceptionOnly = false,
     required int offset,
     required int limit,
   }) async {
+    final exceptionOrderIds = exceptionOnly
+        ? await _exceptionOrderIdsPage(
+            status: status,
+            dateRange: dateRange,
+            unfinishedOnly: unfinishedOnly,
+            offset: offset,
+            limit: limit,
+          )
+        : null;
+    if (exceptionOnly && exceptionOrderIds!.ids.isEmpty) {
+      return PagedOrderSummaries(
+        orders: const <OrderSummary>[],
+        total: exceptionOrderIds.total,
+      );
+    }
     final orderTable = _database.orders;
     final countExp = orderTable.id.count();
     final countQuery = _database.selectOnly(orderTable)..addColumns([countExp]);
@@ -665,9 +699,14 @@ class OrderDao {
       );
       countQuery.where(orderTable.orderDate.isBetweenValues(start, end));
     }
-    final total = (await countQuery.getSingle()).read(countExp) ?? 0;
+    final total = exceptionOnly
+        ? exceptionOrderIds!.total
+        : (await countQuery.getSingle()).read(countExp) ?? 0;
 
     final query = _database.select(_database.orders);
+    if (exceptionOnly) {
+      query.where((table) => table.id.isIn(exceptionOrderIds!.ids));
+    }
     if (unfinishedOnly) {
       query.where((table) => table.status.isNotValue(OrderStatus.done.index));
     } else if (status != null) {
@@ -689,13 +728,22 @@ class OrderDao {
       );
       query.where((table) => table.orderDate.isBetweenValues(start, end));
     }
-    query.orderBy([
-      (table) => OrderingTerm.desc(table.orderDate),
-      (table) => OrderingTerm.desc(table.createdAt),
-    ]);
-    query.limit(limit, offset: offset);
+    if (!exceptionOnly) {
+      query.orderBy([
+        (table) => OrderingTerm.desc(table.orderDate),
+        (table) => OrderingTerm.desc(table.createdAt),
+      ]);
+      query.limit(limit, offset: offset);
+    }
 
     final orders = await query.get();
+    if (exceptionOnly) {
+      orders.sort(
+        (a, b) =>
+            exceptionOrderIds!.ids.indexOf(a.id) -
+            exceptionOrderIds.ids.indexOf(b.id),
+      );
+    }
     if (orders.isEmpty) {
       return PagedOrderSummaries(
         orders: const <OrderSummary>[],
@@ -732,11 +780,13 @@ class OrderDao {
         (value) => value.add(
           item.boxes,
           tsRequired: tsRequired,
+          isException: item.isException,
           location: location,
         ),
         ifAbsent: () => _OrderItemStats(
           item.boxes,
           tsRequired: tsRequired,
+          isException: item.isException,
           location: location,
         ),
       );
@@ -754,6 +804,7 @@ class OrderDao {
           itemCount: stats?.count ?? 0,
           totalBoxes: stats?.totalBoxes ?? 0,
           hasTsRequired: stats?.hasTsRequired ?? false,
+          hasException: stats?.hasException ?? false,
           locationsText: stats?.locationsText ?? '',
           restockSummaryText: _restockSummaryText(
             orderItems:
@@ -765,6 +816,78 @@ class OrderDao {
       );
     }
     return PagedOrderSummaries(orders: summaries, total: total);
+  }
+
+  Future<_ExceptionOrderIdsPage> _exceptionOrderIdsPage({
+    OrderStatus? status,
+    DateTimeRange? dateRange,
+    bool unfinishedOnly = false,
+    required int offset,
+    required int limit,
+  }) async {
+    final where = <String>['oi.is_exception = 1'];
+    final vars = <Variable<Object>>[];
+    if (unfinishedOnly) {
+      where.add('o.status != ?');
+      vars.add(Variable.withInt(OrderStatus.done.index));
+    } else if (status != null) {
+      where.add('o.status = ?');
+      vars.add(Variable.withInt(status.index));
+    }
+    if (dateRange != null) {
+      final start = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+      );
+      final end = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23,
+        59,
+        59,
+      );
+      where.add('o.order_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    final whereSql = where.join(' AND ');
+    final totalRow = await _database
+        .customSelect(
+          '''
+      SELECT COUNT(DISTINCT o.id) AS total
+      FROM orders o
+      INNER JOIN order_items oi ON oi.order_id = o.id
+      WHERE $whereSql
+      ''',
+          variables: vars,
+          readsFrom: {_database.orders, _database.orderItems},
+        )
+        .getSingle();
+    final rows = await _database.customSelect(
+      '''
+      SELECT DISTINCT o.id AS order_id, o.order_date, o.created_at
+      FROM orders o
+      INNER JOIN order_items oi ON oi.order_id = o.id
+      WHERE $whereSql
+      ORDER BY o.order_date DESC, o.created_at DESC
+      LIMIT ? OFFSET ?
+      ''',
+      variables: [
+        ...vars,
+        Variable.withInt(limit),
+        Variable.withInt(offset),
+      ],
+      readsFrom: {_database.orders, _database.orderItems},
+    ).get();
+    return _ExceptionOrderIdsPage(
+      ids: rows
+          .map((row) => row.data['order_id'] as int?)
+          .whereType<int>()
+          .toList(growable: false),
+      total: (totalRow.data['total'] as int?) ?? 0,
+    );
   }
 
   Future<OrderDetail> orderDetail(int orderId) async {
@@ -946,6 +1069,7 @@ class OrderSummary {
     required this.itemCount,
     required this.totalBoxes,
     required this.hasTsRequired,
+    required this.hasException,
     required this.locationsText,
     required this.restockSummaryText,
   });
@@ -958,6 +1082,7 @@ class OrderSummary {
   final int itemCount;
   final int totalBoxes;
   final bool hasTsRequired;
+  final bool hasException;
   final String locationsText;
   final String restockSummaryText;
 
@@ -1005,6 +1130,16 @@ class OrderRestockAggregate {
   final List<String> batchCodeVariants;
 }
 
+class _ExceptionOrderIdsPage {
+  const _ExceptionOrderIdsPage({
+    required this.ids,
+    required this.total,
+  });
+
+  final List<int> ids;
+  final int total;
+}
+
 class _RestockBoxesAccumulator {
   const _RestockBoxesAccumulator({
     required this.totalBoxes,
@@ -1048,8 +1183,10 @@ class _OrderItemStats {
   _OrderItemStats(
     this.totalBoxes, {
     required bool tsRequired,
+    required bool isException,
     String? location,
-  }) : hasTsRequired = tsRequired {
+  })  : hasTsRequired = tsRequired,
+        hasException = isException {
     if (location != null && location.isNotEmpty) {
       _locations.add(location);
     }
@@ -1058,6 +1195,7 @@ class _OrderItemStats {
   int count = 1;
   int totalBoxes;
   bool hasTsRequired;
+  bool hasException;
   final Set<String> _locations = <String>{};
 
   String get locationsText {
@@ -1074,11 +1212,13 @@ class _OrderItemStats {
   _OrderItemStats add(
     int boxes, {
     required bool tsRequired,
+    required bool isException,
     String? location,
   }) {
     count += 1;
     totalBoxes += boxes;
     hasTsRequired = hasTsRequired || tsRequired;
+    hasException = hasException || isException;
     if (location != null && location.isNotEmpty) {
       _locations.add(location);
     }

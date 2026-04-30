@@ -1516,6 +1516,16 @@ class $OrderItemsTable extends OrderItems
   late final GeneratedColumn<int> piecesPerBox = GeneratedColumn<int>(
       'pieces_per_box', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _isExceptionMeta =
+      const VerificationMeta('isException');
+  @override
+  late final GeneratedColumn<bool> isException = GeneratedColumn<bool>(
+      'is_exception', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_exception" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1533,6 +1543,7 @@ class $OrderItemsTable extends OrderItems
         boxes,
         boxesPerBoard,
         piecesPerBox,
+        isException,
         createdAt
       ];
   @override
@@ -1588,6 +1599,12 @@ class $OrderItemsTable extends OrderItems
     } else if (isInserting) {
       context.missing(_piecesPerBoxMeta);
     }
+    if (data.containsKey('is_exception')) {
+      context.handle(
+          _isExceptionMeta,
+          isException.isAcceptableOrUnknown(
+              data['is_exception']!, _isExceptionMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1615,6 +1632,8 @@ class $OrderItemsTable extends OrderItems
           .read(DriftSqlType.int, data['${effectivePrefix}boxes_per_board'])!,
       piecesPerBox: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}pieces_per_box'])!,
+      isException: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_exception'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -1634,6 +1653,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   final int boxes;
   final int boxesPerBoard;
   final int piecesPerBox;
+  final bool isException;
   final DateTime createdAt;
   const OrderItem(
       {required this.id,
@@ -1643,6 +1663,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       required this.boxes,
       required this.boxesPerBoard,
       required this.piecesPerBox,
+      required this.isException,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1654,6 +1675,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     map['boxes'] = Variable<int>(boxes);
     map['boxes_per_board'] = Variable<int>(boxesPerBoard);
     map['pieces_per_box'] = Variable<int>(piecesPerBox);
+    map['is_exception'] = Variable<bool>(isException);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1667,6 +1689,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       boxes: Value(boxes),
       boxesPerBoard: Value(boxesPerBoard),
       piecesPerBox: Value(piecesPerBox),
+      isException: Value(isException),
       createdAt: Value(createdAt),
     );
   }
@@ -1682,6 +1705,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       boxes: serializer.fromJson<int>(json['boxes']),
       boxesPerBoard: serializer.fromJson<int>(json['boxesPerBoard']),
       piecesPerBox: serializer.fromJson<int>(json['piecesPerBox']),
+      isException: serializer.fromJson<bool>(json['isException']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1696,6 +1720,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       'boxes': serializer.toJson<int>(boxes),
       'boxesPerBoard': serializer.toJson<int>(boxesPerBoard),
       'piecesPerBox': serializer.toJson<int>(piecesPerBox),
+      'isException': serializer.toJson<bool>(isException),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1708,6 +1733,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           int? boxes,
           int? boxesPerBoard,
           int? piecesPerBox,
+          bool? isException,
           DateTime? createdAt}) =>
       OrderItem(
         id: id ?? this.id,
@@ -1717,6 +1743,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
         boxes: boxes ?? this.boxes,
         boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
         piecesPerBox: piecesPerBox ?? this.piecesPerBox,
+        isException: isException ?? this.isException,
         createdAt: createdAt ?? this.createdAt,
       );
   OrderItem copyWithCompanion(OrderItemsCompanion data) {
@@ -1732,6 +1759,8 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       piecesPerBox: data.piecesPerBox.present
           ? data.piecesPerBox.value
           : this.piecesPerBox,
+      isException:
+          data.isException.present ? data.isException.value : this.isException,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1746,6 +1775,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           ..write('boxes: $boxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('piecesPerBox: $piecesPerBox, ')
+          ..write('isException: $isException, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1753,7 +1783,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
 
   @override
   int get hashCode => Object.hash(id, orderId, productId, batchId, boxes,
-      boxesPerBoard, piecesPerBox, createdAt);
+      boxesPerBoard, piecesPerBox, isException, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1765,6 +1795,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           other.boxes == this.boxes &&
           other.boxesPerBoard == this.boxesPerBoard &&
           other.piecesPerBox == this.piecesPerBox &&
+          other.isException == this.isException &&
           other.createdAt == this.createdAt);
 }
 
@@ -1776,6 +1807,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   final Value<int> boxes;
   final Value<int> boxesPerBoard;
   final Value<int> piecesPerBox;
+  final Value<bool> isException;
   final Value<DateTime> createdAt;
   const OrderItemsCompanion({
     this.id = const Value.absent(),
@@ -1785,6 +1817,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     this.boxes = const Value.absent(),
     this.boxesPerBoard = const Value.absent(),
     this.piecesPerBox = const Value.absent(),
+    this.isException = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   OrderItemsCompanion.insert({
@@ -1795,6 +1828,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     required int boxes,
     required int boxesPerBoard,
     required int piecesPerBox,
+    this.isException = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : orderId = Value(orderId),
         productId = Value(productId),
@@ -1810,6 +1844,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     Expression<int>? boxes,
     Expression<int>? boxesPerBoard,
     Expression<int>? piecesPerBox,
+    Expression<bool>? isException,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1820,6 +1855,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       if (boxes != null) 'boxes': boxes,
       if (boxesPerBoard != null) 'boxes_per_board': boxesPerBoard,
       if (piecesPerBox != null) 'pieces_per_box': piecesPerBox,
+      if (isException != null) 'is_exception': isException,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1832,6 +1868,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       Value<int>? boxes,
       Value<int>? boxesPerBoard,
       Value<int>? piecesPerBox,
+      Value<bool>? isException,
       Value<DateTime>? createdAt}) {
     return OrderItemsCompanion(
       id: id ?? this.id,
@@ -1841,6 +1878,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       boxes: boxes ?? this.boxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       piecesPerBox: piecesPerBox ?? this.piecesPerBox,
+      isException: isException ?? this.isException,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1869,6 +1907,9 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     if (piecesPerBox.present) {
       map['pieces_per_box'] = Variable<int>(piecesPerBox.value);
     }
+    if (isException.present) {
+      map['is_exception'] = Variable<bool>(isException.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1885,6 +1926,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
           ..write('boxes: $boxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('piecesPerBox: $piecesPerBox, ')
+          ..write('isException: $isException, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -3591,6 +3633,7 @@ typedef $$OrderItemsTableCreateCompanionBuilder = OrderItemsCompanion Function({
   required int boxes,
   required int boxesPerBoard,
   required int piecesPerBox,
+  Value<bool> isException,
   Value<DateTime> createdAt,
 });
 typedef $$OrderItemsTableUpdateCompanionBuilder = OrderItemsCompanion Function({
@@ -3601,6 +3644,7 @@ typedef $$OrderItemsTableUpdateCompanionBuilder = OrderItemsCompanion Function({
   Value<int> boxes,
   Value<int> boxesPerBoard,
   Value<int> piecesPerBox,
+  Value<bool> isException,
   Value<DateTime> createdAt,
 });
 
@@ -3672,6 +3716,9 @@ class $$OrderItemsTableFilterComposer
 
   ColumnFilters<int> get piecesPerBox => $composableBuilder(
       column: $table.piecesPerBox, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3760,6 +3807,9 @@ class $$OrderItemsTableOrderingComposer
       column: $table.piecesPerBox,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
@@ -3844,6 +3894,9 @@ class $$OrderItemsTableAnnotationComposer
 
   GeneratedColumn<int> get piecesPerBox => $composableBuilder(
       column: $table.piecesPerBox, builder: (column) => column);
+
+  GeneratedColumn<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3939,6 +3992,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             Value<int> boxes = const Value.absent(),
             Value<int> boxesPerBoard = const Value.absent(),
             Value<int> piecesPerBox = const Value.absent(),
+            Value<bool> isException = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               OrderItemsCompanion(
@@ -3949,6 +4003,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             boxes: boxes,
             boxesPerBoard: boxesPerBoard,
             piecesPerBox: piecesPerBox,
+            isException: isException,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -3959,6 +4014,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             required int boxes,
             required int boxesPerBoard,
             required int piecesPerBox,
+            Value<bool> isException = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               OrderItemsCompanion.insert(
@@ -3969,6 +4025,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             boxes: boxes,
             boxesPerBoard: boxesPerBoard,
             piecesPerBox: piecesPerBox,
+            isException: isException,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0

@@ -12,5 +12,6 @@ class OrderItems extends Table {
   IntColumn get boxes => integer()();
   IntColumn get boxesPerBoard => integer()();
   IntColumn get piecesPerBox => integer()();
+  BoolColumn get isException => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

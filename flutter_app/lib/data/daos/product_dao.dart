@@ -387,6 +387,9 @@ class ProductDao {
       if (entry == null) {
         throw StateError('Batch $batchId does not exist.');
       }
+      final oldProductId = entry.product.id;
+      final oldDateBatch = entry.batch.dateBatch;
+      final oldActualBatch = entry.batch.actualBatch;
       final duplicateCode = await (_database.select(_database.products)
             ..where((table) =>
                 table.code.equals(code) &
@@ -436,7 +439,55 @@ class ProductDao {
           tsRequired: true,
         );
       }
+      if (oldActualBatch != actualBatch || oldDateBatch != dateBatch) {
+        await _markAmbiguousDateOrderItems(
+          productId: oldProductId,
+          dateBatch: oldDateBatch,
+        );
+        await _markAmbiguousDateOrderItems(
+          productId: entry.product.id,
+          dateBatch: dateBatch,
+        );
+      }
     });
+  }
+
+  Future<void> _markAmbiguousDateOrderItems({
+    required int productId,
+    required String dateBatch,
+  }) async {
+    final dateKey = _dateBatchKey(dateBatch);
+    final productBatches = await (_database.select(_database.batches)
+          ..where((table) => table.productId.equals(productId)))
+        .get();
+    final candidates = productBatches
+        .where((batch) => _dateBatchKey(batch.dateBatch) == dateKey)
+        .toList();
+    final actualBatches = candidates.map((batch) => batch.actualBatch).toSet();
+    if (actualBatches.length <= 1) {
+      return;
+    }
+    final batchIds = candidates.map((batch) => batch.id).toList();
+    await (_database.update(_database.orderItems)
+          ..where((table) => table.batchId.isIn(batchIds)))
+        .write(const OrderItemsCompanion(isException: Value(true)));
+  }
+
+  String _dateBatchKey(String value) {
+    final normalized = value
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('。', '.');
+    final match = RegExp(r'(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})日?')
+        .firstMatch(normalized);
+    if (match == null) {
+      return normalized;
+    }
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    return '$year.$month.$day';
   }
 
   int _movementDelta(StockMovement movement) {
