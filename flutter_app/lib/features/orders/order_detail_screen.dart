@@ -59,9 +59,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           builder: (context, snapshot) {
             final viewData = snapshot.data;
             final detail = viewData?.detail;
-            final batchCodesByProductDate =
-                viewData?.batchCodesByProductDate ??
-                    const <String, List<String>>{};
+            final batchCodesByProductDate = viewData?.batchCodesByProductDate ??
+                const <String, List<String>>{};
             final duplicateBatchKeys = detail == null
                 ? const <String>{}
                 : _duplicateProductDateBatches(batchCodesByProductDate);
@@ -261,12 +260,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       );
       return;
     }
-    await _orderDao.updateOrderBasic(
-      orderId: widget.orderId,
-      waybillNo: waybillNo,
-      merchantName: merchantName,
-      orderDate: selectedDate,
-    );
+    try {
+      await _orderDao.updateOrderBasic(
+        orderId: widget.orderId,
+        waybillNo: waybillNo,
+        merchantName: merchantName,
+        orderDate: selectedDate,
+      );
+    } on DuplicateWaybillNoException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('运单号已存在')),
+      );
+      return;
+    }
     if (!mounted) {
       return;
     }

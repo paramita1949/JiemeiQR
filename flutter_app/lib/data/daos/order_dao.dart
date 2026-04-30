@@ -16,6 +16,7 @@ class OrderDao {
     required DateTime orderDate,
     String? remark,
   }) async {
+    await _ensureWaybillNoAvailable(waybillNo: waybillNo);
     final normalizedDate = DateTime(
       orderDate.year,
       orderDate.month,
@@ -148,6 +149,24 @@ class OrderDao {
           ..limit(1))
         .getSingleOrNull();
     return existing?.id;
+  }
+
+  Future<void> _ensureWaybillNoAvailable({
+    required String waybillNo,
+    int? excludeOrderId,
+  }) async {
+    final query = _database.select(_database.orders)
+      ..where((table) => table.waybillNo.equals(waybillNo));
+    if (excludeOrderId != null) {
+      query.where((table) => table.id.isNotValue(excludeOrderId));
+    }
+    final duplicate = await (query..limit(1)).getSingleOrNull();
+    if (duplicate != null) {
+      throw DuplicateWaybillNoException(
+        waybillNo: waybillNo,
+        existingOrderId: duplicate.id,
+      );
+    }
   }
 
   Future<int> appendPendingWaybillItem({
@@ -331,6 +350,10 @@ class OrderDao {
       orderDate.year,
       orderDate.month,
       orderDate.day,
+    );
+    await _ensureWaybillNoAvailable(
+      waybillNo: waybillNo,
+      excludeOrderId: orderId,
     );
     await (_database.update(_database.orders)
           ..where((table) => table.id.equals(orderId)))
@@ -572,8 +595,8 @@ class OrderDao {
             dateBatch: dateBatch,
             totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
             boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
-            batchCodeVariants: variants['$productCode|$dateBatch'] ??
-                const <String>[],
+            batchCodeVariants:
+                variants['$productCode|$dateBatch'] ?? const <String>[],
           );
         })
         .where((row) => row.productCode.isNotEmpty)
@@ -604,7 +627,8 @@ class OrderDao {
       if (productCode.isEmpty || dateBatch.isEmpty || actualBatch.isEmpty) {
         continue;
       }
-      result.putIfAbsent('$productCode|$dateBatch', () => <String>[])
+      result
+          .putIfAbsent('$productCode|$dateBatch', () => <String>[])
           .add(actualBatch);
     }
     return result;
@@ -894,6 +918,21 @@ class DuplicateOrderItemException implements Exception {
   @override
   String toString() {
     return 'DuplicateOrderItemException(orderId: $orderId, itemId: $itemId, currentBoxes: $currentBoxes, productId: $productId, batchId: $batchId)';
+  }
+}
+
+class DuplicateWaybillNoException implements Exception {
+  const DuplicateWaybillNoException({
+    required this.waybillNo,
+    required this.existingOrderId,
+  });
+
+  final String waybillNo;
+  final int existingOrderId;
+
+  @override
+  String toString() {
+    return 'DuplicateWaybillNoException(waybillNo: $waybillNo, existingOrderId: $existingOrderId)';
   }
 }
 

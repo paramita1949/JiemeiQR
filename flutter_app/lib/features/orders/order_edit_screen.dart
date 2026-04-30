@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_review_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
@@ -14,9 +20,13 @@ class OrderEditScreen extends StatefulWidget {
   const OrderEditScreen({
     super.key,
     this.database,
+    this.ocrService,
+    this.imagePicker,
   });
 
   final AppDatabase? database;
+  final GeminiWaybillOcrService? ocrService;
+  final ImagePicker? imagePicker;
 
   @override
   State<OrderEditScreen> createState() => _OrderEditScreenState();
@@ -31,6 +41,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final OrderDao _orderDao;
+  GeminiWaybillOcrService? _ocrService;
+  ImagePicker? _imagePicker;
   late final bool _ownsDatabase;
   late Future<_OrderEditState> _stateFuture;
 
@@ -51,6 +63,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _database = widget.database ?? AppDatabase();
     _productDao = ProductDao(_database);
     _orderDao = OrderDao(_database);
+    _ocrService = widget.ocrService ?? GeminiWaybillOcrService();
+    _imagePicker = widget.imagePicker ?? ImagePicker();
     _boxesController.addListener(() => setState(() {}));
     _waybillNoController.addListener(_onOrderHeaderChanged);
     _merchantController.addListener(_onOrderHeaderChanged);
@@ -90,6 +104,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                     icon: Icons.add_box_outlined,
                     title: '新增运单',
                     subtitle: '',
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    key: const Key('waybillOcrButton'),
+                    onPressed: _recognizeWaybillPhoto,
+                    icon: const Icon(Icons.document_scanner_outlined),
+                    label: const Text('拍照识别'),
                   ),
                   const SizedBox(height: 8),
                   _SectionCard(
@@ -298,6 +319,120 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _onOrderHeaderChanged();
   }
 
+  Future<void> _recognizeWaybillPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('拍照识别'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('从相册选择'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) {
+      return;
+    }
+    final picked = await _effectiveImagePicker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1600,
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    await _runWaybillOcr(File(picked.path));
+  }
+
+  Future<void> _runWaybillOcr(File image) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final draft = await _effectiveOcrService.recognize(image);
+      final matched = await WaybillOcrMatcher(_productDao).match(draft);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      await _openOcrReview(matched);
+    } on GeminiWaybillOcrException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('识别失败，请重试')),
+      );
+    }
+  }
+
+  GeminiWaybillOcrService get _effectiveOcrService {
+    return _ocrService ??= widget.ocrService ?? GeminiWaybillOcrService();
+  }
+
+  ImagePicker get _effectiveImagePicker {
+    return _imagePicker ??= widget.imagePicker ?? ImagePicker();
+  }
+
+  Future<void> _openOcrReview(MatchedWaybillOcrDraft matched) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WaybillOcrReviewScreen(
+          orderDao: _orderDao,
+          matched: matched,
+        ),
+      ),
+    );
+    if (saved != true || !mounted) {
+      return;
+    }
+    final orderDate = matched.orderDate ?? DateTime.now();
+    _waybillNoController.text = matched.source.waybillNo;
+    _merchantController.text = matched.source.merchantName;
+    _orderDate = DateTime(orderDate.year, orderDate.month, orderDate.day);
+    final orderId = await _orderDao.findOpenOrderId(
+      waybillNo: matched.source.waybillNo,
+      merchantName: matched.source.merchantName,
+      orderDate: _orderDate,
+    );
+    if (orderId != null) {
+      final headerKey = _orderHeaderKey(
+        waybillNo: matched.source.waybillNo,
+        merchantName: matched.source.merchantName,
+        orderDate: _orderDate,
+      );
+      _draftOrderKey = headerKey;
+      await _reloadDraftLines(orderId: orderId, headerKey: headerKey);
+    }
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('识别明细已录入')),
+    );
+  }
+
   Future<void> _save({
     required bool continueAdd,
     bool exitAfterSave = false,
@@ -397,6 +532,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('箱数无效，无法保存运单')),
+      );
+      return;
+    } on DuplicateWaybillNoException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('运单号已存在')),
       );
       return;
     } catch (_) {

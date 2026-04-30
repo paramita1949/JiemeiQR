@@ -8,6 +8,7 @@ import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
+import 'package:qrscan_flutter/features/orders/ocr/ai_config_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
@@ -176,6 +177,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onPrepareImport: widget.onPrepareImport,
             onImportCompleted: widget.onImportCompleted,
           ),
+        ),
+        onRefresh: () => unawaited(_refreshStats()),
+      );
+      return;
+    }
+    if (title == 'AI配置') {
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
+          builder: (_) => const AiConfigScreen(),
         ),
         onRefresh: () => unawaited(_refreshStats()),
       );
@@ -571,6 +582,12 @@ class _ActionGrid extends StatelessWidget {
         title: '基础资料',
         subtitle: '产品/批号/规格/库位',
         color: Color(0xFFEEF2FF),
+      ),
+      _HomeAction(
+        icon: Icons.tune_outlined,
+        title: 'AI配置',
+        subtitle: 'Gemini OCR Key',
+        color: Color(0xFFF0FDF4),
       ),
     ];
 

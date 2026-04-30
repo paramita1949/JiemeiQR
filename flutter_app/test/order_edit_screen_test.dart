@@ -110,6 +110,15 @@ void main() {
     expect(find.byKey(const Key('waybillQrContentField')), findsNothing);
   });
 
+  testWidgets('shows OCR photo entry on new waybill screen', (tester) async {
+    await seedProduct();
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('waybillOcrButton')), findsOneWidget);
+    expect(find.text('拍照识别'), findsOneWidget);
+  });
+
   testWidgets('does not show zero-box requirement before input',
       (tester) async {
     await seedProduct();
@@ -186,6 +195,33 @@ void main() {
 
     expect(find.text('库存不足，无法保存运单'), findsOneWidget);
     expect(await database.select(database.orders).get(), hasLength(1));
+  });
+
+  testWidgets('shows duplicate waybill number error for another order',
+      (tester) async {
+    await seedProduct();
+    await orderDao.createOrder(
+      waybillNo: '123',
+      merchantName: 'taicang',
+      orderDate: DateTime(2026, 4, 20),
+    );
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('waybillNoField')), '123');
+    await tester.enterText(find.byKey(const Key('merchantNameField')), 'other');
+    await tester.enterText(find.byKey(const Key('boxesField')), '10');
+    final nextButton = find.byKey(const Key('nextWaybillButton'));
+    await tester.scrollUntilVisible(
+      nextButton,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(nextButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('运单号已存在'), findsOneWidget);
   });
 
   testWidgets('duplicate product batch can be merged after confirmation',
@@ -277,7 +313,8 @@ void main() {
     expect(order, isNull);
   });
 
-  testWidgets('shows batch index reminder when same product date has two batches',
+  testWidgets(
+      'shows batch index reminder when same product date has two batches',
       (tester) async {
     final productId = await productDao.createProduct(
       code: 'FCHBMEZ',
@@ -302,7 +339,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('FCHBMEZ 2029.9.7 批号1'), findsOneWidget);
-    await tester.tap(find.text('FCHBMEZ 2029.9.7 批号1'));
+    final batchDropdown = find.byType(DropdownButtonFormField<int>).last;
+    await tester.ensureVisible(batchDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(batchDropdown);
     await tester.pumpAndSettle();
     expect(find.text('FCHBMEZ-ALT 2029.9.7 批号2'), findsOneWidget);
   });

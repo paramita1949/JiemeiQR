@@ -216,4 +216,24 @@ void main() {
     expect(find.text('总库存'), findsWidgets);
     expect(find.text('查看订单信息'), findsOneWidget);
   });
+
+  testWidgets('AI config home action opens configuration screen',
+      (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('AI配置'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AI配置'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('AI配置'), findsWidgets);
+    expect(find.text('Gemini API Key'), findsOneWidget);
+    expect(find.text('Gemini 模型'), findsOneWidget);
+  });
 }

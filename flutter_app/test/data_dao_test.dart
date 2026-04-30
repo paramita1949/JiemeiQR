@@ -378,6 +378,74 @@ void main() {
     expect(mergedItem.boxes, 40);
   });
 
+  test('order dao rejects duplicate waybill number on another order', () async {
+    final productId = await productDao.createProduct(
+      code: '72069',
+      name: '六神花露水195ML',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final firstBatchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'UNIQUE-1',
+      dateBatch: '2029.9.7',
+      initialBoxes: 100,
+    );
+    final secondBatchId = await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'UNIQUE-2',
+      dateBatch: '2029.9.8',
+      initialBoxes: 100,
+    );
+
+    await orderDao.appendPendingWaybillItem(
+      waybillNo: '123',
+      merchantName: 'taicang',
+      orderDate: DateTime(2026, 4, 26),
+      item: PendingOrderItemInput(
+        productId: productId,
+        batchId: firstBatchId,
+        boxes: 10,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
+
+    expect(
+      () => orderDao.appendPendingWaybillItem(
+        waybillNo: '123',
+        merchantName: 'other',
+        orderDate: DateTime(2026, 4, 27),
+        item: PendingOrderItemInput(
+          productId: productId,
+          batchId: secondBatchId,
+          boxes: 10,
+          boxesPerBoard: 40,
+          piecesPerBox: 30,
+        ),
+      ),
+      throwsA(isA<DuplicateWaybillNoException>()),
+    );
+    expect(await database.select(database.orders).get(), hasLength(1));
+  });
+
+  test('order dao rejects duplicate waybill number on direct create', () async {
+    await orderDao.createOrder(
+      waybillNo: 'taicang',
+      merchantName: '洁美A',
+      orderDate: DateTime(2026, 4, 26),
+    );
+
+    expect(
+      () => orderDao.createOrder(
+        waybillNo: 'taicang',
+        merchantName: '洁美B',
+        orderDate: DateTime(2026, 4, 27),
+      ),
+      throwsA(isA<DuplicateWaybillNoException>()),
+    );
+  });
+
   test('product dao uses pending order as reserved stock for available batches',
       () async {
     final productId = await productDao.createProduct(
