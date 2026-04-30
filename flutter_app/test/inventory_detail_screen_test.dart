@@ -191,11 +191,8 @@ void main() {
     final title = tester
         .widgetList<RichText>(find.byType(RichText))
         .firstWhere((widget) => widget.text.toPlainText().contains('FBAADEZ'));
-    final dateText = find.textContaining('2029.7.31');
-
     expect(title.maxLines, 1);
-    expect(dateText, findsOneWidget);
-    expect(tester.widget<Text>(dateText).maxLines, 1);
+    expect(richTextContaining('2029.7.31'), findsOneWidget);
   });
 
   testWidgets('sorts same product by earlier date first', (tester) async {

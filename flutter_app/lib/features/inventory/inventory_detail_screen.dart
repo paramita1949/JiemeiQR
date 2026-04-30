@@ -698,52 +698,57 @@ class _InventoryRowCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: RichText(
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        text: TextSpan(
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          children: [
-                            TextSpan(text: '${row.product.code} · '),
-                            TextSpan(
-                              children: _batchCodeSpans(
-                                row.batch.actualBatch,
-                                variants: batchCodeVariants,
-                                highlightDifferences: highlightBatch,
-                              ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SizedBox(
+                      width: constraints.maxWidth,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: RichText(
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                          text: TextSpan(
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
                             ),
-                          ],
+                            children: [
+                              TextSpan(text: '${row.product.code} · '),
+                              TextSpan(
+                                children: _batchCodeSpans(
+                                  row.batch.actualBatch,
+                                  variants: batchCodeVariants,
+                                  highlightDifferences: highlightBatch,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' · ${row.batch.dateBatch}',
+                                style: const TextStyle(
+                                  color: Color(0xFFB91C1C),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    Text(
-                      ' · ${row.batch.dateBatch}',
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.clip,
-                      style: const TextStyle(
-                        color: Color(0xFFB91C1C),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-              if (row.isZeroStock)
+              if (row.isZeroStock) ...[
+                const SizedBox(width: 8),
                 _StatusPill(
                   text: '已空',
                   color: statusColor,
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
