@@ -700,31 +700,43 @@ class _InventoryRowCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: RichText(
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  text: TextSpan(
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    children: [
-                      TextSpan(text: '${row.product.code} · '),
-                      TextSpan(
-                        children: _batchCodeSpans(
-                          row.batch.actualBatch,
-                          variants: batchCodeVariants,
-                          highlightDifferences: highlightBatch,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: RichText(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          children: [
+                            TextSpan(text: '${row.product.code} · '),
+                            TextSpan(
+                              children: _batchCodeSpans(
+                                row.batch.actualBatch,
+                                variants: batchCodeVariants,
+                                highlightDifferences: highlightBatch,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const TextSpan(text: ' · '),
-                      TextSpan(
-                        text: row.batch.dateBatch,
-                        style: const TextStyle(color: Color(0xFFB91C1C)),
+                    ),
+                    Text(
+                      ' · ${row.batch.dateBatch}',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.clip,
+                      style: const TextStyle(
+                        color: Color(0xFFB91C1C),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               if (row.isZeroStock)
