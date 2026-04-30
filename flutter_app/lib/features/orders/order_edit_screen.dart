@@ -7,9 +7,12 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/tencent_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_review_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
@@ -25,7 +28,7 @@ class OrderEditScreen extends StatefulWidget {
   });
 
   final AppDatabase? database;
-  final GeminiWaybillOcrService? ocrService;
+  final WaybillPhotoOcrService? ocrService;
   final ImagePicker? imagePicker;
 
   @override
@@ -41,7 +44,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final OrderDao _orderDao;
-  GeminiWaybillOcrService? _ocrService;
+  WaybillPhotoOcrService? _ocrService;
   ImagePicker? _imagePicker;
   late final bool _ownsDatabase;
   late Future<_OrderEditState> _stateFuture;
@@ -63,7 +66,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _database = widget.database ?? AppDatabase();
     _productDao = ProductDao(_database);
     _orderDao = OrderDao(_database);
-    _ocrService = widget.ocrService ?? GeminiWaybillOcrService();
+    _ocrService = widget.ocrService ?? const ConfiguredWaybillOcrService();
     _imagePicker = widget.imagePicker ?? ImagePicker();
     _boxesController.addListener(() => setState(() {}));
     _waybillNoController.addListener(_onOrderHeaderChanged);
@@ -376,6 +379,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
+    } on TencentWaybillOcrException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -387,8 +398,9 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     }
   }
 
-  GeminiWaybillOcrService get _effectiveOcrService {
-    return _ocrService ??= widget.ocrService ?? GeminiWaybillOcrService();
+  WaybillPhotoOcrService get _effectiveOcrService {
+    return _ocrService ??=
+        widget.ocrService ?? const ConfiguredWaybillOcrService();
   }
 
   ImagePicker get _effectiveImagePicker {

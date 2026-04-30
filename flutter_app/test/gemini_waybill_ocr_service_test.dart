@@ -84,8 +84,12 @@ void main() {
     );
     await store.save(
       const AiOcrConfig(
+        provider: AiOcrConfig.defaultProvider,
         geminiApiKey: 'saved-key',
         geminiModel: 'gemini-2.5-flash',
+        tencentSecretId: '',
+        tencentSecretKey: '',
+        tencentRegion: AiOcrConfig.defaultTencentRegion,
       ),
     );
     Uri? capturedUri;

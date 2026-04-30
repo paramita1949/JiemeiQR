@@ -12,14 +12,22 @@ void main() {
 
     await store.save(
       const AiOcrConfig(
+        provider: AiOcrConfig.defaultProvider,
         geminiApiKey: 'abc123',
         geminiModel: 'gemini-2.5-flash',
+        tencentSecretId: 'sid',
+        tencentSecretKey: 'skey',
+        tencentRegion: 'ap-shanghai',
       ),
     );
 
     final loaded = await store.load();
+    expect(loaded.provider, AiOcrConfig.defaultProvider);
     expect(loaded.geminiApiKey, 'abc123');
     expect(loaded.geminiModel, 'gemini-2.5-flash');
+    expect(loaded.tencentSecretId, 'sid');
+    expect(loaded.tencentSecretKey, 'skey');
+    expect(loaded.tencentRegion, 'ap-shanghai');
   });
 
   test('uses Gemini 3 Flash preview as default model', () async {
@@ -30,7 +38,9 @@ void main() {
     );
 
     final loaded = await store.load();
+    expect(loaded.provider, AiOcrConfig.defaultProvider);
     expect(loaded.geminiApiKey, '');
     expect(loaded.geminiModel, 'gemini-3-flash-preview');
+    expect(loaded.tencentRegion, AiOcrConfig.defaultTencentRegion);
   });
 }

@@ -235,5 +235,7 @@ void main() {
     expect(find.text('AI配置'), findsWidgets);
     expect(find.text('Gemini API Key'), findsOneWidget);
     expect(find.text('Gemini 模型'), findsOneWidget);
+    expect(find.text('腾讯OCR'), findsOneWidget);
+    expect(find.text('腾讯 SecretId'), findsOneWidget);
   });
 }

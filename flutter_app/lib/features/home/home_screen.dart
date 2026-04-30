@@ -586,7 +586,7 @@ class _ActionGrid extends StatelessWidget {
       _HomeAction(
         icon: Icons.tune_outlined,
         title: 'AI配置',
-        subtitle: 'Gemini OCR Key',
+        subtitle: 'Gemini / 腾讯OCR',
         color: Color(0xFFF0FDF4),
       ),
     ];

@@ -3,13 +3,14 @@ import 'dart:io';
 
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
 
 typedef GeminiHttpPost = Future<String> Function(
   Uri uri,
   Map<String, Object?> body,
 );
 
-class GeminiWaybillOcrService {
+class GeminiWaybillOcrService implements WaybillPhotoOcrService {
   GeminiWaybillOcrService({
     String? apiKey,
     String? model,
@@ -25,6 +26,7 @@ class GeminiWaybillOcrService {
   final FileAiConfigStore _configStore;
   final GeminiHttpPost _httpPost;
 
+  @override
   Future<WaybillOcrDraft> recognize(File image) async {
     final needsConfig = apiKey.trim().isEmpty;
     final config = needsConfig ? await _configStore.load() : null;
