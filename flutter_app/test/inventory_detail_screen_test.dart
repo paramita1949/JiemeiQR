@@ -160,6 +160,42 @@ void main() {
     expect(batchRecord.remark, '临时备注');
   });
 
+  testWidgets('zero stock row keeps long date visible on narrow phones',
+      (tester) async {
+    tester.view.physicalSize = const Size(432, 936);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await seedBatch(
+      code: '20148',
+      batch: 'FBAADEZ',
+      dateBatch: '2029.7.31',
+      initialBoxes: 50,
+      shippedBoxes: 50,
+    );
+
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('零库存'));
+    await tester.pumpAndSettle();
+    final batchFinder = richTextContaining('20148 · FBAADEZ');
+    for (var i = 0; i < 2; i += 1) {
+      if (batchFinder.evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.tap(find.byKey(const Key('inventory-group-20148')));
+      await tester.pumpAndSettle();
+    }
+
+    final title = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .firstWhere((widget) => widget.text.toPlainText().contains('FBAADEZ'));
+
+    expect(title.maxLines, 2);
+    expect(title.text.toPlainText(), contains('2029.7.31'));
+  });
+
   testWidgets('sorts same product by earlier date first', (tester) async {
     await seedBatch(
       code: '72067',
@@ -359,7 +395,8 @@ void main() {
       }
 
       collect(root);
-      final hasRed = allSpans.any((span) => span.style?.color == const Color(0xFFDC2626));
+      final hasRed =
+          allSpans.any((span) => span.style?.color == const Color(0xFFDC2626));
       final hasNormal =
           allSpans.any((span) => span.style?.color == AppTheme.textPrimary);
       final plain = root.toPlainText();

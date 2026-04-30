@@ -684,6 +684,31 @@ void main() {
     expect(reloadCalled, isTrue);
   });
 
+  testWidgets('backup snapshot time stays on one line on narrow phones',
+      (tester) async {
+    tester.view.physicalSize = const Size(432, 936);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: LanTransferScreen(
+          backupService: _ShareImportBackupService(),
+          lanTransferService: _FakeSendLanTransferService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final snapshotTime = tester.widget<Text>(
+      find.text('2026.4.30 16:00'),
+    );
+    expect(snapshotTime.maxLines, 1);
+    expect(snapshotTime.softWrap, isFalse);
+  });
+
   testWidgets('reset database reopens without seeding embedded stock',
       (tester) async {
     final backupService = _ResetOnlyBackupService();

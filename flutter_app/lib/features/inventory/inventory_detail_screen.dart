@@ -701,7 +701,7 @@ class _InventoryRowCard extends StatelessWidget {
             children: [
               Expanded(
                 child: RichText(
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   text: TextSpan(
                     style: const TextStyle(
@@ -899,7 +899,8 @@ List<InlineSpan> _batchCodeSpans(
     ];
   }
 
-  final maxLen = unique.map((item) => item.length).fold<int>(0, (a, b) => a > b ? a : b);
+  final maxLen =
+      unique.map((item) => item.length).fold<int>(0, (a, b) => a > b ? a : b);
   final diffIndexes = <int>{};
   for (var i = 0; i < maxLen; i += 1) {
     final chars = unique.map((item) => i < item.length ? item[i] : '').toSet();
@@ -914,7 +915,9 @@ List<InlineSpan> _batchCodeSpans(
       TextSpan(
         text: code[i],
         style: TextStyle(
-          color: diffIndexes.contains(i) ? const Color(0xFFDC2626) : AppTheme.textPrimary,
+          color: diffIndexes.contains(i)
+              ? const Color(0xFFDC2626)
+              : AppTheme.textPrimary,
         ),
       ),
     );

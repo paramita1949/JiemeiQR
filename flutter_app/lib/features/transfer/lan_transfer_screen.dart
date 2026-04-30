@@ -1690,6 +1690,9 @@ class _BackupSnapshotTile extends StatelessWidget {
               children: [
                 Text(
                   _formatSnapshotTime(snapshot.createdAt),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
                   style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 13,
@@ -1700,15 +1703,27 @@ class _BackupSnapshotTile extends StatelessWidget {
             ),
           ),
           TextButton(
+            style: TextButton.styleFrom(
+              minimumSize: const Size(44, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             onPressed: restoring ? null : onRestore,
             child: Text(restoring ? '恢复中' : '恢复'),
           ),
           TextButton(
+            style: TextButton.styleFrom(
+              minimumSize: const Size(44, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             onPressed: restoring || sharing ? null : onShare,
             child: Text(sharing ? '分享中' : '分享'),
           ),
           IconButton(
             tooltip: '删除备份',
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            padding: EdgeInsets.zero,
             onPressed: restoring || sharing ? null : onDelete,
             icon: const Icon(Icons.delete_outline, size: 18),
           ),
