@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
@@ -28,17 +30,37 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _baiduApiKeyController = TextEditingController();
   final _baiduSecretKeyController = TextEditingController();
   late Future<void> _loadFuture;
+  Timer? _autoSaveTimer;
   bool _saving = false;
+  bool _autoSaveReady = false;
   String _provider = AiOcrConfig.defaultProvider;
 
   @override
   void initState() {
     super.initState();
+    for (final controller in [
+      _apiKeyController,
+      _modelController,
+      _tencentSecretIdController,
+      _tencentSecretKeyController,
+      _tencentRegionController,
+      _aliyunAccessKeyIdController,
+      _aliyunAccessKeySecretController,
+      _aliyunEndpointController,
+      _baiduApiKeyController,
+      _baiduSecretKeyController,
+    ]) {
+      controller.addListener(_scheduleAutoSave);
+    }
     _loadFuture = _load();
   }
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
+    if (_autoSaveReady && _selectedConfigError() == null) {
+      _saveDraftSilently();
+    }
     _apiKeyController.dispose();
     _modelController.dispose();
     _tencentSecretIdController.dispose();
@@ -54,17 +76,23 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
 
   Future<void> _load() async {
     final config = await widget.configStore.load();
-    _provider = config.provider;
-    _apiKeyController.text = config.geminiApiKey;
-    _modelController.text = config.geminiModel;
-    _tencentSecretIdController.text = config.tencentSecretId;
-    _tencentSecretKeyController.text = config.tencentSecretKey;
-    _tencentRegionController.text = config.tencentRegion;
-    _aliyunAccessKeyIdController.text = config.aliyunAccessKeyId;
-    _aliyunAccessKeySecretController.text = config.aliyunAccessKeySecret;
-    _aliyunEndpointController.text = config.aliyunEndpoint;
-    _baiduApiKeyController.text = config.baiduApiKey;
-    _baiduSecretKeyController.text = config.baiduSecretKey;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _provider = config.provider;
+      _apiKeyController.text = config.geminiApiKey;
+      _modelController.text = config.geminiModel;
+      _tencentSecretIdController.text = config.tencentSecretId;
+      _tencentSecretKeyController.text = config.tencentSecretKey;
+      _tencentRegionController.text = config.tencentRegion;
+      _aliyunAccessKeyIdController.text = config.aliyunAccessKeyId;
+      _aliyunAccessKeySecretController.text = config.aliyunAccessKeySecret;
+      _aliyunEndpointController.text = config.aliyunEndpoint;
+      _baiduApiKeyController.text = config.baiduApiKey;
+      _baiduSecretKeyController.text = config.baiduSecretKey;
+      _autoSaveReady = true;
+    });
   }
 
   @override
@@ -236,6 +264,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return;
     }
     setState(() => _provider = provider);
+    _scheduleAutoSave();
   }
 
   Future<void> _save() async {
@@ -250,25 +279,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return;
     }
     setState(() => _saving = true);
-    await widget.configStore.save(
-      AiOcrConfig(
-        provider: _provider,
-        geminiApiKey: _apiKeyController.text.trim(),
-        geminiModel: _modelController.text.trim(),
-        tencentSecretId: _tencentSecretIdController.text.trim(),
-        tencentSecretKey: _tencentSecretKeyController.text.trim(),
-        tencentRegion: _tencentRegionController.text.trim().isEmpty
-            ? AiOcrConfig.defaultTencentRegion
-            : _tencentRegionController.text.trim(),
-        aliyunAccessKeyId: _aliyunAccessKeyIdController.text.trim(),
-        aliyunAccessKeySecret: _aliyunAccessKeySecretController.text.trim(),
-        aliyunEndpoint: _aliyunEndpointController.text.trim().isEmpty
-            ? AiOcrConfig.defaultAliyunEndpoint
-            : _aliyunEndpointController.text.trim(),
-        baiduApiKey: _baiduApiKeyController.text.trim(),
-        baiduSecretKey: _baiduSecretKeyController.text.trim(),
-      ),
-    );
+    await widget.configStore.save(_currentConfig());
     if (!mounted) {
       return;
     }
@@ -301,6 +312,40 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
             _modelController.text.trim().isNotEmpty
         ? null
         : '请填写 Gemini API Key 并选择模型';
+  }
+
+  AiOcrConfig _currentConfig() {
+    return AiOcrConfig(
+      provider: _provider,
+      geminiApiKey: _apiKeyController.text.trim(),
+      geminiModel: _modelController.text.trim(),
+      tencentSecretId: _tencentSecretIdController.text.trim(),
+      tencentSecretKey: _tencentSecretKeyController.text.trim(),
+      tencentRegion: _tencentRegionController.text.trim().isEmpty
+          ? AiOcrConfig.defaultTencentRegion
+          : _tencentRegionController.text.trim(),
+      aliyunAccessKeyId: _aliyunAccessKeyIdController.text.trim(),
+      aliyunAccessKeySecret: _aliyunAccessKeySecretController.text.trim(),
+      aliyunEndpoint: _aliyunEndpointController.text.trim().isEmpty
+          ? AiOcrConfig.defaultAliyunEndpoint
+          : _aliyunEndpointController.text.trim(),
+      baiduApiKey: _baiduApiKeyController.text.trim(),
+      baiduSecretKey: _baiduSecretKeyController.text.trim(),
+    );
+  }
+
+  void _scheduleAutoSave() {
+    if (!_autoSaveReady || _saving || _selectedConfigError() != null) {
+      return;
+    }
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(milliseconds: 450), () {
+      _saveDraftSilently();
+    });
+  }
+
+  void _saveDraftSilently() {
+    unawaited(widget.configStore.save(_currentConfig()).catchError((_) {}));
   }
 }
 

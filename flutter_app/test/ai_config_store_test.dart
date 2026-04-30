@@ -54,4 +54,34 @@ void main() {
     expect(loaded.aliyunEndpoint, AiOcrConfig.defaultAliyunEndpoint);
     expect(loaded.baiduApiKey, '');
   });
+
+  test('saves and loads selected Baidu provider', () async {
+    final dir =
+        await Directory.systemTemp.createTemp('jiemei-ai-config-baidu-');
+    final store = FileAiConfigStore(
+      settingsFileProvider: () async => File('${dir.path}/ai_config.json'),
+    );
+
+    await store.save(
+      const AiOcrConfig(
+        provider: AiOcrConfig.baiduProvider,
+        geminiApiKey: '',
+        geminiModel: AiOcrConfig.defaultModel,
+        tencentSecretId: '',
+        tencentSecretKey: '',
+        tencentRegion: AiOcrConfig.defaultTencentRegion,
+        aliyunAccessKeyId: '',
+        aliyunAccessKeySecret: '',
+        aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
+        baiduApiKey: 'baidu-api',
+        baiduSecretKey: 'baidu-secret',
+      ),
+    );
+
+    final loaded = await store.load();
+    expect(loaded.provider, AiOcrConfig.baiduProvider);
+    expect(loaded.usesBaiduOcr, isTrue);
+    expect(loaded.baiduApiKey, 'baidu-api');
+    expect(loaded.baiduSecretKey, 'baidu-secret');
+  });
 }
