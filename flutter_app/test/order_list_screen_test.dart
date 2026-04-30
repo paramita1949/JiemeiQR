@@ -36,6 +36,22 @@ void main() {
     );
   }
 
+  Finder richTextSpanWithTextColor(String text, Color color) {
+    bool hasSpan(InlineSpan span) {
+      if (span is TextSpan) {
+        if (span.text == text && span.style?.color == color) {
+          return true;
+        }
+        return span.children?.any(hasSpan) ?? false;
+      }
+      return false;
+    }
+
+    return find.byWidgetPredicate(
+      (widget) => widget is RichText && hasSpan(widget.text),
+    );
+  }
+
   testWidgets('defaults to unfinished quick filter and shows status stats',
       (tester) async {
     final today = DateTime.now();
@@ -375,11 +391,44 @@ void main() {
         piecesPerBox: 30,
       ),
     );
+    final fullBoardProductId = await productDao.createProduct(
+      code: '20149',
+      name: '整板产品',
+      boxesPerBoard: 40,
+      piecesPerBox: 30,
+    );
+    final fullBoardBatchId = await productDao.createBatch(
+      productId: fullBoardProductId,
+      actualBatch: 'B-2',
+      dateBatch: '2029.8.12',
+      initialBoxes: 100,
+      boxesPerBoard: 40,
+    );
+    await orderDao.createPendingWaybill(
+      waybillNo: 'WB-FULL-BOARD',
+      merchantName: '洁美B',
+      orderDate: DateTime.now(),
+      item: PendingOrderItemInput(
+        productId: fullBoardProductId,
+        batchId: fullBoardBatchId,
+        boxes: 40,
+        boxesPerBoard: 40,
+        piecesPerBox: 30,
+      ),
+    );
 
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
     expect(richTextContaining('30箱 · 30箱'), findsOneWidget);
+    expect(
+      richTextSpanWithTextColor('30箱', const Color(0xFF2563EB)),
+      findsOneWidget,
+    );
+    expect(
+      richTextSpanWithTextColor('1板', const Color(0xFFDC2626)),
+      findsOneWidget,
+    );
     expect(find.textContaining('.5板'), findsNothing);
   });
 }

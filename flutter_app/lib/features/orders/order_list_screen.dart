@@ -804,6 +804,7 @@ class _RestockAggregateCard extends StatelessWidget {
                     productCode: row.productCode,
                     dateBatch: row.dateBatch,
                   );
+                  final restockColor = _restockQuantityColor(row);
                   return RichText(
                     text: TextSpan(
                       style: const TextStyle(
@@ -827,13 +828,16 @@ class _RestockAggregateCard extends StatelessWidget {
                           text: row.dateBatch,
                           style: const TextStyle(color: Color(0xFFDC2626)),
                         ),
-                        TextSpan(text: ' · ${row.totalBoxes}箱 · '),
+                        TextSpan(
+                          text: ' · ${row.totalBoxes}箱 · ',
+                          style: TextStyle(color: restockColor),
+                        ),
                         TextSpan(
                           text: BoardCalculator.format(
                             boxes: row.totalBoxes,
                             boxesPerBoard: row.boxesPerBoard,
                           ),
-                          style: const TextStyle(color: Color(0xFFDC2626)),
+                          style: TextStyle(color: restockColor),
                         ),
                       ],
                     ),
@@ -847,6 +851,12 @@ class _RestockAggregateCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _restockQuantityColor(OrderRestockAggregate row) {
+  return row.totalBoxes >= row.boxesPerBoard
+      ? const Color(0xFFDC2626)
+      : const Color(0xFF2563EB);
 }
 
 Set<String> _duplicateProductDateKeys(List<OrderRestockAggregate> rows) {

@@ -116,7 +116,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('waybillOcrButton')), findsOneWidget);
-    expect(find.text('拍照识别'), findsOneWidget);
+    expect(find.byTooltip('拍照识别'), findsOneWidget);
+    expect(find.text('拍照识别'), findsNothing);
   });
 
   testWidgets('does not show zero-box requirement before input',

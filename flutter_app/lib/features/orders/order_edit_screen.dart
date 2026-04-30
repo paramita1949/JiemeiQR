@@ -9,6 +9,7 @@ import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/tencent_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
@@ -103,17 +104,23 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
                 children: [
-                  const PageTitle(
-                    icon: Icons.add_box_outlined,
-                    title: '新增运单',
-                    subtitle: '',
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    key: const Key('waybillOcrButton'),
-                    onPressed: _recognizeWaybillPhoto,
-                    icon: const Icon(Icons.document_scanner_outlined),
-                    label: const Text('拍照识别'),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(
+                        child: PageTitle(
+                          icon: Icons.add_box_outlined,
+                          title: '新增运单',
+                          subtitle: '',
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        key: const Key('waybillOcrButton'),
+                        tooltip: '拍照识别',
+                        onPressed: _recognizeWaybillPhoto,
+                        icon: const Icon(Icons.auto_awesome),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   _SectionCard(
@@ -364,7 +371,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final draft = await _effectiveOcrService.recognize(image);
+      var draft = await _effectiveOcrService.recognize(image);
+      draft = await _resolveOcrMerchantName(draft);
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
       if (!mounted) {
         return;
@@ -396,6 +404,28 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         const SnackBar(content: Text('识别失败，请重试')),
       );
     }
+  }
+
+  Future<WaybillOcrDraft> _resolveOcrMerchantName(WaybillOcrDraft draft) async {
+    final merchantName = draft.merchantName.trim();
+    if (merchantName.isEmpty) {
+      return draft;
+    }
+    final historyNames = await _orderDao.recentMerchantNames(limit: 200);
+    final resolved = resolveMerchantNameFromHistory(
+      recognizedName: merchantName,
+      historyNames: historyNames,
+    );
+    if (resolved == merchantName) {
+      return draft;
+    }
+    return WaybillOcrDraft(
+      waybillNo: draft.waybillNo,
+      merchantName: resolved,
+      orderDateText: draft.orderDateText,
+      rows: draft.rows,
+      warnings: draft.warnings,
+    );
   }
 
   WaybillPhotoOcrService get _effectiveOcrService {
