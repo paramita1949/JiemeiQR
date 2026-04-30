@@ -23,6 +23,7 @@ class LanTransferScreen extends StatefulWidget {
   const LanTransferScreen({
     super.key,
     this.databasePath = 'jiemei.sqlite',
+    this.initialImportPath,
     this.backupService,
     this.lanTransferService,
     this.onPrepareImport,
@@ -32,6 +33,7 @@ class LanTransferScreen extends StatefulWidget {
   });
 
   final String databasePath;
+  final String? initialImportPath;
   final BackupService? backupService;
   final LanTransferService? lanTransferService;
   final Future<void> Function()? onPrepareImport;
@@ -75,6 +77,15 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     _lanTransferService = widget.lanTransferService ??
         LanTransferService(backupService: _backupService);
     _bootstrapBackupPanel();
+    final initialImportPath = widget.initialImportPath?.trim();
+    if (initialImportPath != null && initialImportPath.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_importSharedBackupWithConfirm(initialImportPath));
+      });
+    }
   }
 
   @override
@@ -587,6 +598,10 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     if (!mounted || path == null || path.trim().isEmpty) {
       return;
     }
+    await _importSharedBackupWithConfirm(path.trim());
+  }
+
+  Future<void> _importSharedBackupWithConfirm(String path) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

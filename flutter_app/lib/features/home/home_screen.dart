@@ -10,6 +10,7 @@ import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
+import 'package:qrscan_flutter/features/transfer/backup_import_intent_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
@@ -35,10 +36,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  static const _importExtensions = ['.jiemei', '.sqlite', '.zip'];
   late AppDatabase _database;
   late bool _ownsDatabase;
+  final BackupImportIntentService _backupImportIntentService =
+      const BackupImportIntentService();
   _HomeStats? _stats;
   bool _loadingStats = true;
+  bool _handlingIntentImport = false;
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     unawaited(_refreshStats());
+    unawaited(_consumePendingImportIntent());
   }
 
   @override
@@ -80,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshStats());
+      unawaited(_consumePendingImportIntent());
     }
   }
 
@@ -170,16 +177,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     if (title == '数据备份') {
-      await pushAndRefresh(
-        context,
-        route: MaterialPageRoute(
-          builder: (_) => LanTransferScreen(
-            onPrepareImport: widget.onPrepareImport,
-            onImportCompleted: widget.onImportCompleted,
-          ),
-        ),
-        onRefresh: () => unawaited(_refreshStats()),
-      );
+      await _openBackupScreen();
       return;
     }
     if (title == 'AI识别') {
@@ -192,6 +190,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       return;
     }
+  }
+
+  Future<void> _openBackupScreen({String? initialImportPath}) async {
+    if (!mounted) {
+      return;
+    }
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
+        builder: (_) => LanTransferScreen(
+          initialImportPath: initialImportPath,
+          onPrepareImport: widget.onPrepareImport,
+          onImportCompleted: widget.onImportCompleted,
+        ),
+      ),
+      onRefresh: () => unawaited(_refreshStats()),
+    );
+  }
+
+  Future<void> _consumePendingImportIntent() async {
+    if (!mounted || _handlingIntentImport) {
+      return;
+    }
+    _handlingIntentImport = true;
+    try {
+      final path = await _backupImportIntentService.consumePendingImportPath();
+      if (!mounted || path == null || !_isSupportedImportPath(path)) {
+        return;
+      }
+      await _openBackupScreen(initialImportPath: path);
+    } catch (_) {
+      // Swallow intent read errors to avoid interrupting normal home flows.
+    } finally {
+      _handlingIntentImport = false;
+    }
+  }
+
+  bool _isSupportedImportPath(String path) {
+    final normalized = path.toLowerCase();
+    return _importExtensions.any(normalized.endsWith);
   }
 
   AppDatabase get database => _database;
