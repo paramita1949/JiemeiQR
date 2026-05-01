@@ -244,9 +244,7 @@ void main() {
     expect(result.lines.single.batch?.actualBatch, 'FCHBLEH');
   });
 
-  test(
-      'does not guess when same date has multiple batches without actual batch',
-      () async {
+  test('defaults to first batch when same date has multiple batches', () async {
     final productId = await productDao.createProduct(
       code: '72067',
       name: '大桶花露水195ml',
@@ -284,7 +282,98 @@ void main() {
     );
 
     expect(result.lines, hasLength(1));
-    expect(result.lines.single.batch, isNull);
-    expect(result.lines.single.messages, contains('未匹配批号'));
+    expect(result.lines.single.batch, isNotNull);
+    expect(result.lines.single.resolvedStatus, OcrLineStatus.needReview);
+    expect(result.lines.single.candidateBatches.length, 2);
+    expect(
+      result.lines.single.reasons,
+      contains('产品+日期对应多个批号，已默认代选批号1'),
+    );
+  });
+
+  test('reverse infers product and date from unique actual batch', () async {
+    final productId = await productDao.createProduct(
+      code: '20380',
+      name: '六神喷雾止痒花露水80ml',
+      boxesPerBoard: 40,
+      piecesPerBox: 12,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'ELOAYEZ',
+      dateBatch: '2029.8.11',
+      initialBoxes: 300,
+    );
+
+    final result = await WaybillOcrMatcher(productDao).match(
+      const WaybillOcrDraft(
+        waybillNo: '0001691948',
+        merchantName: '宁波冀源日月用品有限公司',
+        orderDateText: '2026-04-30',
+        rows: [
+          WaybillOcrRow(
+            productCode: '20880',
+            productName: '',
+            actualBatch: 'ELOAYEZ',
+            dateBatch: '',
+            boxes: 50,
+          ),
+        ],
+      ),
+    );
+
+    expect(result.lines, hasLength(1));
+    expect(result.lines.single.product?.code, '20380');
+    expect(result.lines.single.batch?.dateBatch, '2029.8.11');
+    expect(result.lines.single.resolvedStatus, OcrLineStatus.autoFixed);
+    expect(result.lines.single.reasons, contains('批号唯一命中，自动修正产品与日期'));
+  });
+
+  test('defaults to first batch and marks review when product+date has many',
+      () async {
+    final productId = await productDao.createProduct(
+      code: '20148',
+      name: '六神喷雾花露水180ml',
+      boxesPerBoard: 40,
+      piecesPerBox: 12,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FBLAFEX',
+      dateBatch: '2029.8.11',
+      initialBoxes: 300,
+    );
+    await productDao.createBatch(
+      productId: productId,
+      actualBatch: 'FBLAFEY',
+      dateBatch: '2029.8.11',
+      initialBoxes: 300,
+    );
+
+    final result = await WaybillOcrMatcher(productDao).match(
+      const WaybillOcrDraft(
+        waybillNo: '0001691949',
+        merchantName: '宁波冀源日月用品有限公司',
+        orderDateText: '2026-04-30',
+        rows: [
+          WaybillOcrRow(
+            productCode: '20148',
+            productName: '六神喷雾花露水180ml',
+            actualBatch: '',
+            dateBatch: '2029.8.11',
+            boxes: 30,
+          ),
+        ],
+      ),
+    );
+
+    expect(result.lines, hasLength(1));
+    expect(result.lines.single.batch, isNotNull);
+    expect(result.lines.single.resolvedStatus, OcrLineStatus.needReview);
+    expect(result.lines.single.candidateBatches.length, 2);
+    expect(
+      result.lines.single.reasons,
+      contains('产品+日期对应多个批号，已默认代选批号1'),
+    );
   });
 }

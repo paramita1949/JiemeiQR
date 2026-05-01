@@ -83,8 +83,19 @@ class MatchedWaybillOcrDraft {
   final DateTime? orderDate;
   final List<MatchedWaybillOcrLine> lines;
 
-  bool get hasSavableLines => lines.any(
-      (line) => line.product != null && line.batch != null && line.boxes > 0);
+  bool get hasSavableLines => lines.any((line) => line.isMatched);
+  int get autoFixedCount =>
+      lines.where((line) => line.status == OcrLineStatus.autoFixed).length;
+  int get needReviewCount =>
+      lines.where((line) => line.status == OcrLineStatus.needReview).length;
+  int get unmatchedCount =>
+      lines.where((line) => line.status == OcrLineStatus.unmatched).length;
+}
+
+enum OcrLineStatus {
+  autoFixed,
+  needReview,
+  unmatched,
 }
 
 class MatchedWaybillOcrLine {
@@ -95,6 +106,9 @@ class MatchedWaybillOcrLine {
     required this.sourceRows,
     required this.sourceBoxes,
     required this.messages,
+    this.status,
+    this.reasons = const [],
+    this.candidateBatches = const [],
   });
 
   final Product? product;
@@ -103,9 +117,18 @@ class MatchedWaybillOcrLine {
   final List<WaybillOcrRow> sourceRows;
   final List<int> sourceBoxes;
   final List<String> messages;
+  final OcrLineStatus? status;
+  final List<String> reasons;
+  final List<BatchRecord> candidateBatches;
 
   bool get isMatched => product != null && batch != null && boxes > 0;
   bool get isMerged => sourceRows.length > 1;
+  OcrLineStatus get resolvedStatus {
+    if (status != null) {
+      return status!;
+    }
+    return isMatched ? OcrLineStatus.autoFixed : OcrLineStatus.unmatched;
+  }
 }
 
 String _stringValue(Object? value) => value?.toString().trim() ?? '';
