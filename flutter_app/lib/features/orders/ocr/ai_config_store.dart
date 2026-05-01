@@ -21,6 +21,9 @@ class AiOcrConfig {
     this.modelscopeModel = defaultModelScopeModel,
     this.openRouterApiKey = '',
     this.openRouterModel = defaultOpenRouterModel,
+    this.geminiModelPresets = defaultGeminiModelPresets,
+    this.modelScopeModelPresets = defaultModelScopeModelPresets,
+    this.openRouterModelPresets = defaultOpenRouterModelPresets,
   });
 
   static const defaultModel = 'gemini-3-flash-preview';
@@ -34,6 +37,20 @@ class AiOcrConfig {
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
+  static const defaultGeminiModelPresets = [
+    defaultModel,
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+  ];
+  static const defaultModelScopeModelPresets = [
+    defaultModelScopeModel,
+    'Qwen/Qwen2.5-VL-72B-Instruct',
+  ];
+  static const defaultOpenRouterModelPresets = [
+    defaultOpenRouterModel,
+    'minimax/minimax-m2.5:free',
+    'openai/gpt-oss-120b:free',
+  ];
 
   final String provider;
   final String geminiApiKey;
@@ -50,6 +67,9 @@ class AiOcrConfig {
   final String modelscopeModel;
   final String openRouterApiKey;
   final String openRouterModel;
+  final List<String> geminiModelPresets;
+  final List<String> modelScopeModelPresets;
+  final List<String> openRouterModelPresets;
 
   bool get hasGeminiKey => geminiApiKey.trim().isNotEmpty;
   bool get usesTencentOcr => provider == tencentProvider;
@@ -83,6 +103,9 @@ class AiOcrConfig {
         'modelscopeModel': modelscopeModel,
         'openRouterApiKey': openRouterApiKey,
         'openRouterModel': openRouterModel,
+        'geminiModelPresets': geminiModelPresets,
+        'modelScopeModelPresets': modelScopeModelPresets,
+        'openRouterModelPresets': openRouterModelPresets,
       };
 
   factory AiOcrConfig.fromJson(Map<String, Object?> json) {
@@ -123,6 +146,18 @@ class AiOcrConfig {
           json['openRouterModel']?.toString().trim().isNotEmpty == true
               ? json['openRouterModel'].toString().trim()
               : defaultOpenRouterModel,
+      geminiModelPresets: _decodePresetList(
+        json['geminiModelPresets'],
+        fallback: defaultGeminiModelPresets,
+      ),
+      modelScopeModelPresets: _decodePresetList(
+        json['modelScopeModelPresets'],
+        fallback: defaultModelScopeModelPresets,
+      ),
+      openRouterModelPresets: _decodePresetList(
+        json['openRouterModelPresets'],
+        fallback: defaultOpenRouterModelPresets,
+      ),
     );
   }
 
@@ -142,6 +177,9 @@ class AiOcrConfig {
     String? modelscopeModel,
     String? openRouterApiKey,
     String? openRouterModel,
+    List<String>? geminiModelPresets,
+    List<String>? modelScopeModelPresets,
+    List<String>? openRouterModelPresets,
   }) {
     return AiOcrConfig(
       provider: provider ?? this.provider,
@@ -160,6 +198,11 @@ class AiOcrConfig {
       modelscopeModel: modelscopeModel ?? this.modelscopeModel,
       openRouterApiKey: openRouterApiKey ?? this.openRouterApiKey,
       openRouterModel: openRouterModel ?? this.openRouterModel,
+      geminiModelPresets: geminiModelPresets ?? this.geminiModelPresets,
+      modelScopeModelPresets:
+          modelScopeModelPresets ?? this.modelScopeModelPresets,
+      openRouterModelPresets:
+          openRouterModelPresets ?? this.openRouterModelPresets,
     );
   }
 }
@@ -192,6 +235,9 @@ class FileAiConfigStore {
         modelscopeModel: AiOcrConfig.defaultModelScopeModel,
         openRouterApiKey: '',
         openRouterModel: AiOcrConfig.defaultOpenRouterModel,
+        geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
+        modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+        openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
       );
     }
     try {
@@ -218,6 +264,9 @@ class FileAiConfigStore {
       modelscopeModel: AiOcrConfig.defaultModelScopeModel,
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
+      geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
+      modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+      openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
     );
   }
 
@@ -231,4 +280,14 @@ class FileAiConfigStore {
 Future<File> _defaultSettingsFile() async {
   final directory = await getApplicationDocumentsDirectory();
   return File(p.join(directory.path, 'ai_ocr_config.json'));
+}
+
+List<String> _decodePresetList(Object? raw, {required List<String> fallback}) {
+  final source = raw is List ? raw : fallback;
+  final values = source
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList();
+  return values.isEmpty ? fallback : values;
 }

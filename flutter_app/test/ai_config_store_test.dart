@@ -35,6 +35,7 @@ void main() {
     expect(loaded.tencentRegion, 'ap-shanghai');
     expect(loaded.aliyunAccessKeyId, 'ak');
     expect(loaded.aliyunAccessKeySecret, 'as');
+    expect(loaded.aliyunEndpoint, 'ocr-api.cn-hangzhou.aliyuncs.com');
     expect(loaded.baiduApiKey, 'bak');
     expect(loaded.baiduSecretKey, 'bsk');
   });
