@@ -272,8 +272,15 @@ class LanTransferService {
         pairingCode: pairingCode,
       );
       final incomingPath = await _saveIncomingFile(dbResponse, dbFileName);
+      final aiConfigIncomingPath = await _downloadAiConfigWithPairingCode(
+        manifest: manifest,
+        client: client,
+        baseUri: baseUri,
+        pairingCode: pairingCode,
+      );
       final importResult = await _backupService.importDatabaseFromPath(
         incomingPath,
+        incomingAiConfigPath: aiConfigIncomingPath,
       );
       return ReceiveResult(
         importedFromPath: incomingPath,
@@ -308,8 +315,15 @@ class LanTransferService {
         transferToken: transferToken,
       );
       final incomingPath = await _saveIncomingFile(dbResponse, dbFileName);
+      final aiConfigIncomingPath = await _downloadAiConfigWithTransferToken(
+        manifest: manifest,
+        client: client,
+        baseUri: baseUri,
+        transferToken: transferToken,
+      );
       final importResult = await _backupService.importDatabaseFromPath(
         incomingPath,
+        incomingAiConfigPath: aiConfigIncomingPath,
       );
       return ReceiveResult(
         importedFromPath: incomingPath,
@@ -507,6 +521,58 @@ class LanTransferService {
 
     request.response.statusCode = HttpStatus.notFound;
     await request.response.close();
+  }
+
+  Future<String?> _downloadAiConfigWithPairingCode({
+    required Map<String, dynamic> manifest,
+    required HttpClient client,
+    required Uri baseUri,
+    required String pairingCode,
+  }) async {
+    final aiConfigPath = manifest['aiConfigPath'] as String?;
+    if (aiConfigPath == null || aiConfigPath.isEmpty) {
+      return null;
+    }
+    final fileName = p.basename(aiConfigPath);
+    if (fileName.isEmpty) {
+      return null;
+    }
+    try {
+      final response = await _getWithPairingCode(
+        client: client,
+        uri: baseUri.resolve('/database/$fileName'),
+        pairingCode: pairingCode,
+      );
+      return _saveIncomingFile(response, fileName);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _downloadAiConfigWithTransferToken({
+    required Map<String, dynamic> manifest,
+    required HttpClient client,
+    required Uri baseUri,
+    required String transferToken,
+  }) async {
+    final aiConfigPath = manifest['aiConfigPath'] as String?;
+    if (aiConfigPath == null || aiConfigPath.isEmpty) {
+      return null;
+    }
+    final fileName = p.basename(aiConfigPath);
+    if (fileName.isEmpty) {
+      return null;
+    }
+    try {
+      final response = await _getWithTransferToken(
+        client: client,
+        uri: baseUri.resolve('/database/$fileName'),
+        transferToken: transferToken,
+      );
+      return _saveIncomingFile(response, fileName);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _handleTransferRequest(

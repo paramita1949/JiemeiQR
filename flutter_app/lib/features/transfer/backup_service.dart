@@ -56,6 +56,7 @@ class BackupService {
   final NowProvider? nowProvider;
   final RandomIntProvider? randomIntProvider;
   static const int maxSnapshotCount = 90;
+  static const String aiConfigFileName = 'ai_ocr_config.json';
   static const Duration dailyAutoBackupInterval = Duration(hours: 24);
   static const Duration weeklyAutoBackupInterval = Duration(days: 7);
 
@@ -88,6 +89,16 @@ class BackupService {
     final backupFileName = 'jiemei-backup-$stamp.sqlite';
     final backupFile = File(p.join(backupDir.path, backupFileName));
     await source.copy(backupFile.path);
+    final aiConfigSource = await _aiConfigFile();
+    final aiConfigBackupPath = p.join(
+      backupDir.path,
+      'jiemei-backup-$stamp.$aiConfigFileName',
+    );
+    String? copiedAiConfigPath;
+    if (await aiConfigSource.exists()) {
+      final copied = await aiConfigSource.copy(aiConfigBackupPath);
+      copiedAiConfigPath = copied.path;
+    }
 
     final infoFileName = 'jiemei-backup-$stamp.backup_info.json';
     final infoFile = File(p.join(backupDir.path, infoFileName));
@@ -97,6 +108,7 @@ class BackupService {
         'databaseFileName': databaseFileName,
         'sourceDatabasePath': source.path,
         'backupDatabasePath': backupFile.path,
+        'backupAiConfigPath': copiedAiConfigPath,
         'reason': reason.value,
       }),
     );
@@ -163,7 +175,14 @@ class BackupService {
   }
 
   Future<ImportResult> restoreBackupSnapshot(String backupPath) {
-    return importDatabaseFromPath(backupPath);
+    final aiConfigPath = p.join(
+      p.dirname(backupPath),
+      '${p.basenameWithoutExtension(backupPath)}.$aiConfigFileName',
+    );
+    return importDatabaseFromPath(
+      backupPath,
+      incomingAiConfigPath: aiConfigPath,
+    );
   }
 
   Future<void> deleteBackupSnapshot(String backupPath) async {
@@ -281,6 +300,13 @@ class BackupService {
 
     final packageDb = File(p.join(sendDir.path, databaseFileName));
     await source.copy(packageDb.path);
+    String? aiConfigPackagePath;
+    final aiConfig = await _aiConfigFile();
+    if (await aiConfig.exists()) {
+      final aiConfigFile =
+          await aiConfig.copy(p.join(sendDir.path, aiConfigFileName));
+      aiConfigPackagePath = aiConfigFile.path;
+    }
 
     final pairingCode = _generatePairingCode();
     final manifest = {
@@ -288,6 +314,7 @@ class BackupService {
       'createdAt': now.toIso8601String(),
       'databaseFileName': databaseFileName,
       'databasePath': packageDb.path,
+      'aiConfigPath': aiConfigPackagePath,
       'pairingCode': pairingCode,
     };
     final manifestFile = File(p.join(sendDir.path, 'transfer_manifest.json'));
@@ -334,6 +361,13 @@ class BackupService {
           ArchiveFile('manifest.json', manifestBytes.length, manifestBytes))
       ..addFile(
           ArchiveFile(databaseFileName, databaseBytes.length, databaseBytes));
+    final aiConfig = await _aiConfigFile();
+    if (await aiConfig.exists()) {
+      final aiConfigBytes = await aiConfig.readAsBytes();
+      archive.addFile(
+        ArchiveFile(aiConfigFileName, aiConfigBytes.length, aiConfigBytes),
+      );
+    }
     final encoded = ZipEncoder().encode(archive);
     await packageFile.writeAsBytes(encoded, flush: true);
 
@@ -363,11 +397,14 @@ class BackupService {
 
     ArchiveFile? manifestFile;
     ArchiveFile? databaseFile;
+    ArchiveFile? aiConfigArchiveFile;
     for (final file in archive.files) {
       if (file.name == 'manifest.json') {
         manifestFile = file;
       } else if (p.basename(file.name) == databaseFileName) {
         databaseFile = file;
+      } else if (p.basename(file.name) == aiConfigFileName) {
+        aiConfigArchiveFile = file;
       }
     }
     if (manifestFile == null || databaseFile == null) {
@@ -399,8 +436,20 @@ class BackupService {
       _archiveContentBytes(databaseFile),
       flush: true,
     );
+    String? extractedAiConfigPath;
+    if (aiConfigArchiveFile != null) {
+      final extractedAiConfig = File(p.join(tempDir.path, aiConfigFileName));
+      await extractedAiConfig.writeAsBytes(
+        _archiveContentBytes(aiConfigArchiveFile),
+        flush: true,
+      );
+      extractedAiConfigPath = extractedAiConfig.path;
+    }
 
-    final result = await importDatabaseFromPath(extractedDatabase.path);
+    final result = await importDatabaseFromPath(
+      extractedDatabase.path,
+      incomingAiConfigPath: extractedAiConfigPath,
+    );
     return ImportResult(
       importedFromPath: incomingPath,
       backupFilePath: result.backupFilePath,
@@ -408,7 +457,10 @@ class BackupService {
     );
   }
 
-  Future<ImportResult> importDatabaseFromPath(String incomingPath) async {
+  Future<ImportResult> importDatabaseFromPath(
+    String incomingPath, {
+    String? incomingAiConfigPath,
+  }) async {
     final incoming = await _resolveIncomingFile(incomingPath);
     if (incoming == null) {
       throw ImportSourceMissingException(incomingPath);
@@ -430,6 +482,7 @@ class BackupService {
     final backup = await createLocalBackup(reason: BackupReason.beforeImport);
     try {
       _overwriteBusinessTables(target: target, incoming: incoming);
+      await _restoreAiConfigFromPath(incomingAiConfigPath);
       return ImportResult(
         importedFromPath: incomingPath,
         backupFilePath: backup.filePath,
@@ -587,6 +640,25 @@ class BackupService {
   Future<File> _backupSettingsFile() async {
     final documentsDir = await _documentsDirectory();
     return File(p.join(documentsDir.path, 'backups', '.backup_settings.json'));
+  }
+
+  Future<File> _aiConfigFile() async {
+    final documentsDir = await _documentsDirectory();
+    return File(p.join(documentsDir.path, aiConfigFileName));
+  }
+
+  Future<void> _restoreAiConfigFromPath(String? incomingAiConfigPath) async {
+    final path = incomingAiConfigPath?.trim();
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    final incoming = File(path);
+    if (!await incoming.exists()) {
+      return;
+    }
+    final target = await _aiConfigFile();
+    await target.parent.create(recursive: true);
+    await incoming.copy(target.path);
   }
 
   Future<int> _pruneBackupsByCount({required int maxCount}) async {

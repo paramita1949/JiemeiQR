@@ -429,6 +429,29 @@ void main() {
     expect(manifest['createdAt'], '2026-04-30T15:20:00.000');
   });
 
+  test('backup service includes ai config in share package when present',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('jiemei-share-ai-test-');
+    final sourceFile = File('${tempDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(sourceFile, productCode: 'SHARE_AI');
+    final aiConfig = File('${tempDir.path}/ai_ocr_config.json');
+    await aiConfig.writeAsString('{"provider":"gemini","geminiApiKey":"k1"}');
+
+    final service = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => tempDir,
+      nowProvider: () => DateTime(2026, 4, 30, 15, 21, 0),
+    );
+
+    final package = await service.createSharePackage();
+    final archive = ZipDecoder().decodeBytes(
+      await File(package.filePath).readAsBytes(),
+    );
+    final names = archive.files.map((file) => file.name).toSet();
+    expect(names, contains('ai_ocr_config.json'));
+  });
+
   test('backup service imports shared package through protected restore',
       () async {
     final senderDir =
@@ -458,6 +481,40 @@ void main() {
     expect(_productCodes(receiverDb), ['FROM_SHARE']);
     expect(result.importedFromPath, package.filePath);
     expect(await File(result.backupFilePath).exists(), isTrue);
+  });
+
+  test('backup service restores ai config from shared package', () async {
+    final senderDir =
+        await Directory.systemTemp.createTemp('jiemei-share-sender-ai-');
+    final senderDb = File('${senderDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(senderDb, productCode: 'FROM_SHARE_AI');
+    await File('${senderDir.path}/ai_ocr_config.json')
+        .writeAsString('{"provider":"openrouter","openRouterApiKey":"okey"}');
+    final senderService = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => senderDir,
+      nowProvider: () => DateTime(2026, 4, 30, 15, 31, 0),
+    );
+    final package = await senderService.createSharePackage();
+
+    final receiverDir =
+        await Directory.systemTemp.createTemp('jiemei-share-receiver-ai-');
+    final receiverDb = File('${receiverDir.path}/jiemei.sqlite');
+    await _createBusinessDatabase(receiverDb, productCode: 'CURRENT');
+    await File('${receiverDir.path}/ai_ocr_config.json')
+        .writeAsString('{"provider":"gemini","geminiApiKey":"old"}');
+    final receiverService = BackupService(
+      databaseFileName: 'jiemei.sqlite',
+      documentsDirectoryProvider: () async => receiverDir,
+      nowProvider: () => DateTime(2026, 4, 30, 16, 1, 0),
+    );
+
+    await receiverService.importSharedBackupPackage(package.filePath);
+
+    final restored =
+        await File('${receiverDir.path}/ai_ocr_config.json').readAsString();
+    expect(restored, contains('"provider":"openrouter"'));
+    expect(restored, contains('"openRouterApiKey":"okey"'));
   });
 
   test('backup service imports database with sql overwrite, not file replace',
