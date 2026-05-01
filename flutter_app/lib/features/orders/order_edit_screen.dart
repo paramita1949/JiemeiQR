@@ -400,6 +400,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       source: source,
       imageQuality: 85,
       maxWidth: 1600,
+      maxHeight: 2048,
     );
     if (!mounted || picked == null) {
       return;
