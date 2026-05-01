@@ -502,7 +502,7 @@ class _ProviderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          width: 118,
+          width: 132,
           constraints: const BoxConstraints(minHeight: 72),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
@@ -530,20 +530,21 @@ class _ProviderCard extends StatelessWidget {
                       size: 21,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      meta.name,
-                      style: TextStyle(
-                        color: selected ? meta.color : AppTheme.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
+                  const Spacer(),
                   if (selected)
                     Icon(Icons.check_circle, color: meta.color, size: 20),
                 ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                meta.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? meta.color : AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),

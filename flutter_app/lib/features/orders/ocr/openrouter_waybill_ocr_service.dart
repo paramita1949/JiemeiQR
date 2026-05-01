@@ -33,12 +33,13 @@ class OpenRouterWaybillOcrService implements WaybillPhotoOcrService {
     final effectiveApiKey = apiKey.trim().isNotEmpty
         ? apiKey.trim()
         : config.openRouterApiKey.trim();
+    final normalizedApiKey = _normalizeApiKey(effectiveApiKey);
     final effectiveModel = model.trim().isNotEmpty
         ? model.trim()
         : config.openRouterModel.trim().isNotEmpty
             ? config.openRouterModel.trim()
             : AiOcrConfig.defaultOpenRouterModel;
-    if (effectiveApiKey.isEmpty) {
+    if (normalizedApiKey.isEmpty) {
       throw const OpenRouterWaybillOcrException('缺少 OpenRouter API KEY');
     }
 
@@ -63,7 +64,7 @@ class OpenRouterWaybillOcrService implements WaybillPhotoOcrService {
       'temperature': 0.0,
     };
 
-    final responseText = await _httpPost(uri, body, effectiveApiKey);
+    final responseText = await _httpPost(uri, body, normalizedApiKey);
     return _parseResponse(responseText);
   }
 
@@ -122,12 +123,21 @@ Future<String> _defaultHttpPost(
     final responseText = await response.transform(utf8.decoder).join();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw OpenRouterWaybillOcrException(
-          'OpenRouter 请求失败：${response.statusCode}');
+        'OpenRouter 请求失败：${response.statusCode} ${responseText.trim()}',
+      );
     }
     return responseText;
   } finally {
     client.close(force: true);
   }
+}
+
+String _normalizeApiKey(String raw) {
+  final value = raw.trim();
+  if (value.toLowerCase().startsWith('bearer ')) {
+    return value.substring(7).trim();
+  }
+  return value;
 }
 
 const _ocrPrompt = '''
