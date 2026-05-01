@@ -238,40 +238,19 @@ void main() {
     expect(find.text('默认使用'), findsOneWidget);
     expect(find.text('当前启用'), findsOneWidget);
     expect(find.text('谷歌'), findsWidgets);
-    expect(find.text('腾讯'), findsWidgets);
-    expect(find.text('阿里'), findsWidgets);
-    expect(find.text('百度'), findsWidgets);
-    expect(find.text('阿里OCR'), findsNothing);
-    expect(find.text('百度OCR'), findsNothing);
+    expect(find.text('魔搭'), findsWidgets);
     expect(find.byKey(const Key('providerHorizontalList')), findsOneWidget);
 
     expect(find.text('识别密钥'), findsOneWidget);
     expect(find.text('Gemini API Key'), findsOneWidget);
     expect(find.text('Gemini 模型'), findsOneWidget);
-    expect(find.text('腾讯OCR'), findsNothing);
-    expect(find.text('腾讯 SecretId'), findsNothing);
-    expect(find.text('腾讯 SecretKey'), findsNothing);
-    expect(find.text('腾讯地域'), findsNothing);
+    expect(find.text('魔搭 API KEY'), findsNothing);
+    expect(find.text('魔搭 模型'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('providerCard-tencent')));
+    await tester.tap(find.byKey(const Key('providerCard-modelscope')));
     await tester.pumpAndSettle();
-    expect(find.text('腾讯 SecretId'), findsOneWidget);
-    expect(find.text('腾讯 SecretKey'), findsOneWidget);
+    expect(find.text('魔搭 API KEY'), findsOneWidget);
+    expect(find.text('魔搭 模型'), findsOneWidget);
     expect(find.text('Gemini API Key'), findsNothing);
-
-    await tester.drag(
-        find.byKey(const Key('providerHorizontalList')), const Offset(-180, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('providerCard-aliyun')));
-    await tester.pumpAndSettle();
-    expect(find.text('阿里 AccessKeyId'), findsOneWidget);
-    expect(find.text('阿里 AccessKeySecret'), findsOneWidget);
-    expect(find.text('阿里接入点'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('providerCard-baidu')));
-    await tester.pumpAndSettle();
-    expect(find.text('百度 API Key'), findsOneWidget);
-    expect(find.text('百度 Secret Key'), findsOneWidget);
-    expect(find.text('阿里 AccessKeyId'), findsNothing);
   });
 }

@@ -10,7 +10,7 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
-import 'package:qrscan_flutter/features/orders/ocr/tencent_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -387,7 +387,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-    } on TencentWaybillOcrException catch (error) {
+    } on ModelScopeWaybillOcrException catch (error) {
       if (!mounted) {
         return;
       }

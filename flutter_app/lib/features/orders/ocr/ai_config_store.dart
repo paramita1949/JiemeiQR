@@ -17,6 +17,8 @@ class AiOcrConfig {
     required this.aliyunEndpoint,
     required this.baiduApiKey,
     required this.baiduSecretKey,
+    this.modelscopeToken = '',
+    this.modelscopeModel = defaultModelScopeModel,
   });
 
   static const defaultModel = 'gemini-3-flash-preview';
@@ -24,8 +26,10 @@ class AiOcrConfig {
   static const tencentProvider = 'tencent';
   static const aliyunProvider = 'aliyun';
   static const baiduProvider = 'baidu';
+  static const modelscopeProvider = 'modelscope';
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
+  static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
 
   final String provider;
   final String geminiApiKey;
@@ -38,11 +42,14 @@ class AiOcrConfig {
   final String aliyunEndpoint;
   final String baiduApiKey;
   final String baiduSecretKey;
+  final String modelscopeToken;
+  final String modelscopeModel;
 
   bool get hasGeminiKey => geminiApiKey.trim().isNotEmpty;
   bool get usesTencentOcr => provider == tencentProvider;
   bool get usesAliyunOcr => provider == aliyunProvider;
   bool get usesBaiduOcr => provider == baiduProvider;
+  bool get usesModelScopeOcr => provider == modelscopeProvider;
   bool get hasTencentCredential =>
       tencentSecretId.trim().isNotEmpty && tencentSecretKey.trim().isNotEmpty;
   bool get hasAliyunCredential =>
@@ -50,6 +57,7 @@ class AiOcrConfig {
       aliyunAccessKeySecret.trim().isNotEmpty;
   bool get hasBaiduCredential =>
       baiduApiKey.trim().isNotEmpty && baiduSecretKey.trim().isNotEmpty;
+  bool get hasModelScopeCredential => modelscopeToken.trim().isNotEmpty;
 
   Map<String, Object?> toJson() => {
         'provider': provider,
@@ -63,6 +71,8 @@ class AiOcrConfig {
         'aliyunEndpoint': aliyunEndpoint,
         'baiduApiKey': baiduApiKey,
         'baiduSecretKey': baiduSecretKey,
+        'modelscopeToken': modelscopeToken,
+        'modelscopeModel': modelscopeModel,
       };
 
   factory AiOcrConfig.fromJson(Map<String, Object?> json) {
@@ -70,6 +80,7 @@ class AiOcrConfig {
       tencentProvider => tencentProvider,
       aliyunProvider => aliyunProvider,
       baiduProvider => baiduProvider,
+      modelscopeProvider => modelscopeProvider,
       _ => defaultProvider,
     };
     return AiOcrConfig(
@@ -91,6 +102,11 @@ class AiOcrConfig {
               : defaultAliyunEndpoint,
       baiduApiKey: json['baiduApiKey']?.toString() ?? '',
       baiduSecretKey: json['baiduSecretKey']?.toString() ?? '',
+      modelscopeToken: json['modelscopeToken']?.toString() ?? '',
+      modelscopeModel:
+          json['modelscopeModel']?.toString().trim().isNotEmpty == true
+              ? json['modelscopeModel'].toString().trim()
+              : defaultModelScopeModel,
     );
   }
 
@@ -106,6 +122,8 @@ class AiOcrConfig {
     String? aliyunEndpoint,
     String? baiduApiKey,
     String? baiduSecretKey,
+    String? modelscopeToken,
+    String? modelscopeModel,
   }) {
     return AiOcrConfig(
       provider: provider ?? this.provider,
@@ -120,6 +138,8 @@ class AiOcrConfig {
       aliyunEndpoint: aliyunEndpoint ?? this.aliyunEndpoint,
       baiduApiKey: baiduApiKey ?? this.baiduApiKey,
       baiduSecretKey: baiduSecretKey ?? this.baiduSecretKey,
+      modelscopeToken: modelscopeToken ?? this.modelscopeToken,
+      modelscopeModel: modelscopeModel ?? this.modelscopeModel,
     );
   }
 }
@@ -148,6 +168,8 @@ class FileAiConfigStore {
         aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
         baiduApiKey: '',
         baiduSecretKey: '',
+        modelscopeToken: '',
+        modelscopeModel: AiOcrConfig.defaultModelScopeModel,
       );
     }
     try {
@@ -170,6 +192,8 @@ class FileAiConfigStore {
       aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
       baiduApiKey: '',
       baiduSecretKey: '',
+      modelscopeToken: '',
+      modelscopeModel: AiOcrConfig.defaultModelScopeModel,
     );
   }
 

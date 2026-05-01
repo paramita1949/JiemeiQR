@@ -21,14 +21,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiKeyController = TextEditingController();
   final _modelController = TextEditingController();
-  final _tencentSecretIdController = TextEditingController();
-  final _tencentSecretKeyController = TextEditingController();
-  final _tencentRegionController = TextEditingController();
-  final _aliyunAccessKeyIdController = TextEditingController();
-  final _aliyunAccessKeySecretController = TextEditingController();
-  final _aliyunEndpointController = TextEditingController();
-  final _baiduApiKeyController = TextEditingController();
-  final _baiduSecretKeyController = TextEditingController();
+  final _modelscopeTokenController = TextEditingController();
+  final _modelscopeModelController = TextEditingController();
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -41,14 +35,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     for (final controller in [
       _apiKeyController,
       _modelController,
-      _tencentSecretIdController,
-      _tencentSecretKeyController,
-      _tencentRegionController,
-      _aliyunAccessKeyIdController,
-      _aliyunAccessKeySecretController,
-      _aliyunEndpointController,
-      _baiduApiKeyController,
-      _baiduSecretKeyController,
+      _modelscopeTokenController,
+      _modelscopeModelController,
     ]) {
       controller.addListener(_scheduleAutoSave);
     }
@@ -63,14 +51,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     }
     _apiKeyController.dispose();
     _modelController.dispose();
-    _tencentSecretIdController.dispose();
-    _tencentSecretKeyController.dispose();
-    _tencentRegionController.dispose();
-    _aliyunAccessKeyIdController.dispose();
-    _aliyunAccessKeySecretController.dispose();
-    _aliyunEndpointController.dispose();
-    _baiduApiKeyController.dispose();
-    _baiduSecretKeyController.dispose();
+    _modelscopeTokenController.dispose();
+    _modelscopeModelController.dispose();
     super.dispose();
   }
 
@@ -83,14 +65,12 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _provider = config.provider;
       _apiKeyController.text = config.geminiApiKey;
       _modelController.text = config.geminiModel;
-      _tencentSecretIdController.text = config.tencentSecretId;
-      _tencentSecretKeyController.text = config.tencentSecretKey;
-      _tencentRegionController.text = config.tencentRegion;
-      _aliyunAccessKeyIdController.text = config.aliyunAccessKeyId;
-      _aliyunAccessKeySecretController.text = config.aliyunAccessKeySecret;
-      _aliyunEndpointController.text = config.aliyunEndpoint;
-      _baiduApiKeyController.text = config.baiduApiKey;
-      _baiduSecretKeyController.text = config.baiduSecretKey;
+      _modelscopeTokenController.text = config.modelscopeToken;
+      _modelscopeModelController.text = config.modelscopeModel;
+      if (_provider != AiOcrConfig.defaultProvider &&
+          _provider != AiOcrConfig.modelscopeProvider) {
+        _provider = AiOcrConfig.defaultProvider;
+      }
       _autoSaveReady = true;
     });
   }
@@ -164,29 +144,12 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                           ),
                           const SizedBox(width: 10),
                           _ProviderCard(
-                            key: const Key('providerCard-tencent'),
-                            meta: _providerMeta(AiOcrConfig.tencentProvider),
-                            selected: _provider == AiOcrConfig.tencentProvider,
+                            key: const Key('providerCard-modelscope'),
+                            meta: _providerMeta(AiOcrConfig.modelscopeProvider),
+                            selected:
+                                _provider == AiOcrConfig.modelscopeProvider,
                             onTap: () => _selectProvider(
-                              AiOcrConfig.tencentProvider,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          _ProviderCard(
-                            key: const Key('providerCard-aliyun'),
-                            meta: _providerMeta(AiOcrConfig.aliyunProvider),
-                            selected: _provider == AiOcrConfig.aliyunProvider,
-                            onTap: () => _selectProvider(
-                              AiOcrConfig.aliyunProvider,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          _ProviderCard(
-                            key: const Key('providerCard-baidu'),
-                            meta: _providerMeta(AiOcrConfig.baiduProvider),
-                            selected: _provider == AiOcrConfig.baiduProvider,
-                            onTap: () => _selectProvider(
-                              AiOcrConfig.baiduProvider,
+                              AiOcrConfig.modelscopeProvider,
                             ),
                           ),
                         ],
@@ -214,42 +177,20 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   }
 
   bool get _isSelectedProviderConfigured {
-    if (_provider == AiOcrConfig.tencentProvider) {
-      return _tencentSecretIdController.text.trim().isNotEmpty &&
-          _tencentSecretKeyController.text.trim().isNotEmpty;
-    }
-    if (_provider == AiOcrConfig.aliyunProvider) {
-      return _aliyunAccessKeyIdController.text.trim().isNotEmpty &&
-          _aliyunAccessKeySecretController.text.trim().isNotEmpty;
-    }
-    if (_provider == AiOcrConfig.baiduProvider) {
-      return _baiduApiKeyController.text.trim().isNotEmpty &&
-          _baiduSecretKeyController.text.trim().isNotEmpty;
+    if (_provider == AiOcrConfig.modelscopeProvider) {
+      return _modelscopeTokenController.text.trim().isNotEmpty &&
+          _modelscopeModelController.text.trim().isNotEmpty;
     }
     return _apiKeyController.text.trim().isNotEmpty &&
         _modelController.text.trim().isNotEmpty;
   }
 
   Widget _providerFields() {
-    if (_provider == AiOcrConfig.tencentProvider) {
-      return _TencentFields(
-        key: const ValueKey('tencentFields'),
-        secretIdController: _tencentSecretIdController,
-        secretKeyController: _tencentSecretKeyController,
-      );
-    }
-    if (_provider == AiOcrConfig.aliyunProvider) {
-      return _AliyunFields(
-        key: const ValueKey('aliyunFields'),
-        accessKeyIdController: _aliyunAccessKeyIdController,
-        accessKeySecretController: _aliyunAccessKeySecretController,
-      );
-    }
-    if (_provider == AiOcrConfig.baiduProvider) {
-      return _BaiduFields(
-        key: const ValueKey('baiduFields'),
-        apiKeyController: _baiduApiKeyController,
-        secretKeyController: _baiduSecretKeyController,
+    if (_provider == AiOcrConfig.modelscopeProvider) {
+      return _ModelScopeFields(
+        key: const ValueKey('modelScopeFields'),
+        apiKeyController: _modelscopeTokenController,
+        modelController: _modelscopeModelController,
       );
     }
     return _GeminiFields(
@@ -290,23 +231,11 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   }
 
   String? _selectedConfigError() {
-    if (_provider == AiOcrConfig.tencentProvider) {
-      return _tencentSecretIdController.text.trim().isNotEmpty &&
-              _tencentSecretKeyController.text.trim().isNotEmpty
+    if (_provider == AiOcrConfig.modelscopeProvider) {
+      return _modelscopeTokenController.text.trim().isNotEmpty &&
+              _modelscopeModelController.text.trim().isNotEmpty
           ? null
-          : '请填写腾讯 SecretId 和 SecretKey';
-    }
-    if (_provider == AiOcrConfig.aliyunProvider) {
-      return _aliyunAccessKeyIdController.text.trim().isNotEmpty &&
-              _aliyunAccessKeySecretController.text.trim().isNotEmpty
-          ? null
-          : '请填写阿里 AccessKeyId 和 AccessKeySecret';
-    }
-    if (_provider == AiOcrConfig.baiduProvider) {
-      return _baiduApiKeyController.text.trim().isNotEmpty &&
-              _baiduSecretKeyController.text.trim().isNotEmpty
-          ? null
-          : '请填写百度 API Key 和 Secret Key';
+          : '请填写魔搭 API KEY 和模型';
     }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
@@ -319,18 +248,16 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       provider: _provider,
       geminiApiKey: _apiKeyController.text.trim(),
       geminiModel: _modelController.text.trim(),
-      tencentSecretId: _tencentSecretIdController.text.trim(),
-      tencentSecretKey: _tencentSecretKeyController.text.trim(),
-      tencentRegion: _tencentRegionController.text.trim().isEmpty
-          ? AiOcrConfig.defaultTencentRegion
-          : _tencentRegionController.text.trim(),
-      aliyunAccessKeyId: _aliyunAccessKeyIdController.text.trim(),
-      aliyunAccessKeySecret: _aliyunAccessKeySecretController.text.trim(),
-      aliyunEndpoint: _aliyunEndpointController.text.trim().isEmpty
-          ? AiOcrConfig.defaultAliyunEndpoint
-          : _aliyunEndpointController.text.trim(),
-      baiduApiKey: _baiduApiKeyController.text.trim(),
-      baiduSecretKey: _baiduSecretKeyController.text.trim(),
+      tencentSecretId: '',
+      tencentSecretKey: '',
+      tencentRegion: AiOcrConfig.defaultTencentRegion,
+      aliyunAccessKeyId: '',
+      aliyunAccessKeySecret: '',
+      aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
+      baiduApiKey: '',
+      baiduSecretKey: '',
+      modelscopeToken: _modelscopeTokenController.text.trim(),
+      modelscopeModel: _modelscopeModelController.text.trim(),
     );
   }
 
@@ -350,31 +277,13 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
 }
 
 _ProviderMeta _providerMeta(String provider) {
-  if (provider == AiOcrConfig.tencentProvider) {
+  if (provider == AiOcrConfig.modelscopeProvider) {
     return const _ProviderMeta(
-      provider: AiOcrConfig.tencentProvider,
-      name: '腾讯',
-      formHint: '填写腾讯云访问密钥，地域默认使用广州。',
-      icon: Icons.article_outlined,
-      color: Color(0xFFDC2626),
-    );
-  }
-  if (provider == AiOcrConfig.aliyunProvider) {
-    return const _ProviderMeta(
-      provider: AiOcrConfig.aliyunProvider,
-      name: '阿里',
-      formHint: '填写阿里云 AccessKey，默认杭州 OCR API 接入点。',
-      icon: Icons.cloud_queue_outlined,
-      color: Color(0xFFF97316),
-    );
-  }
-  if (provider == AiOcrConfig.baiduProvider) {
-    return const _ProviderMeta(
-      provider: AiOcrConfig.baiduProvider,
-      name: '百度',
-      formHint: '填写百度智能云 API Key 和 Secret Key。',
+      provider: AiOcrConfig.modelscopeProvider,
+      name: '魔搭',
+      formHint: '填写魔搭 API KEY 和模型（Model ID）。',
       icon: Icons.document_scanner_outlined,
-      color: Color(0xFF7C3AED),
+      color: Color(0xFF2563EB),
     );
   }
   return const _ProviderMeta(
@@ -622,105 +531,50 @@ class _GeminiFields extends StatelessWidget {
         _ModelSelectField(
           key: const Key('geminiModelField'),
           controller: modelController,
+          label: 'Gemini 模型',
+          fallbackModel: AiOcrConfig.defaultModel,
+          models: const [
+            AiOcrConfig.defaultModel,
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+          ],
         ),
       ],
     );
   }
 }
 
-class _TencentFields extends StatelessWidget {
-  const _TencentFields({
-    super.key,
-    required this.secretIdController,
-    required this.secretKeyController,
-  });
-
-  final TextEditingController secretIdController;
-  final TextEditingController secretKeyController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ConfigField(
-          key: const Key('tencentSecretIdField'),
-          controller: secretIdController,
-          label: '腾讯 SecretId',
-          icon: Icons.badge_outlined,
-        ),
-        const SizedBox(height: 12),
-        _ConfigField(
-          key: const Key('tencentSecretKeyField'),
-          controller: secretKeyController,
-          label: '腾讯 SecretKey',
-          icon: Icons.lock_outline,
-          obscureText: true,
-        ),
-      ],
-    );
-  }
-}
-
-class _AliyunFields extends StatelessWidget {
-  const _AliyunFields({
-    super.key,
-    required this.accessKeyIdController,
-    required this.accessKeySecretController,
-  });
-
-  final TextEditingController accessKeyIdController;
-  final TextEditingController accessKeySecretController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ConfigField(
-          key: const Key('aliyunAccessKeyIdField'),
-          controller: accessKeyIdController,
-          label: '阿里 AccessKeyId',
-          icon: Icons.badge_outlined,
-        ),
-        const SizedBox(height: 12),
-        _ConfigField(
-          key: const Key('aliyunAccessKeySecretField'),
-          controller: accessKeySecretController,
-          label: '阿里 AccessKeySecret',
-          icon: Icons.lock_outline,
-          obscureText: true,
-        ),
-      ],
-    );
-  }
-}
-
-class _BaiduFields extends StatelessWidget {
-  const _BaiduFields({
+class _ModelScopeFields extends StatelessWidget {
+  const _ModelScopeFields({
     super.key,
     required this.apiKeyController,
-    required this.secretKeyController,
+    required this.modelController,
   });
 
   final TextEditingController apiKeyController;
-  final TextEditingController secretKeyController;
+  final TextEditingController modelController;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         _ConfigField(
-          key: const Key('baiduApiKeyField'),
+          key: const Key('modelscopeApiKeyField'),
           controller: apiKeyController,
-          label: '百度 API Key',
+          label: '魔搭 API KEY',
           icon: Icons.key_outlined,
+          obscureText: true,
         ),
         const SizedBox(height: 12),
-        _ConfigField(
-          key: const Key('baiduSecretKeyField'),
-          controller: secretKeyController,
-          label: '百度 Secret Key',
-          icon: Icons.lock_outline,
-          obscureText: true,
+        _ModelSelectField(
+          key: const Key('modelscopeModelField'),
+          controller: modelController,
+          label: '魔搭 模型',
+          fallbackModel: AiOcrConfig.defaultModelScopeModel,
+          models: const [
+            AiOcrConfig.defaultModelScopeModel,
+            'Qwen/Qwen2.5-VL-72B-Instruct',
+          ],
         ),
       ],
     );
@@ -731,24 +585,24 @@ class _ModelSelectField extends StatelessWidget {
   const _ModelSelectField({
     super.key,
     required this.controller,
+    required this.label,
+    required this.fallbackModel,
+    required this.models,
   });
 
-  static const _models = [
-    AiOcrConfig.defaultModel,
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-  ];
-
   final TextEditingController controller;
+  final String label;
+  final String fallbackModel;
+  final List<String> models;
 
   @override
   Widget build(BuildContext context) {
     final current = controller.text.trim().isEmpty
-        ? AiOcrConfig.defaultModel
+        ? fallbackModel
         : controller.text.trim();
-    final values = current.isNotEmpty && !_models.contains(current)
-        ? [current, ..._models]
-        : _models;
+    final values = current.isNotEmpty && !models.contains(current)
+        ? [current, ...models]
+        : models;
     return DropdownButtonFormField<String>(
       key: key,
       initialValue: current,
@@ -767,7 +621,7 @@ class _ModelSelectField extends StatelessWidget {
       },
       validator: (value) => value?.trim().isNotEmpty == true ? null : '必选',
       decoration: _fieldDecoration(
-        label: 'Gemini 模型',
+        label: label,
         icon: Icons.memory_outlined,
       ),
     );
