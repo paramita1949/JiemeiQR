@@ -33,12 +33,13 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final effectiveApiKey = apiKey.trim().isNotEmpty
         ? apiKey.trim()
         : config.modelscopeToken.trim();
+    final normalizedApiKey = _normalizeApiKey(effectiveApiKey);
     final effectiveModel = model.trim().isNotEmpty
         ? model.trim()
         : config.modelscopeModel.trim().isNotEmpty
             ? config.modelscopeModel.trim()
             : AiOcrConfig.defaultModelScopeModel;
-    if (effectiveApiKey.isEmpty) {
+    if (normalizedApiKey.isEmpty) {
       throw const ModelScopeWaybillOcrException('缺少魔搭 API KEY');
     }
 
@@ -66,7 +67,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
       'temperature': 0.0,
     };
 
-    final responseText = await _httpPost(uri, body, effectiveApiKey);
+    final responseText = await _httpPost(uri, body, normalizedApiKey);
     return _parseResponse(responseText);
   }
 
@@ -123,12 +124,22 @@ Future<String> _defaultHttpPost(
     final response = await request.close();
     final responseText = await response.transform(utf8.decoder).join();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ModelScopeWaybillOcrException('魔搭请求失败：${response.statusCode}');
+      throw ModelScopeWaybillOcrException(
+        '魔搭请求失败：${response.statusCode} ${responseText.trim()}',
+      );
     }
     return responseText;
   } finally {
     client.close(force: true);
   }
+}
+
+String _normalizeApiKey(String raw) {
+  final value = raw.trim();
+  if (value.toLowerCase().startsWith('bearer ')) {
+    return value.substring(7).trim();
+  }
+  return value;
 }
 
 const _ocrPrompt = '''
