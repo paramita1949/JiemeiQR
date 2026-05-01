@@ -128,11 +128,11 @@ void main() {
             ),
             orderDate: DateTime(2026, 4, 30),
             lines: [
-              MatchedWaybillOcrLine(
+              const MatchedWaybillOcrLine(
                 product: null,
                 batch: null,
                 boxes: 50,
-                sourceRows: const [
+                sourceRows: [
                   WaybillOcrRow(
                     productCode: '20880',
                     productName: '',
@@ -141,8 +141,8 @@ void main() {
                     boxes: 50,
                   ),
                 ],
-                sourceBoxes: const [50],
-                messages: const ['未匹配产品'],
+                sourceBoxes: [50],
+                messages: ['未匹配产品'],
               ),
               MatchedWaybillOcrLine(
                 product: product,
