@@ -243,19 +243,15 @@ void main() {
 
     expect(find.text('识别密钥'), findsOneWidget);
     expect(find.text('Gemini API Key'), findsOneWidget);
-    expect(
-      find.textContaining('当前模型：').evaluate().isNotEmpty ||
-          find.text('尚未选择模型').evaluate().isNotEmpty,
-      isTrue,
-    );
-    expect(find.byKey(const Key('GeminiModelInput')), findsOneWidget);
+    expect(find.byKey(const Key('GeminiModelDropdown')), findsOneWidget);
+    expect(find.byKey(const Key('GeminiAddModelButton')), findsOneWidget);
     expect(find.text('魔搭 API KEY'), findsNothing);
-    expect(find.byKey(const Key('魔搭ModelInput')), findsNothing);
+    expect(find.byKey(const Key('魔搭ModelDropdown')), findsNothing);
 
     await tester.tap(find.byKey(const Key('providerCard-modelscope')));
     await tester.pumpAndSettle();
     expect(find.text('魔搭 API KEY'), findsOneWidget);
-    expect(find.byKey(const Key('魔搭ModelInput')), findsOneWidget);
+    expect(find.byKey(const Key('魔搭ModelDropdown')), findsOneWidget);
     expect(find.text('Gemini API Key'), findsNothing);
   });
 }

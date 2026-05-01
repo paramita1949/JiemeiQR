@@ -288,7 +288,9 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   }
 
   void _applyModelPreset(TextEditingController controller, String model) {
-    controller.text = model;
+    setState(() {
+      controller.text = model;
+    });
   }
 
   void _addModelPreset(String provider, String model) {
@@ -692,185 +694,156 @@ class _ModelPresetEditor extends StatefulWidget {
 }
 
 class _ModelPresetEditorState extends State<_ModelPresetEditor> {
-  late final TextEditingController _newModelController;
-
-  @override
-  void initState() {
-    super.initState();
-    _newModelController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _newModelController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final selected = widget.selectedModel;
-    final hasModels = widget.presets.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final selected = widget.selectedModel.trim();
+    final models = _dropdownModels(selected);
+
+    return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFF),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFDCE5F3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.flash_on_rounded,
-                color: Color(0xFF1D4ED8),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  selected.isEmpty ? '尚未选择模型' : '当前模型：$selected',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: Key('${widget.providerName}ModelInput'),
-                controller: _newModelController,
-                decoration: _fieldDecoration(
-                  label:
-                      '输入新模型标识，如 ${widget.providerName == 'Gemini' ? 'gemini-2.5-flash' : 'Qwen/Qwen3.5-32B-Instruct'}',
-                  icon: Icons.add_circle_outline,
-                ),
-                onSubmitted: (_) => _submitNewModel(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            FilledButton.icon(
-              key: Key('${widget.providerName}AddModelButton'),
-              onPressed: _submitNewModel,
-              icon: const Icon(Icons.add),
-              label: const Text('添加'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (!hasModels)
-          const Text(
-            '还没有预设模型，添加后会自动选中并保存到模型列表。',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        if (hasModels)
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: widget.presets
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            key: Key('${widget.providerName}ModelDropdown'),
+            initialValue: selected.isEmpty ? null : selected,
+            isExpanded: true,
+            items: models
                 .map(
-                  (model) => _ModelOptionCard(
-                    model: model,
-                    active: selected == model,
-                    onSelect: () => widget.onApplyPreset(model),
-                    onDelete: () => widget.onRemovePreset(model),
+                  (model) => DropdownMenuItem<String>(
+                    value: model,
+                    child: Text(
+                      model,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 )
                 .toList(),
+            selectedItemBuilder: (context) => models
+                .map(
+                  (model) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      model,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              widget.onApplyPreset(value);
+            },
+            decoration: _fieldDecoration(
+              label: '${widget.providerName} 模型',
+              icon: Icons.memory_outlined,
+            ),
           ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          key: Key('${widget.providerName}DeleteModelButton'),
+          onPressed:
+              selected.isEmpty ? null : () => _confirmDeleteModel(selected),
+          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+          label: const Text('删除当前模型'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFDC2626),
+            backgroundColor: const Color(0xFFFFF1F2),
+            side: const BorderSide(color: Color(0xFFFDA4AF)),
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton.filled(
+          key: Key('${widget.providerName}AddModelButton'),
+          tooltip: '新增模型',
+          onPressed: _showAddModelDialog,
+          icon: const Icon(Icons.add),
+        ),
       ],
     );
   }
 
-  void _submitNewModel() {
-    final model = _newModelController.text.trim();
-    if (model.isEmpty) {
-      return;
+  List<String> _dropdownModels(String selected) {
+    final values = widget.presets
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+    if (selected.isNotEmpty && !values.contains(selected)) {
+      values.insert(0, selected);
     }
-    widget.onAddPreset(model);
-    _newModelController.clear();
+    return values;
   }
-}
 
-class _ModelOptionCard extends StatelessWidget {
-  const _ModelOptionCard({
-    required this.model,
-    required this.active,
-    required this.onSelect,
-    required this.onDelete,
-  });
-
-  final String model;
-  final bool active;
-  final VoidCallback onSelect;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      constraints: const BoxConstraints(minWidth: 150, maxWidth: 260),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFFEFF4FF) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: active ? const Color(0xFF2563EB) : const Color(0xFFDCE4F2),
-          width: active ? 1.6 : 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onSelect,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    model,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: active
-                          ? const Color(0xFF1E3A8A)
-                          : AppTheme.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: '删除模型',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                  color: const Color(0xFFDC2626),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(30, 30),
-                    padding: EdgeInsets.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
+  Future<void> _confirmDeleteModel(String model) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('删除模型'),
+        content: Text('确认删除当前模型？\n$model'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
           ),
-        ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
       ),
     );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+    widget.onRemovePreset(model);
+  }
+
+  Future<void> _showAddModelDialog() async {
+    var draftValue = '';
+    final model = await showDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('新增模型'),
+        content: TextField(
+          autofocus: true,
+          onChanged: (value) => draftValue = value,
+          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+          decoration: const InputDecoration(
+            hintText: '输入模型标识，例如 Qwen/Qwen3.5-397B-A17B',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(draftValue.trim()),
+            child: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    final value = model?.trim() ?? '';
+    if (value.isEmpty) {
+      return;
+    }
+    widget.onAddPreset(value);
   }
 }
 

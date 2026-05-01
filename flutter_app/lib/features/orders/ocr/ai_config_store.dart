@@ -114,7 +114,6 @@ class AiOcrConfig {
       aliyunProvider => aliyunProvider,
       baiduProvider => baiduProvider,
       modelscopeProvider => modelscopeProvider,
-      openRouterProvider => openRouterProvider,
       _ => defaultProvider,
     };
     return AiOcrConfig(
