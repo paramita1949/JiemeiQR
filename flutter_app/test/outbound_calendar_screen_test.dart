@@ -215,7 +215,11 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('本月出库明细'), findsOneWidget);
+    final isFirstDayOfMonth = todayOnly.day == 1;
+    expect(
+      find.text(isFirstDayOfMonth ? '今日出库明细' : '本月出库明细'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('total inventory uses end-date snapshot instead of realtime',
