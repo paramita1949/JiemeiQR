@@ -241,10 +241,10 @@ void main() {
     expect(find.text('魔搭'), findsWidgets);
     expect(find.byKey(const Key('providerHorizontalList')), findsOneWidget);
 
-    expect(find.text('识别密钥'), findsOneWidget);
+    expect(find.text('识别密钥'), findsNothing);
     expect(find.text('Gemini API Key'), findsOneWidget);
     expect(find.byKey(const Key('GeminiModelDropdown')), findsOneWidget);
-    expect(find.byKey(const Key('GeminiAddModelButton')), findsOneWidget);
+    expect(find.byKey(const Key('GeminiAddModelButton')), findsNothing);
     expect(find.text('魔搭 API KEY'), findsNothing);
     expect(find.byKey(const Key('魔搭ModelDropdown')), findsNothing);
 

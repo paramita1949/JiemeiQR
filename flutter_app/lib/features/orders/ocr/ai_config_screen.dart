@@ -132,7 +132,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   const SizedBox(height: 14),
                   _SectionShell(
                     title: '默认使用',
-                    subtitle: '拍照识别时优先调用选中的服务',
+                    subtitle: '',
                     child: SingleChildScrollView(
                       key: const Key('providerHorizontalList'),
                       scrollDirection: Axis.horizontal,
@@ -162,8 +162,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   ),
                   const SizedBox(height: 14),
                   _SectionShell(
-                    title: '识别密钥',
-                    subtitle: selectedMeta.formHint,
+                    title: '',
+                    subtitle: '',
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
                       switchInCurve: Curves.easeOut,
@@ -485,24 +485,26 @@ class _SectionShell extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+          if (title.isNotEmpty) const SizedBox(height: 4),
+          if (subtitle.isNotEmpty)
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+          if (subtitle.isNotEmpty) const SizedBox(height: 14),
           child,
         ],
       ),
@@ -702,71 +704,35 @@ class _ModelPresetEditorState extends State<_ModelPresetEditor> {
     return Row(
       children: [
         Expanded(
-          child: DropdownButtonFormField<String>(
+          child: InkWell(
             key: Key('${widget.providerName}ModelDropdown'),
-            initialValue: selected.isEmpty ? null : selected,
-            isExpanded: true,
-            items: models
-                .map(
-                  (model) => DropdownMenuItem<String>(
-                    value: model,
-                    child: Text(
-                      model,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                )
-                .toList(),
-            selectedItemBuilder: (context) => models
-                .map(
-                  (model) => Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      model,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) {
-                return;
-              }
-              widget.onApplyPreset(value);
-            },
-            decoration: _fieldDecoration(
-              label: '${widget.providerName} 模型',
-              icon: Icons.memory_outlined,
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => _showModelSelectorDialog(models, selected),
+            child: InputDecorator(
+              decoration: _fieldDecoration(
+                label: '${widget.providerName} 模型',
+                icon: Icons.memory_outlined,
+                hintText: '请选择模型',
+              ).copyWith(
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              child: Text(
+                selected.isEmpty ? '请选择模型' : selected,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected.isEmpty
+                      ? const Color(0xFF94A3B8)
+                      : AppTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        OutlinedButton.icon(
-          key: Key('${widget.providerName}DeleteModelButton'),
-          onPressed:
-              selected.isEmpty ? null : () => _confirmDeleteModel(selected),
-          icon: const Icon(Icons.delete_outline_rounded, size: 18),
-          label: const Text('删除当前模型'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFFDC2626),
-            backgroundColor: const Color(0xFFFFF1F2),
-            side: const BorderSide(color: Color(0xFFFDA4AF)),
-            minimumSize: const Size(0, 48),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        IconButton.filled(
-          key: Key('${widget.providerName}AddModelButton'),
-          tooltip: '新增模型',
-          onPressed: _showAddModelDialog,
-          icon: const Icon(Icons.add),
         ),
       ],
     );
@@ -807,6 +773,126 @@ class _ModelPresetEditorState extends State<_ModelPresetEditor> {
       return;
     }
     widget.onRemovePreset(model);
+  }
+
+  Future<void> _showModelSelectorDialog(
+    List<String> models,
+    String selected,
+  ) async {
+    if (models.isEmpty) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final listed = [...models];
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 6,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 14,
+                ),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.68,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '选择模型',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: ListView.separated(
+                            itemCount: listed.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final model = listed[index];
+                              final isSelected = model == selected;
+                              return ListTile(
+                                tileColor: isSelected
+                                    ? const Color(0xFFEFF4FF)
+                                    : Colors.white,
+                                selected: isSelected,
+                                leading: Icon(
+                                  isSelected
+                                      ? Icons.check_circle
+                                      : Icons.memory_outlined,
+                                  color: isSelected
+                                      ? AppTheme.primary
+                                      : const Color(0xFF64748B),
+                                ),
+                                title: Text(
+                                  model,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                onTap: () {
+                                  widget.onApplyPreset(model);
+                                  Navigator.of(sheetContext).pop();
+                                },
+                                trailing: IconButton(
+                                  key: Key(
+                                    '${widget.providerName}DeleteModelButton_$index',
+                                  ),
+                                  tooltip: '删除模型',
+                                  onPressed: () async {
+                                    Navigator.of(sheetContext).pop();
+                                    await _confirmDeleteModel(model);
+                                  },
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            Navigator.of(sheetContext).pop();
+                            await _showAddModelDialog();
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('新增模型'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showAddModelDialog() async {
@@ -874,9 +960,11 @@ class _ConfigField extends StatelessWidget {
 InputDecoration _fieldDecoration({
   required String label,
   required IconData icon,
+  String? hintText,
 }) {
   return InputDecoration(
     labelText: label,
+    hintText: hintText,
     prefixIcon: Icon(icon),
     filled: true,
     fillColor: const Color(0xFFF7F9FC),
