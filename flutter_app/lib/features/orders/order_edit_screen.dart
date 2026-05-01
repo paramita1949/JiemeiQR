@@ -11,7 +11,6 @@ import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_servic
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
-import 'package:qrscan_flutter/features/orders/ocr/openrouter_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -432,14 +431,6 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         SnackBar(content: Text(error.message)),
       );
     } on ModelScopeWaybillOcrException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context, rootNavigator: true).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } on OpenRouterWaybillOcrException catch (error) {
       if (!mounted) {
         return;
       }
