@@ -326,7 +326,50 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (picked == null) {
       return;
     }
-    setState(() => _orderDate = picked);
+    final nextDate = DateTime(picked.year, picked.month, picked.day);
+    if (_draftLines.isNotEmpty) {
+      final waybillNo = _waybillNoController.text.trim();
+      final merchantName = _merchantController.text.trim();
+      final orderId = _draftLines.first.item.orderId;
+      if (waybillNo.isNotEmpty && merchantName.isNotEmpty) {
+        try {
+          await _orderDao.updateOrderBasic(
+            orderId: orderId,
+            waybillNo: waybillNo,
+            merchantName: merchantName,
+            orderDate: nextDate,
+          );
+          final nextHeaderKey = _orderHeaderKey(
+            waybillNo: waybillNo,
+            merchantName: merchantName,
+            orderDate: nextDate,
+          );
+          setState(() {
+            _orderDate = nextDate;
+            _draftOrderKey = nextHeaderKey;
+          });
+          await _reloadDraftLines(orderId: orderId, headerKey: nextHeaderKey);
+          return;
+        } on DuplicateWaybillNoException {
+          if (!mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('运单号已存在，无法修改日期')),
+          );
+          return;
+        } catch (_) {
+          if (!mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('修改日期失败，请重试')),
+          );
+          return;
+        }
+      }
+    }
+    setState(() => _orderDate = nextDate);
     _onOrderHeaderChanged();
   }
 
@@ -458,18 +501,19 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (saved != true || !mounted) {
       return;
     }
+    final normalizedWaybillNo = _normalizeWaybillNo(matched.source.waybillNo);
     final orderDate = matched.orderDate ?? DateTime.now();
-    _waybillNoController.text = matched.source.waybillNo;
+    _waybillNoController.text = normalizedWaybillNo;
     _merchantController.text = matched.source.merchantName;
     _orderDate = DateTime(orderDate.year, orderDate.month, orderDate.day);
     final orderId = await _orderDao.findOpenOrderId(
-      waybillNo: matched.source.waybillNo,
+      waybillNo: normalizedWaybillNo,
       merchantName: matched.source.merchantName,
       orderDate: _orderDate,
     );
     if (orderId != null) {
       final headerKey = _orderHeaderKey(
-        waybillNo: matched.source.waybillNo,
+        waybillNo: normalizedWaybillNo,
         merchantName: matched.source.merchantName,
         orderDate: _orderDate,
       );
@@ -658,6 +702,15 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     required DateTime orderDate,
   }) {
     return '$waybillNo|$merchantName|${orderDate.year}-${orderDate.month}-${orderDate.day}';
+  }
+
+  String _normalizeWaybillNo(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    final stripped = trimmed.replaceFirst(RegExp(r'^0+'), '');
+    return stripped.isEmpty ? '0' : stripped;
   }
 
   Future<void> _clearForNextWaybill() async {

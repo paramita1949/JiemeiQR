@@ -85,6 +85,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
     final draft = widget.matched.source;
+    final normalizedWaybillNo = _normalizeWaybillNo(draft.waybillNo);
     final orderDate = widget.matched.orderDate ?? DateTime.now();
     try {
       for (final line in widget.matched.lines.where((line) => line.isMatched)) {
@@ -92,7 +93,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
         final batch = line.batch!;
         try {
           await widget.orderDao.appendPendingWaybillItem(
-            waybillNo: draft.waybillNo,
+            waybillNo: normalizedWaybillNo,
             merchantName: draft.merchantName,
             orderDate: orderDate,
             item: PendingOrderItemInput(
@@ -134,6 +135,15 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
       SnackBar(content: Text(message)),
     );
   }
+}
+
+String _normalizeWaybillNo(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) {
+    return trimmed;
+  }
+  final stripped = trimmed.replaceFirst(RegExp(r'^0+'), '');
+  return stripped.isEmpty ? '0' : stripped;
 }
 
 class _InfoCard extends StatelessWidget {

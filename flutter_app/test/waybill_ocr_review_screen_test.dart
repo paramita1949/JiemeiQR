@@ -44,7 +44,7 @@ void main() {
           ..where((table) => table.id.equals(batchId)))
         .getSingle();
     await orderDao.appendPendingWaybillItem(
-      waybillNo: '0001686469',
+      waybillNo: '1686469',
       merchantName: '上峰蒙悦',
       orderDate: DateTime(2026, 4, 10),
       item: PendingOrderItemInput(
