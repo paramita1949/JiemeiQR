@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.2.12 (2026-05-01)
+
+### Added
+- AI配置新增 OpenRouter 服务商，支持模型与 API KEY 配置。
+- 新增 OpenRouter OCR 接口接入，默认模型为 `tencent/hy3-preview:free`。
+
+### Fixed
+- 修复魔搭 OCR 返回 401 时定位困难的问题：错误提示增加后端返回内容。
+- 兼容魔搭 API KEY 误填 `Bearer ` 前缀的情况，保存后可自动去除前缀再请求。
+
 ## 3.2.11 (2026-05-01)
 
 ### Changed

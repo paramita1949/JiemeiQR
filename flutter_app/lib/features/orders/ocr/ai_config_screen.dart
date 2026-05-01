@@ -23,6 +23,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _modelController = TextEditingController();
   final _modelscopeTokenController = TextEditingController();
   final _modelscopeModelController = TextEditingController();
+  final _openRouterApiKeyController = TextEditingController();
+  final _openRouterModelController = TextEditingController();
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -37,6 +39,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelController,
       _modelscopeTokenController,
       _modelscopeModelController,
+      _openRouterApiKeyController,
+      _openRouterModelController,
     ]) {
       controller.addListener(_scheduleAutoSave);
     }
@@ -53,6 +57,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     _modelController.dispose();
     _modelscopeTokenController.dispose();
     _modelscopeModelController.dispose();
+    _openRouterApiKeyController.dispose();
+    _openRouterModelController.dispose();
     super.dispose();
   }
 
@@ -67,8 +73,11 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelController.text = config.geminiModel;
       _modelscopeTokenController.text = config.modelscopeToken;
       _modelscopeModelController.text = config.modelscopeModel;
+      _openRouterApiKeyController.text = config.openRouterApiKey;
+      _openRouterModelController.text = config.openRouterModel;
       if (_provider != AiOcrConfig.defaultProvider &&
-          _provider != AiOcrConfig.modelscopeProvider) {
+          _provider != AiOcrConfig.modelscopeProvider &&
+          _provider != AiOcrConfig.openRouterProvider) {
         _provider = AiOcrConfig.defaultProvider;
       }
       _autoSaveReady = true;
@@ -152,6 +161,16 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                               AiOcrConfig.modelscopeProvider,
                             ),
                           ),
+                          const SizedBox(width: 10),
+                          _ProviderCard(
+                            key: const Key('providerCard-openrouter'),
+                            meta: _providerMeta(AiOcrConfig.openRouterProvider),
+                            selected:
+                                _provider == AiOcrConfig.openRouterProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.openRouterProvider,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -181,6 +200,10 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return _modelscopeTokenController.text.trim().isNotEmpty &&
           _modelscopeModelController.text.trim().isNotEmpty;
     }
+    if (_provider == AiOcrConfig.openRouterProvider) {
+      return _openRouterApiKeyController.text.trim().isNotEmpty &&
+          _openRouterModelController.text.trim().isNotEmpty;
+    }
     return _apiKeyController.text.trim().isNotEmpty &&
         _modelController.text.trim().isNotEmpty;
   }
@@ -191,6 +214,13 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
         key: const ValueKey('modelScopeFields'),
         apiKeyController: _modelscopeTokenController,
         modelController: _modelscopeModelController,
+      );
+    }
+    if (_provider == AiOcrConfig.openRouterProvider) {
+      return _OpenRouterFields(
+        key: const ValueKey('openRouterFields'),
+        apiKeyController: _openRouterApiKeyController,
+        modelController: _openRouterModelController,
       );
     }
     return _GeminiFields(
@@ -237,6 +267,12 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
           ? null
           : '请填写魔搭 API KEY 和模型';
     }
+    if (_provider == AiOcrConfig.openRouterProvider) {
+      return _openRouterApiKeyController.text.trim().isNotEmpty &&
+              _openRouterModelController.text.trim().isNotEmpty
+          ? null
+          : '请填写 OpenRouter API KEY 和模型';
+    }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
         ? null
@@ -258,6 +294,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       baiduSecretKey: '',
       modelscopeToken: _modelscopeTokenController.text.trim(),
       modelscopeModel: _modelscopeModelController.text.trim(),
+      openRouterApiKey: _openRouterApiKeyController.text.trim(),
+      openRouterModel: _openRouterModelController.text.trim(),
     );
   }
 
@@ -284,6 +322,15 @@ _ProviderMeta _providerMeta(String provider) {
       formHint: '填写魔搭 API KEY 和模型（Model ID）。',
       icon: Icons.document_scanner_outlined,
       color: Color(0xFF2563EB),
+    );
+  }
+  if (provider == AiOcrConfig.openRouterProvider) {
+    return const _ProviderMeta(
+      provider: AiOcrConfig.openRouterProvider,
+      name: 'OpenRouter',
+      formHint: '填写 OpenRouter API KEY 和模型。',
+      icon: Icons.hub_outlined,
+      color: Color(0xFF0F766E),
     );
   }
   return const _ProviderMeta(
@@ -574,6 +621,43 @@ class _ModelScopeFields extends StatelessWidget {
           models: const [
             AiOcrConfig.defaultModelScopeModel,
             'Qwen/Qwen2.5-VL-72B-Instruct',
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _OpenRouterFields extends StatelessWidget {
+  const _OpenRouterFields({
+    super.key,
+    required this.apiKeyController,
+    required this.modelController,
+  });
+
+  final TextEditingController apiKeyController;
+  final TextEditingController modelController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ConfigField(
+          key: const Key('openRouterApiKeyField'),
+          controller: apiKeyController,
+          label: 'OpenRouter API KEY',
+          icon: Icons.key_outlined,
+          obscureText: true,
+        ),
+        const SizedBox(height: 12),
+        _ModelSelectField(
+          key: const Key('openRouterModelField'),
+          controller: modelController,
+          label: 'OpenRouter 模型',
+          fallbackModel: AiOcrConfig.defaultOpenRouterModel,
+          models: const [
+            AiOcrConfig.defaultOpenRouterModel,
+            'openai/gpt-4o-mini',
           ],
         ),
       ],

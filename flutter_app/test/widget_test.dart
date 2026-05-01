@@ -239,6 +239,7 @@ void main() {
     expect(find.text('当前启用'), findsOneWidget);
     expect(find.text('谷歌'), findsWidgets);
     expect(find.text('魔搭'), findsWidgets);
+    expect(find.text('OpenRouter'), findsWidgets);
     expect(find.byKey(const Key('providerHorizontalList')), findsOneWidget);
 
     expect(find.text('识别密钥'), findsOneWidget);
@@ -246,11 +247,21 @@ void main() {
     expect(find.text('Gemini 模型'), findsOneWidget);
     expect(find.text('魔搭 API KEY'), findsNothing);
     expect(find.text('魔搭 模型'), findsNothing);
+    expect(find.text('OpenRouter API KEY'), findsNothing);
+    expect(find.text('OpenRouter 模型'), findsNothing);
 
     await tester.tap(find.byKey(const Key('providerCard-modelscope')));
     await tester.pumpAndSettle();
     expect(find.text('魔搭 API KEY'), findsOneWidget);
     expect(find.text('魔搭 模型'), findsOneWidget);
     expect(find.text('Gemini API Key'), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const Key('providerCard-openrouter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('providerCard-openrouter')));
+    await tester.pumpAndSettle();
+    expect(find.text('OpenRouter API KEY'), findsOneWidget);
+    expect(find.text('OpenRouter 模型'), findsOneWidget);
+    expect(find.text('魔搭 API KEY'), findsNothing);
   });
 }

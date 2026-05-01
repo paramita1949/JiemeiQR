@@ -19,6 +19,8 @@ class AiOcrConfig {
     required this.baiduSecretKey,
     this.modelscopeToken = '',
     this.modelscopeModel = defaultModelScopeModel,
+    this.openRouterApiKey = '',
+    this.openRouterModel = defaultOpenRouterModel,
   });
 
   static const defaultModel = 'gemini-3-flash-preview';
@@ -27,9 +29,11 @@ class AiOcrConfig {
   static const aliyunProvider = 'aliyun';
   static const baiduProvider = 'baidu';
   static const modelscopeProvider = 'modelscope';
+  static const openRouterProvider = 'openrouter';
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
+  static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
 
   final String provider;
   final String geminiApiKey;
@@ -44,12 +48,15 @@ class AiOcrConfig {
   final String baiduSecretKey;
   final String modelscopeToken;
   final String modelscopeModel;
+  final String openRouterApiKey;
+  final String openRouterModel;
 
   bool get hasGeminiKey => geminiApiKey.trim().isNotEmpty;
   bool get usesTencentOcr => provider == tencentProvider;
   bool get usesAliyunOcr => provider == aliyunProvider;
   bool get usesBaiduOcr => provider == baiduProvider;
   bool get usesModelScopeOcr => provider == modelscopeProvider;
+  bool get usesOpenRouterOcr => provider == openRouterProvider;
   bool get hasTencentCredential =>
       tencentSecretId.trim().isNotEmpty && tencentSecretKey.trim().isNotEmpty;
   bool get hasAliyunCredential =>
@@ -58,6 +65,7 @@ class AiOcrConfig {
   bool get hasBaiduCredential =>
       baiduApiKey.trim().isNotEmpty && baiduSecretKey.trim().isNotEmpty;
   bool get hasModelScopeCredential => modelscopeToken.trim().isNotEmpty;
+  bool get hasOpenRouterCredential => openRouterApiKey.trim().isNotEmpty;
 
   Map<String, Object?> toJson() => {
         'provider': provider,
@@ -73,6 +81,8 @@ class AiOcrConfig {
         'baiduSecretKey': baiduSecretKey,
         'modelscopeToken': modelscopeToken,
         'modelscopeModel': modelscopeModel,
+        'openRouterApiKey': openRouterApiKey,
+        'openRouterModel': openRouterModel,
       };
 
   factory AiOcrConfig.fromJson(Map<String, Object?> json) {
@@ -81,6 +91,7 @@ class AiOcrConfig {
       aliyunProvider => aliyunProvider,
       baiduProvider => baiduProvider,
       modelscopeProvider => modelscopeProvider,
+      openRouterProvider => openRouterProvider,
       _ => defaultProvider,
     };
     return AiOcrConfig(
@@ -107,6 +118,11 @@ class AiOcrConfig {
           json['modelscopeModel']?.toString().trim().isNotEmpty == true
               ? json['modelscopeModel'].toString().trim()
               : defaultModelScopeModel,
+      openRouterApiKey: json['openRouterApiKey']?.toString() ?? '',
+      openRouterModel:
+          json['openRouterModel']?.toString().trim().isNotEmpty == true
+              ? json['openRouterModel'].toString().trim()
+              : defaultOpenRouterModel,
     );
   }
 
@@ -124,6 +140,8 @@ class AiOcrConfig {
     String? baiduSecretKey,
     String? modelscopeToken,
     String? modelscopeModel,
+    String? openRouterApiKey,
+    String? openRouterModel,
   }) {
     return AiOcrConfig(
       provider: provider ?? this.provider,
@@ -140,6 +158,8 @@ class AiOcrConfig {
       baiduSecretKey: baiduSecretKey ?? this.baiduSecretKey,
       modelscopeToken: modelscopeToken ?? this.modelscopeToken,
       modelscopeModel: modelscopeModel ?? this.modelscopeModel,
+      openRouterApiKey: openRouterApiKey ?? this.openRouterApiKey,
+      openRouterModel: openRouterModel ?? this.openRouterModel,
     );
   }
 }
@@ -170,6 +190,8 @@ class FileAiConfigStore {
         baiduSecretKey: '',
         modelscopeToken: '',
         modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+        openRouterApiKey: '',
+        openRouterModel: AiOcrConfig.defaultOpenRouterModel,
       );
     }
     try {
@@ -194,6 +216,8 @@ class FileAiConfigStore {
       baiduSecretKey: '',
       modelscopeToken: '',
       modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+      openRouterApiKey: '',
+      openRouterModel: AiOcrConfig.defaultOpenRouterModel,
     );
   }
 
