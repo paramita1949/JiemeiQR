@@ -25,6 +25,9 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _modelscopeModelController = TextEditingController();
   final _openRouterApiKeyController = TextEditingController();
   final _openRouterModelController = TextEditingController();
+  List<String> _geminiModelPresets = [];
+  List<String> _modelScopeModelPresets = [];
+  List<String> _openRouterModelPresets = [];
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -75,6 +78,9 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController.text = config.modelscopeModel;
       _openRouterApiKeyController.text = config.openRouterApiKey;
       _openRouterModelController.text = config.openRouterModel;
+      _geminiModelPresets = [...config.geminiModelPresets];
+      _modelScopeModelPresets = [...config.modelScopeModelPresets];
+      _openRouterModelPresets = [...config.openRouterModelPresets];
       if (_provider != AiOcrConfig.defaultProvider &&
           _provider != AiOcrConfig.modelscopeProvider &&
           _provider != AiOcrConfig.openRouterProvider) {
@@ -214,6 +220,17 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
         key: const ValueKey('modelScopeFields'),
         apiKeyController: _modelscopeTokenController,
         modelController: _modelscopeModelController,
+        presets: _modelScopeModelPresets,
+        onApplyPreset: (model) =>
+            _applyModelPreset(_modelscopeModelController, model),
+        onAddPreset: () => _addModelPreset(
+          _modelscopeModelController,
+          AiOcrConfig.modelscopeProvider,
+        ),
+        onRemovePreset: (model) => _removeModelPreset(
+          AiOcrConfig.modelscopeProvider,
+          model,
+        ),
       );
     }
     if (_provider == AiOcrConfig.openRouterProvider) {
@@ -221,12 +238,33 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
         key: const ValueKey('openRouterFields'),
         apiKeyController: _openRouterApiKeyController,
         modelController: _openRouterModelController,
+        presets: _openRouterModelPresets,
+        onApplyPreset: (model) =>
+            _applyModelPreset(_openRouterModelController, model),
+        onAddPreset: () => _addModelPreset(
+          _openRouterModelController,
+          AiOcrConfig.openRouterProvider,
+        ),
+        onRemovePreset: (model) => _removeModelPreset(
+          AiOcrConfig.openRouterProvider,
+          model,
+        ),
       );
     }
     return _GeminiFields(
       key: const ValueKey('geminiFields'),
       apiKeyController: _apiKeyController,
       modelController: _modelController,
+      presets: _geminiModelPresets,
+      onApplyPreset: (model) => _applyModelPreset(_modelController, model),
+      onAddPreset: () => _addModelPreset(
+        _modelController,
+        AiOcrConfig.defaultProvider,
+      ),
+      onRemovePreset: (model) => _removeModelPreset(
+        AiOcrConfig.defaultProvider,
+        model,
+      ),
     );
   }
 
@@ -295,8 +333,48 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       modelscopeToken: _modelscopeTokenController.text.trim(),
       modelscopeModel: _modelscopeModelController.text.trim(),
       openRouterApiKey: _openRouterApiKeyController.text.trim(),
-      openRouterModel: _openRouterModelController.text.trim(),
+      openRouterModel: _openRouterModelController.text.trim().isEmpty
+          ? AiOcrConfig.defaultOpenRouterModel
+          : _openRouterModelController.text.trim(),
+      geminiModelPresets: _geminiModelPresets,
+      modelScopeModelPresets: _modelScopeModelPresets,
+      openRouterModelPresets: _openRouterModelPresets,
     );
+  }
+
+  void _applyModelPreset(TextEditingController controller, String model) {
+    controller.text = model;
+  }
+
+  void _addModelPreset(TextEditingController controller, String provider) {
+    final model = controller.text.trim();
+    if (model.isEmpty) {
+      return;
+    }
+    setState(() {
+      final presets = _presetsByProvider(provider);
+      if (!presets.contains(model)) {
+        presets.add(model);
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _removeModelPreset(String provider, String model) {
+    setState(() {
+      _presetsByProvider(provider).remove(model);
+    });
+    _scheduleAutoSave();
+  }
+
+  List<String> _presetsByProvider(String provider) {
+    if (provider == AiOcrConfig.modelscopeProvider) {
+      return _modelScopeModelPresets;
+    }
+    if (provider == AiOcrConfig.openRouterProvider) {
+      return _openRouterModelPresets;
+    }
+    return _geminiModelPresets;
   }
 
   void _scheduleAutoSave() {
@@ -559,10 +637,18 @@ class _GeminiFields extends StatelessWidget {
     super.key,
     required this.apiKeyController,
     required this.modelController,
+    required this.presets,
+    required this.onApplyPreset,
+    required this.onAddPreset,
+    required this.onRemovePreset,
   });
 
   final TextEditingController apiKeyController;
   final TextEditingController modelController;
+  final List<String> presets;
+  final ValueChanged<String> onApplyPreset;
+  final VoidCallback onAddPreset;
+  final ValueChanged<String> onRemovePreset;
 
   @override
   Widget build(BuildContext context) {
@@ -576,16 +662,18 @@ class _GeminiFields extends StatelessWidget {
           obscureText: true,
         ),
         const SizedBox(height: 12),
-        _ModelSelectField(
+        _ConfigField(
           key: const Key('geminiModelField'),
           controller: modelController,
           label: 'Gemini 模型',
-          fallbackModel: AiOcrConfig.defaultModel,
-          models: const [
-            AiOcrConfig.defaultModel,
-            'gemini-2.5-flash',
-            'gemini-2.5-pro',
-          ],
+          icon: Icons.memory_outlined,
+        ),
+        const SizedBox(height: 8),
+        _ModelPresetEditor(
+          presets: presets,
+          onApplyPreset: onApplyPreset,
+          onAddPreset: onAddPreset,
+          onRemovePreset: onRemovePreset,
         ),
       ],
     );
@@ -597,10 +685,18 @@ class _ModelScopeFields extends StatelessWidget {
     super.key,
     required this.apiKeyController,
     required this.modelController,
+    required this.presets,
+    required this.onApplyPreset,
+    required this.onAddPreset,
+    required this.onRemovePreset,
   });
 
   final TextEditingController apiKeyController;
   final TextEditingController modelController;
+  final List<String> presets;
+  final ValueChanged<String> onApplyPreset;
+  final VoidCallback onAddPreset;
+  final ValueChanged<String> onRemovePreset;
 
   @override
   Widget build(BuildContext context) {
@@ -614,15 +710,18 @@ class _ModelScopeFields extends StatelessWidget {
           obscureText: true,
         ),
         const SizedBox(height: 12),
-        _ModelSelectField(
+        _ConfigField(
           key: const Key('modelscopeModelField'),
           controller: modelController,
           label: '魔搭 模型',
-          fallbackModel: AiOcrConfig.defaultModelScopeModel,
-          models: const [
-            AiOcrConfig.defaultModelScopeModel,
-            'Qwen/Qwen2.5-VL-72B-Instruct',
-          ],
+          icon: Icons.memory_outlined,
+        ),
+        const SizedBox(height: 8),
+        _ModelPresetEditor(
+          presets: presets,
+          onApplyPreset: onApplyPreset,
+          onAddPreset: onAddPreset,
+          onRemovePreset: onRemovePreset,
         ),
       ],
     );
@@ -634,14 +733,23 @@ class _OpenRouterFields extends StatelessWidget {
     super.key,
     required this.apiKeyController,
     required this.modelController,
+    required this.presets,
+    required this.onApplyPreset,
+    required this.onAddPreset,
+    required this.onRemovePreset,
   });
 
   final TextEditingController apiKeyController;
   final TextEditingController modelController;
+  final List<String> presets;
+  final ValueChanged<String> onApplyPreset;
+  final VoidCallback onAddPreset;
+  final ValueChanged<String> onRemovePreset;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ConfigField(
           key: const Key('openRouterApiKeyField'),
@@ -651,64 +759,62 @@ class _OpenRouterFields extends StatelessWidget {
           obscureText: true,
         ),
         const SizedBox(height: 12),
-        _ModelSelectField(
+        _ConfigField(
           key: const Key('openRouterModelField'),
           controller: modelController,
           label: 'OpenRouter 模型',
-          fallbackModel: AiOcrConfig.defaultOpenRouterModel,
-          models: const [
-            AiOcrConfig.defaultOpenRouterModel,
-            'openai/gpt-4o-mini',
-          ],
+          icon: Icons.memory_outlined,
+        ),
+        const SizedBox(height: 8),
+        _ModelPresetEditor(
+          presets: presets,
+          onApplyPreset: onApplyPreset,
+          onAddPreset: onAddPreset,
+          onRemovePreset: onRemovePreset,
         ),
       ],
     );
   }
 }
 
-class _ModelSelectField extends StatelessWidget {
-  const _ModelSelectField({
-    super.key,
-    required this.controller,
-    required this.label,
-    required this.fallbackModel,
-    required this.models,
+class _ModelPresetEditor extends StatelessWidget {
+  const _ModelPresetEditor({
+    required this.presets,
+    required this.onApplyPreset,
+    required this.onAddPreset,
+    required this.onRemovePreset,
   });
 
-  final TextEditingController controller;
-  final String label;
-  final String fallbackModel;
-  final List<String> models;
+  final List<String> presets;
+  final ValueChanged<String> onApplyPreset;
+  final VoidCallback onAddPreset;
+  final ValueChanged<String> onRemovePreset;
 
   @override
   Widget build(BuildContext context) {
-    final current = controller.text.trim().isEmpty
-        ? fallbackModel
-        : controller.text.trim();
-    final values = current.isNotEmpty && !models.contains(current)
-        ? [current, ...models]
-        : models;
-    return DropdownButtonFormField<String>(
-      key: key,
-      initialValue: current,
-      items: values
-          .map(
-            (model) => DropdownMenuItem(
-              value: model,
-              child: Text(model),
-            ),
-          )
-          .toList(),
-      onChanged: (value) {
-        if (value != null) {
-          controller.text = value;
-        }
-      },
-      validator: (value) => value?.trim().isNotEmpty == true ? null : '必选',
-      decoration: _fieldDecoration(
-        label: label,
-        icon: Icons.memory_outlined,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: presets
+              .map(
+                (model) => InputChip(
+                  label: Text(model),
+                  onPressed: () => onApplyPreset(model),
+                  onDeleted: () => onRemovePreset(model),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: onAddPreset,
+          icon: const Icon(Icons.add),
+          label: const Text('新增当前模型到预设'),
+        ),
+      ],
     );
   }
 }
