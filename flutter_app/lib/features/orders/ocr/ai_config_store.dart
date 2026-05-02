@@ -159,6 +159,7 @@ class AiOcrConfig {
       modelScopeModelPresets: _decodePresetList(
         json['modelScopeModelPresets'],
         fallback: defaultModelScopeModelPresets,
+        ensureIncludes: defaultModelScopeModelPresets,
       ),
       openRouterModelPresets: _decodePresetList(
         json['openRouterModelPresets'],
@@ -296,12 +297,25 @@ Future<File> _defaultSettingsFile() async {
   return File(p.join(directory.path, 'ai_ocr_config.json'));
 }
 
-List<String> _decodePresetList(Object? raw, {required List<String> fallback}) {
+List<String> _decodePresetList(
+  Object? raw, {
+  required List<String> fallback,
+  List<String> ensureIncludes = const [],
+}) {
   final source = raw is List ? raw : fallback;
   final values = source
       .map((item) => item.toString().trim())
       .where((item) => item.isNotEmpty)
       .toSet()
       .toList();
-  return values.isEmpty ? fallback : values;
+  if (values.isEmpty) {
+    values.addAll(fallback);
+  }
+  for (final model in ensureIncludes) {
+    final normalized = model.trim();
+    if (normalized.isNotEmpty && !values.contains(normalized)) {
+      values.add(normalized);
+    }
+  }
+  return values;
 }
