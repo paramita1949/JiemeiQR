@@ -49,6 +49,7 @@ class AiOcrConfig {
   static const defaultModelScopeModelPresets = [
     defaultModelScopeModel,
     'Qwen/Qwen2.5-VL-72B-Instruct',
+    'baidu-qianfan/Qianfan-OCR',
   ];
   static const defaultOpenRouterModelPresets = [
     defaultOpenRouterModel,

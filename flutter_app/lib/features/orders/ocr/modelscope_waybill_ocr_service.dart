@@ -59,6 +59,11 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
   final FileAiConfigStore _configStore;
   final ModelScopeHttpPost _httpPost;
   static ModelScopeRateLimitInfo? _lastRateLimitInfo;
+  static const _defaultCompletionUrl =
+      'https://api-inference.modelscope.cn/v1/chat/completions';
+  static const _qianfanOcrModel = 'baidu-qianfan/Qianfan-OCR';
+  static const _qianfanOcrCompletionUrl =
+      'https://ms-ens-9fc2bf8e-b006.api-inference.modelscope.cn/v1/chat/completions';
 
   static ModelScopeRateLimitInfo? get lastRateLimitInfo => _lastRateLimitInfo;
 
@@ -81,8 +86,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
 
     final bytes = await image.readAsBytes();
     final base64Image = base64Encode(bytes);
-    final uri =
-        Uri.parse('https://api-inference.modelscope.cn/v1/chat/completions');
+    final uri = _completionUriForModel(effectiveModel);
     final body = {
       'model': effectiveModel,
       'messages': [
@@ -106,6 +110,13 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
 
     final responseText = await _httpPost(uri, body, normalizedApiKey);
     return _parseResponse(responseText);
+  }
+
+  Uri _completionUriForModel(String modelId) {
+    if (modelId.trim() == _qianfanOcrModel) {
+      return Uri.parse(_qianfanOcrCompletionUrl);
+    }
+    return Uri.parse(_defaultCompletionUrl);
   }
 
   WaybillOcrDraft _parseResponse(String responseText) {
