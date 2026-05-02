@@ -29,7 +29,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   late final bool _ownsDatabase;
 
   final List<ParsedQr> _scans = <ParsedQr>[];
-  bool _predicting = false;
+  final bool _predicting = false;
   bool _autoStarted = false;
   bool _scanStageActive = true;
   bool _scanningNow = false;
