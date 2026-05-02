@@ -165,32 +165,28 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   const SizedBox(height: 14),
                   _SectionShell(
                     title: '识别策略',
-                    subtitle: '默认使用发货单模板增强；如需保守识别可切回通用识别。',
-                    child: Row(
+                    subtitle: '默认推荐模板增强；版式变化大时切换通用识别。',
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: _PromptPresetCard(
-                            key: const Key('promptPreset-waybill-v2'),
-                            title: '发货单模板（增强）',
-                            subtitle: '更适合当前标准模板与缺失容错',
-                            selected: _ocrPromptPreset ==
-                                AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
-                            onTap: () => _selectPromptPreset(
+                        _PromptPresetCard(
+                          key: const Key('promptPreset-waybill-v2'),
+                          title: '发货单模板（增强）',
+                          subtitle: '标准发货单优先，结构化提取更稳',
+                          selected: _ocrPromptPreset ==
                               AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
-                            ),
+                          onTap: () => _selectPromptPreset(
+                            AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _PromptPresetCard(
-                            key: const Key('promptPreset-general'),
-                            title: '通用识别（稳定）',
-                            subtitle: '适合版式变化较大的单据',
-                            selected: _ocrPromptPreset ==
-                                AiOcrConfig.ocrPromptPresetGeneral,
-                            onTap: () => _selectPromptPreset(
+                        const SizedBox(height: 10),
+                        _PromptPresetCard(
+                          key: const Key('promptPreset-general'),
+                          title: '通用识别（稳定）',
+                          subtitle: '版式变化大时使用，优先保证识别兼容',
+                          selected: _ocrPromptPreset ==
                               AiOcrConfig.ocrPromptPresetGeneral,
-                            ),
+                          onTap: () => _selectPromptPreset(
+                            AiOcrConfig.ocrPromptPresetGeneral,
                           ),
                         ),
                       ],
@@ -657,30 +653,51 @@ class _PromptPresetCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
+          border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: AppTheme.primary,
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: AppTheme.textSecondary,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
+                height: 1.35,
               ),
             ),
           ],
