@@ -158,8 +158,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('QR箱码生成'), findsOneWidget);
-    expect(find.text('开始扫码'), findsOneWidget);
-    expect(find.text('导入图片'), findsOneWidget);
+    expect(find.text('箱码范围'), findsOneWidget);
+    expect(find.byKey(const Key('rangeEntryButton')), findsOneWidget);
     expect(find.text('生成并预览'), findsOneWidget);
     expect(find.text('下一组继续'), findsOneWidget);
   });

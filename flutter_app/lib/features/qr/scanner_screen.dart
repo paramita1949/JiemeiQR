@@ -9,10 +9,16 @@ class ScannerScreen extends StatefulWidget {
     super.key,
     this.startFromGallery = false,
     this.title = '扫描箱贴二维码',
+    this.allowGalleryImport = true,
+    this.showEndScanAction = false,
+    this.endScanResult,
   });
 
   final bool startFromGallery;
   final String title;
+  final bool allowGalleryImport;
+  final bool showEndScanAction;
+  final String? endScanResult;
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -38,7 +44,9 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     if (widget.startFromGallery) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pickFromGallery();
+        if (widget.allowGalleryImport) {
+          _pickFromGallery();
+        }
       });
     }
   }
@@ -150,11 +158,17 @@ class _ScannerScreenState extends State<ScannerScreen>
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
-          IconButton(
-            tooltip: '本地图片识别',
-            onPressed: _pickFromGallery,
-            icon: const Icon(Icons.photo_library_outlined),
-          ),
+          if (widget.allowGalleryImport)
+            IconButton(
+              tooltip: '本地图片识别',
+              onPressed: _pickFromGallery,
+              icon: const Icon(Icons.photo_library_outlined),
+            ),
+          if (widget.showEndScanAction)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(widget.endScanResult),
+              child: const Text('结束扫描'),
+            ),
         ],
       ),
       body: Stack(
@@ -165,16 +179,17 @@ class _ScannerScreenState extends State<ScannerScreen>
             onDetect: _onDetect,
           ),
           _buildOverlay(),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 26,
-            child: FilledButton.tonalIcon(
-              onPressed: _pickFromGallery,
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('从本地图片识别'),
+          if (widget.allowGalleryImport)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 26,
+              child: FilledButton.tonalIcon(
+                onPressed: _pickFromGallery,
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('从本地图片识别'),
+              ),
             ),
-          ),
         ],
       ),
     );

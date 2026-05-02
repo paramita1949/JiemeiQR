@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (title == 'QR箱码') {
       await pushAndRefresh(
         context,
-        route: MaterialPageRoute(builder: (_) => const QrEntryScreen()),
+        route: MaterialPageRoute(builder: (_) => QrEntryScreen(database: database)),
         onRefresh: () => unawaited(_refreshStats()),
       );
       return;

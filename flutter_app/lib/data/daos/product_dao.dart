@@ -149,6 +149,18 @@ class ProductDao {
     return result;
   }
 
+  Future<int?> findBoxesPerBoardByActualBatch(String actualBatch) async {
+    final rows = await (_database.select(_database.batches)
+          ..where((table) => table.actualBatch.equals(actualBatch))
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])
+          ..limit(1))
+        .get();
+    if (rows.isEmpty) {
+      return null;
+    }
+    return rows.first.boxesPerBoard;
+  }
+
   Future<List<BatchRecord>> batchesForProduct(int productId) {
     return (_database.select(_database.batches)
           ..where((table) => table.productId.equals(productId))

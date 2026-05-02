@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
+import 'package:qrscan_flutter/features/qr/qr_range_screen.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/models/qr_record.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
@@ -7,7 +9,9 @@ import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 class QrEntryScreen extends StatefulWidget {
-  const QrEntryScreen({super.key});
+  const QrEntryScreen({super.key, this.database});
+
+  final AppDatabase? database;
 
   @override
   State<QrEntryScreen> createState() => _QrEntryScreenState();
@@ -218,6 +222,11 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                 onScan: _startScan,
                 onImportImage: _startFromGallery,
                 onManualInput: _startManualInput,
+                onOpenRange: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const QrRangeScreen()),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _GenerateParamCard(
@@ -288,11 +297,13 @@ class _ScanCard extends StatelessWidget {
     required this.onScan,
     required this.onImportImage,
     required this.onManualInput,
+    required this.onOpenRange,
   });
 
   final VoidCallback onScan;
   final VoidCallback onImportImage;
   final VoidCallback onManualInput;
+  final VoidCallback onOpenRange;
 
   @override
   Widget build(BuildContext context) {
@@ -324,6 +335,16 @@ class _ScanCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonalIcon(
+            key: const Key('rangeEntryButton'),
+            onPressed: onOpenRange,
+            icon: const Icon(Icons.straighten_outlined),
+            label: const Text('箱码范围'),
+          ),
         ),
         const SizedBox(height: 10),
         SizedBox(
