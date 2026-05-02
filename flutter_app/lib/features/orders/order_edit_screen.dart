@@ -436,8 +436,16 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         return;
       }
       Navigator.of(context, rootNavigator: true).pop();
+      final rateLimitInfo = ModelScopeWaybillOcrService.lastRateLimitInfo;
+      final rateLimitText = rateLimitInfo?.summaryText();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
+        SnackBar(
+          content: Text(
+            rateLimitText == null
+                ? error.message
+                : '${error.message}\n$rateLimitText',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -515,8 +523,16 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (!mounted) {
       return;
     }
+    final rateLimitText =
+        ModelScopeWaybillOcrService.lastRateLimitInfo?.summaryText();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('识别明细已录入')),
+      SnackBar(
+        content: Text(
+          rateLimitText == null
+              ? '识别明细已录入'
+              : '识别明细已录入\n$rateLimitText',
+        ),
+      ),
     );
   }
 

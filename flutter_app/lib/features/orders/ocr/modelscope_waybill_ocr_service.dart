@@ -10,6 +10,38 @@ typedef ModelScopeHttpPost = Future<String> Function(
   Map<String, Object?> body,
   String token,
 );
+class ModelScopeRateLimitInfo {
+  const ModelScopeRateLimitInfo({
+    required this.statusCode,
+    required this.headers,
+    this.retryAfter,
+  });
+
+  final int statusCode;
+  final Map<String, String> headers;
+  final String? retryAfter;
+
+  String? get remaining {
+    return headers['x-ratelimit-remaining'] ??
+        headers['ratelimit-remaining'] ??
+        headers['x-ratelimit-remaining-requests'];
+  }
+
+  String summaryText() {
+    final parts = <String>[];
+    if (remaining != null && remaining!.trim().isNotEmpty) {
+      parts.add('剩余次数: ${remaining!.trim()}');
+    }
+    final retry = retryAfter?.trim() ?? '';
+    if (retry.isNotEmpty) {
+      parts.add('建议等待: ${retry}s');
+    }
+    if (parts.isEmpty) {
+      return '魔搭限流信息未返回';
+    }
+    return '魔搭限流 ${parts.join('，')}';
+  }
+}
 
 class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
   ModelScopeWaybillOcrService({
@@ -26,6 +58,9 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
   final String model;
   final FileAiConfigStore _configStore;
   final ModelScopeHttpPost _httpPost;
+  static ModelScopeRateLimitInfo? _lastRateLimitInfo;
+
+  static ModelScopeRateLimitInfo? get lastRateLimitInfo => _lastRateLimitInfo;
 
   @override
   Future<WaybillOcrDraft> recognize(File image) async {
@@ -125,6 +160,17 @@ Future<String> _defaultHttpPost(
     request.write(jsonEncode(body));
     final response = await request.close();
     final responseText = await response.transform(utf8.decoder).join();
+    final headers = <String, String>{};
+    response.headers.forEach((name, values) {
+      if (values.isNotEmpty) {
+        headers[name.toLowerCase()] = values.join(', ');
+      }
+    });
+    ModelScopeWaybillOcrService._lastRateLimitInfo = ModelScopeRateLimitInfo(
+      statusCode: response.statusCode,
+      headers: headers,
+      retryAfter: response.headers.value('retry-after'),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ModelScopeWaybillOcrException(
         '魔搭请求失败：${response.statusCode} ${responseText.trim()}',
