@@ -160,7 +160,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-        find.textContaining('识别2条 · 自动修正1条 · 待确认0条 · 未匹配1条'), findsOneWidget);
+        find.textContaining('识别2条 · 自动修正0条 · 待确认0条 · 未匹配1条'), findsOneWidget);
     expect(find.text('确认录入（录入1条）'), findsOneWidget);
 
     await tester.tap(find.text('确认录入（录入1条）'));

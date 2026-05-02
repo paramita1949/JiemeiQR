@@ -57,7 +57,7 @@ class WaybillOcrMatcher {
           candidateBatches = fromProductDate.candidateBatches;
         }
       } else if (product != null && batch != null) {
-        status = OcrLineStatus.autoFixed;
+        status = OcrLineStatus.matched;
       }
 
       final key = _OcrLineKey(
@@ -222,7 +222,7 @@ class WaybillOcrMatcher {
       return _BatchProductMatch(
         product: candidates.single.product,
         batch: candidates.single.batch,
-        reason: '批号唯一命中，自动修正产品与日期',
+        reason: '批号命中，自动修正产品与日期',
         status: OcrLineStatus.autoFixed,
       );
     }
@@ -249,7 +249,7 @@ class WaybillOcrMatcher {
       return _BatchProductMatch(
         product: product,
         batch: byDate.single,
-        reason: '产品+日期唯一命中，自动补全批号',
+        reason: '产品+日期命中，自动补全批号',
         status: OcrLineStatus.autoFixed,
         candidateBatches: byDate,
       );
@@ -257,7 +257,7 @@ class WaybillOcrMatcher {
     return _BatchProductMatch(
       product: product,
       batch: byDate.first,
-      reason: '产品+日期对应多个批号，已默认代选批号1',
+      reason: '产品+日期命中多个批号，已默认代选批号1',
       status: OcrLineStatus.needReview,
       candidateBatches: byDate,
     );
@@ -284,7 +284,7 @@ class WaybillOcrMatcher {
     }
     final status = first.status ??
         (first.product != null && first.batch != null
-            ? OcrLineStatus.autoFixed
+            ? OcrLineStatus.matched
             : OcrLineStatus.unmatched);
     return MatchedWaybillOcrLine(
       product: first.product,

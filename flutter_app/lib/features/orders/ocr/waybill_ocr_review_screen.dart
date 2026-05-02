@@ -21,8 +21,6 @@ class WaybillOcrReviewScreen extends StatefulWidget {
   State<WaybillOcrReviewScreen> createState() => _WaybillOcrReviewScreenState();
 }
 
-enum _LineFilter { all, reviewOnly }
-
 class _LineEntry {
   _LineEntry(this.line)
       : included = line.isMatched,
@@ -55,7 +53,6 @@ class _LineEntry {
 
 class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
   bool _saving = false;
-  _LineFilter _filter = _LineFilter.all;
   late final List<_LineEntry> _entries = [
     for (final line in widget.matched.lines) _LineEntry(line),
   ];
@@ -78,12 +75,6 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
         .where((entry) => entry.line.resolvedStatus == OcrLineStatus.autoFixed)
         .length;
     final canSave = selectedCount > 0;
-    final visibleEntries = _entries.where((entry) {
-      if (_filter == _LineFilter.reviewOnly) {
-        return entry.line.resolvedStatus == OcrLineStatus.needReview;
-      }
-      return true;
-    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FA),
@@ -149,10 +140,6 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               autoCount: autoCount,
               reviewCount: reviewCount,
               unmatchedCount: unmatchedCount,
-              onAcceptAuto: _acceptAutoFixed,
-              onIgnoreUnmatched: _ignoreUnmatched,
-              filter: _filter,
-              onToggleFilter: _toggleReviewFilter,
             ),
             if (draft.warnings.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -166,7 +153,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               ),
             ],
             const SizedBox(height: 10),
-            ...visibleEntries.map(
+            ..._entries.map(
               (entry) => _LineCard(
                 entry: entry,
                 onChanged: (included) {
@@ -182,34 +169,6 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
         ),
       ),
     );
-  }
-
-  void _acceptAutoFixed() {
-    setState(() {
-      for (final entry in _entries) {
-        if (entry.line.resolvedStatus == OcrLineStatus.autoFixed &&
-            entry.line.isMatched) {
-          entry.included = true;
-        }
-      }
-    });
-  }
-
-  void _ignoreUnmatched() {
-    setState(() {
-      for (final entry in _entries) {
-        if (entry.line.resolvedStatus == OcrLineStatus.unmatched) {
-          entry.included = false;
-        }
-      }
-    });
-  }
-
-  void _toggleReviewFilter() {
-    setState(() {
-      _filter =
-          _filter == _LineFilter.all ? _LineFilter.reviewOnly : _LineFilter.all;
-    });
   }
 
   Future<void> _save() async {
@@ -285,20 +244,12 @@ class _SummaryCard extends StatelessWidget {
     required this.autoCount,
     required this.reviewCount,
     required this.unmatchedCount,
-    required this.onAcceptAuto,
-    required this.onIgnoreUnmatched,
-    required this.filter,
-    required this.onToggleFilter,
   });
 
   final int total;
   final int autoCount;
   final int reviewCount;
   final int unmatchedCount;
-  final VoidCallback onAcceptAuto;
-  final VoidCallback onIgnoreUnmatched;
-  final _LineFilter filter;
-  final VoidCallback onToggleFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -321,28 +272,6 @@ class _SummaryCard extends StatelessWidget {
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.w700,
             ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: onAcceptAuto,
-                icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
-                label: const Text('一键接受高置信'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onIgnoreUnmatched,
-                icon: const Icon(Icons.filter_alt_off, size: 18),
-                label: const Text('忽略未匹配'),
-              ),
-              ChoiceChip(
-                selected: filter == _LineFilter.reviewOnly,
-                label: const Text('仅看待确认'),
-                onSelected: (_) => onToggleFilter(),
-              ),
-            ],
           ),
         ],
       ),
@@ -463,11 +392,12 @@ class _LineCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                _StatusBadge(
-                  text: style.label,
-                  fg: style.fg,
-                  bg: style.bg,
-                ),
+                if (style.showBadge)
+                  _StatusBadge(
+                    text: style.label,
+                    fg: style.fg,
+                    bg: style.bg,
+                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -550,22 +480,33 @@ class _StatusStyle {
     required this.fg,
     required this.bg,
     required this.border,
+    required this.showBadge,
   });
 
   final String label;
   final Color fg;
   final Color bg;
   final Color border;
+  final bool showBadge;
 }
 
 _StatusStyle _statusStyle(OcrLineStatus status) {
   switch (status) {
+    case OcrLineStatus.matched:
+      return const _StatusStyle(
+        label: '',
+        fg: AppTheme.textSecondary,
+        bg: Colors.transparent,
+        border: Color(0xFFE5E7EB),
+        showBadge: false,
+      );
     case OcrLineStatus.autoFixed:
       return const _StatusStyle(
         label: '已自动修正',
-        fg: Color(0xFF166534),
-        bg: Color(0xFFDCFCE7),
-        border: Color(0xFF86EFAC),
+        fg: Color(0xFFB91C1C),
+        bg: Color(0xFFFEE2E2),
+        border: Color(0xFFFCA5A5),
+        showBadge: true,
       );
     case OcrLineStatus.needReview:
       return const _StatusStyle(
@@ -573,6 +514,7 @@ _StatusStyle _statusStyle(OcrLineStatus status) {
         fg: Color(0xFF92400E),
         bg: Color(0xFFFEF3C7),
         border: Color(0xFFFCD34D),
+        showBadge: true,
       );
     case OcrLineStatus.unmatched:
       return const _StatusStyle(
@@ -580,6 +522,7 @@ _StatusStyle _statusStyle(OcrLineStatus status) {
         fg: Color(0xFFB91C1C),
         bg: Color(0xFFFEE2E2),
         border: Color(0xFFFCA5A5),
+        showBadge: true,
       );
   }
 }
@@ -650,13 +593,13 @@ class _ReasonChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: const Color(0xFFFEE2E2),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
         style: const TextStyle(
-          color: Color(0xFF1D4ED8),
+          color: Color(0xFFB91C1C),
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),

@@ -93,6 +93,7 @@ class MatchedWaybillOcrDraft {
 }
 
 enum OcrLineStatus {
+  matched,
   autoFixed,
   needReview,
   unmatched,
@@ -127,7 +128,7 @@ class MatchedWaybillOcrLine {
     if (status != null) {
       return status!;
     }
-    return isMatched ? OcrLineStatus.autoFixed : OcrLineStatus.unmatched;
+    return isMatched ? OcrLineStatus.matched : OcrLineStatus.unmatched;
   }
 }
 

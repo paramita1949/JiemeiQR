@@ -287,7 +287,7 @@ void main() {
     expect(result.lines.single.candidateBatches.length, 2);
     expect(
       result.lines.single.reasons,
-      contains('产品+日期对应多个批号，已默认代选批号1'),
+      contains('产品+日期命中多个批号，已默认代选批号1'),
     );
   });
 
@@ -326,7 +326,7 @@ void main() {
     expect(result.lines.single.product?.code, '20380');
     expect(result.lines.single.batch?.dateBatch, '2029.8.11');
     expect(result.lines.single.resolvedStatus, OcrLineStatus.autoFixed);
-    expect(result.lines.single.reasons, contains('批号唯一命中，自动修正产品与日期'));
+    expect(result.lines.single.reasons, contains('批号命中，自动修正产品与日期'));
   });
 
   test('defaults to first batch and marks review when product+date has many',
@@ -373,7 +373,7 @@ void main() {
     expect(result.lines.single.candidateBatches.length, 2);
     expect(
       result.lines.single.reasons,
-      contains('产品+日期对应多个批号，已默认代选批号1'),
+      contains('产品+日期命中多个批号，已默认代选批号1'),
     );
   });
 }
