@@ -30,6 +30,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   bool _saving = false;
   bool _autoSaveReady = false;
   String _provider = AiOcrConfig.defaultProvider;
+  String _ocrPromptPreset = AiOcrConfig.defaultOcrPromptPreset;
 
   @override
   void initState() {
@@ -71,6 +72,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController.text = config.modelscopeModel;
       _geminiModelPresets = [...config.geminiModelPresets];
       _modelScopeModelPresets = [...config.modelScopeModelPresets];
+      _ocrPromptPreset = config.ocrPromptPreset;
       if (_provider != AiOcrConfig.defaultProvider &&
           _provider != AiOcrConfig.modelscopeProvider) {
         _provider = AiOcrConfig.defaultProvider;
@@ -162,6 +164,40 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   ),
                   const SizedBox(height: 14),
                   _SectionShell(
+                    title: '识别策略',
+                    subtitle: '默认使用发货单模板增强；如需保守识别可切回通用识别。',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _PromptPresetCard(
+                            key: const Key('promptPreset-waybill-v2'),
+                            title: '发货单模板（增强）',
+                            subtitle: '更适合当前标准模板与缺失容错',
+                            selected: _ocrPromptPreset ==
+                                AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                            onTap: () => _selectPromptPreset(
+                              AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _PromptPresetCard(
+                            key: const Key('promptPreset-general'),
+                            title: '通用识别（稳定）',
+                            subtitle: '适合版式变化较大的单据',
+                            selected: _ocrPromptPreset ==
+                                AiOcrConfig.ocrPromptPresetGeneral,
+                            onTap: () => _selectPromptPreset(
+                              AiOcrConfig.ocrPromptPresetGeneral,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _SectionShell(
                     title: '',
                     subtitle: '',
                     child: AnimatedSwitcher(
@@ -229,6 +265,14 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     _scheduleAutoSave();
   }
 
+  void _selectPromptPreset(String preset) {
+    if (_ocrPromptPreset == preset) {
+      return;
+    }
+    setState(() => _ocrPromptPreset = preset);
+    _scheduleAutoSave();
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -284,6 +328,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       geminiModelPresets: _geminiModelPresets,
       modelScopeModelPresets: _modelScopeModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+      ocrPromptPreset: _ocrPromptPreset,
     );
   }
 
@@ -582,6 +627,63 @@ class _ProviderCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PromptPresetCard extends StatelessWidget {
+  const _PromptPresetCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? AppTheme.primary : const Color(0xFFD9E1EE);
+    final backgroundColor =
+        selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

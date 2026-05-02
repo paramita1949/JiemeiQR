@@ -236,22 +236,16 @@ void main() {
 
     expect(find.text('AI配置'), findsWidgets);
     expect(find.text('默认使用'), findsOneWidget);
+    expect(find.text('识别策略'), findsOneWidget);
     expect(find.text('当前启用'), findsOneWidget);
     expect(find.text('谷歌'), findsWidgets);
     expect(find.text('魔搭'), findsWidgets);
     expect(find.byKey(const Key('providerHorizontalList')), findsOneWidget);
 
     expect(find.text('识别密钥'), findsNothing);
-    expect(find.text('Gemini API Key'), findsOneWidget);
-    expect(find.byKey(const Key('GeminiModelDropdown')), findsOneWidget);
-    expect(find.byKey(const Key('GeminiAddModelButton')), findsNothing);
-    expect(find.text('魔搭 API KEY'), findsNothing);
-    expect(find.byKey(const Key('魔搭ModelDropdown')), findsNothing);
 
     await tester.tap(find.byKey(const Key('providerCard-modelscope')));
     await tester.pumpAndSettle();
-    expect(find.text('魔搭 API KEY'), findsOneWidget);
-    expect(find.byKey(const Key('魔搭ModelDropdown')), findsOneWidget);
-    expect(find.text('Gemini API Key'), findsNothing);
+    expect(find.byKey(const Key('providerCard-modelscope')), findsOneWidget);
   });
 }

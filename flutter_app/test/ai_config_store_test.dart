@@ -38,6 +38,7 @@ void main() {
     expect(loaded.aliyunEndpoint, 'ocr-api.cn-hangzhou.aliyuncs.com');
     expect(loaded.baiduApiKey, 'bak');
     expect(loaded.baiduSecretKey, 'bsk');
+    expect(loaded.ocrPromptPreset, AiOcrConfig.defaultOcrPromptPreset);
   });
 
   test('uses Gemini 3 Flash preview as default model', () async {
@@ -54,6 +55,7 @@ void main() {
     expect(loaded.tencentRegion, AiOcrConfig.defaultTencentRegion);
     expect(loaded.aliyunEndpoint, AiOcrConfig.defaultAliyunEndpoint);
     expect(loaded.baiduApiKey, '');
+    expect(loaded.ocrPromptPreset, AiOcrConfig.defaultOcrPromptPreset);
   });
 
   test('saves and loads selected Baidu provider', () async {
@@ -76,6 +78,7 @@ void main() {
         aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
         baiduApiKey: 'baidu-api',
         baiduSecretKey: 'baidu-secret',
+        ocrPromptPreset: AiOcrConfig.ocrPromptPresetGeneral,
       ),
     );
 
@@ -84,5 +87,6 @@ void main() {
     expect(loaded.usesBaiduOcr, isTrue);
     expect(loaded.baiduApiKey, 'baidu-api');
     expect(loaded.baiduSecretKey, 'baidu-secret');
+    expect(loaded.ocrPromptPreset, AiOcrConfig.ocrPromptPresetGeneral);
   });
 }

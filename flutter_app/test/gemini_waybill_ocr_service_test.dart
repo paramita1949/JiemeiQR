@@ -50,8 +50,8 @@ void main() {
 
     expect(capturedUri.toString(), contains('gemini-3-flash-preview'));
     final bodyText = jsonEncode(capturedBody);
-    expect(bodyText, contains('只做OCR'));
-    expect(bodyText, contains('不要推理'));
+    expect(bodyText, contains('标准发货单模板'));
+    expect(bodyText, contains('productCode 仅保留数字字符'));
     expect(bodyText, contains('inlineData'));
     expect(result.waybillNo, '0001686469');
     expect(result.rows.single.actualBatch, 'FCHBLEZ');
@@ -95,15 +95,18 @@ void main() {
         aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
         baiduApiKey: '',
         baiduSecretKey: '',
+        ocrPromptPreset: AiOcrConfig.ocrPromptPresetGeneral,
       ),
     );
     Uri? capturedUri;
+    Map<String, Object?>? capturedBody;
 
     final service = GeminiWaybillOcrService(
       apiKey: '',
       configStore: store,
       httpPost: (uri, body) async {
         capturedUri = uri;
+        capturedBody = body;
         return jsonEncode({
           'candidates': [
             {
@@ -130,5 +133,8 @@ void main() {
 
     expect(capturedUri.toString(), contains('gemini-2.5-flash'));
     expect(capturedUri?.queryParameters['key'], 'saved-key');
+    final bodyText = jsonEncode(capturedBody);
+    expect(bodyText, contains('只做OCR'));
+    expect(bodyText, isNot(contains('标准发货单模板')));
   });
 }

@@ -24,6 +24,7 @@ class AiOcrConfig {
     this.geminiModelPresets = defaultGeminiModelPresets,
     this.modelScopeModelPresets = defaultModelScopeModelPresets,
     this.openRouterModelPresets = defaultOpenRouterModelPresets,
+    this.ocrPromptPreset = defaultOcrPromptPreset,
   });
 
   static const defaultModel = 'gemini-3-flash-preview';
@@ -37,6 +38,9 @@ class AiOcrConfig {
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
+  static const ocrPromptPresetGeneral = 'general';
+  static const ocrPromptPresetWaybillTemplateV2 = 'waybill_template_v2';
+  static const defaultOcrPromptPreset = ocrPromptPresetWaybillTemplateV2;
   static const defaultGeminiModelPresets = [
     defaultModel,
     'gemini-2.5-flash',
@@ -70,6 +74,7 @@ class AiOcrConfig {
   final List<String> geminiModelPresets;
   final List<String> modelScopeModelPresets;
   final List<String> openRouterModelPresets;
+  final String ocrPromptPreset;
 
   bool get hasGeminiKey => geminiApiKey.trim().isNotEmpty;
   bool get usesTencentOcr => provider == tencentProvider;
@@ -106,6 +111,7 @@ class AiOcrConfig {
         'geminiModelPresets': geminiModelPresets,
         'modelScopeModelPresets': modelScopeModelPresets,
         'openRouterModelPresets': openRouterModelPresets,
+        'ocrPromptPreset': ocrPromptPreset,
       };
 
   factory AiOcrConfig.fromJson(Map<String, Object?> json) {
@@ -157,6 +163,10 @@ class AiOcrConfig {
         json['openRouterModelPresets'],
         fallback: defaultOpenRouterModelPresets,
       ),
+      ocrPromptPreset:
+          json['ocrPromptPreset']?.toString() == ocrPromptPresetGeneral
+              ? ocrPromptPresetGeneral
+              : ocrPromptPresetWaybillTemplateV2,
     );
   }
 
@@ -179,6 +189,7 @@ class AiOcrConfig {
     List<String>? geminiModelPresets,
     List<String>? modelScopeModelPresets,
     List<String>? openRouterModelPresets,
+    String? ocrPromptPreset,
   }) {
     return AiOcrConfig(
       provider: provider ?? this.provider,
@@ -202,6 +213,7 @@ class AiOcrConfig {
           modelScopeModelPresets ?? this.modelScopeModelPresets,
       openRouterModelPresets:
           openRouterModelPresets ?? this.openRouterModelPresets,
+      ocrPromptPreset: ocrPromptPreset ?? this.ocrPromptPreset,
     );
   }
 }
@@ -237,6 +249,7 @@ class FileAiConfigStore {
         geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
         modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
         openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+        ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
       );
     }
     try {
@@ -266,6 +279,7 @@ class FileAiConfigStore {
       geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
       modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+      ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
     );
   }
 
