@@ -10,6 +10,7 @@ class ScannerScreen extends StatefulWidget {
     this.startFromGallery = false,
     this.title = '扫描箱贴二维码',
     this.allowGalleryImport = true,
+    this.showBottomGalleryButton = true,
     this.showEndScanAction = false,
     this.endScanResult,
   });
@@ -17,6 +18,7 @@ class ScannerScreen extends StatefulWidget {
   final bool startFromGallery;
   final String title;
   final bool allowGalleryImport;
+  final bool showBottomGalleryButton;
   final bool showEndScanAction;
   final String? endScanResult;
 
@@ -179,7 +181,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             onDetect: _onDetect,
           ),
           _buildOverlay(),
-          if (widget.allowGalleryImport)
+          if (widget.allowGalleryImport && widget.showBottomGalleryButton)
             Positioned(
               left: 20,
               right: 20,

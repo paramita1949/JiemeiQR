@@ -75,7 +75,8 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       MaterialPageRoute(
         builder: (_) => const ScannerScreen(
           title: '箱码范围扫码',
-          allowGalleryImport: false,
+          allowGalleryImport: true,
+          showBottomGalleryButton: false,
           showEndScanAction: true,
           endScanResult: _endScanSignal,
         ),
