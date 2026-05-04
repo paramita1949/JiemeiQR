@@ -5190,6 +5190,14 @@ class $StocktakeItemsTable extends StocktakeItems
   late final GeneratedColumn<String> dateBatch = GeneratedColumn<String>(
       'date_batch', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _initialBoxesMeta =
+      const VerificationMeta('initialBoxes');
+  @override
+  late final GeneratedColumn<int> initialBoxes = GeneratedColumn<int>(
+      'initial_boxes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _boxesPerBoardMeta =
       const VerificationMeta('boxesPerBoard');
   @override
@@ -5231,6 +5239,7 @@ class $StocktakeItemsTable extends StocktakeItems
         productCode,
         batchCode,
         dateBatch,
+        initialBoxes,
         boxesPerBoard,
         currentBoxes,
         status,
@@ -5289,6 +5298,12 @@ class $StocktakeItemsTable extends StocktakeItems
     } else if (isInserting) {
       context.missing(_dateBatchMeta);
     }
+    if (data.containsKey('initial_boxes')) {
+      context.handle(
+          _initialBoxesMeta,
+          initialBoxes.isAcceptableOrUnknown(
+              data['initial_boxes']!, _initialBoxesMeta));
+    }
     if (data.containsKey('boxes_per_board')) {
       context.handle(
           _boxesPerBoardMeta,
@@ -5338,6 +5353,8 @@ class $StocktakeItemsTable extends StocktakeItems
           .read(DriftSqlType.string, data['${effectivePrefix}batch_code'])!,
       dateBatch: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}date_batch'])!,
+      initialBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}initial_boxes'])!,
       boxesPerBoard: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}boxes_per_board'])!,
       currentBoxes: attachedDatabase.typeMapping
@@ -5366,6 +5383,7 @@ class StocktakeItemRecord extends DataClass
   final String productCode;
   final String batchCode;
   final String dateBatch;
+  final int initialBoxes;
   final int boxesPerBoard;
   final int currentBoxes;
   final int status;
@@ -5379,6 +5397,7 @@ class StocktakeItemRecord extends DataClass
       required this.productCode,
       required this.batchCode,
       required this.dateBatch,
+      required this.initialBoxes,
       required this.boxesPerBoard,
       required this.currentBoxes,
       required this.status,
@@ -5394,6 +5413,7 @@ class StocktakeItemRecord extends DataClass
     map['product_code'] = Variable<String>(productCode);
     map['batch_code'] = Variable<String>(batchCode);
     map['date_batch'] = Variable<String>(dateBatch);
+    map['initial_boxes'] = Variable<int>(initialBoxes);
     map['boxes_per_board'] = Variable<int>(boxesPerBoard);
     map['current_boxes'] = Variable<int>(currentBoxes);
     map['status'] = Variable<int>(status);
@@ -5415,6 +5435,7 @@ class StocktakeItemRecord extends DataClass
       productCode: Value(productCode),
       batchCode: Value(batchCode),
       dateBatch: Value(dateBatch),
+      initialBoxes: Value(initialBoxes),
       boxesPerBoard: Value(boxesPerBoard),
       currentBoxes: Value(currentBoxes),
       status: Value(status),
@@ -5436,6 +5457,7 @@ class StocktakeItemRecord extends DataClass
       productCode: serializer.fromJson<String>(json['productCode']),
       batchCode: serializer.fromJson<String>(json['batchCode']),
       dateBatch: serializer.fromJson<String>(json['dateBatch']),
+      initialBoxes: serializer.fromJson<int>(json['initialBoxes']),
       boxesPerBoard: serializer.fromJson<int>(json['boxesPerBoard']),
       currentBoxes: serializer.fromJson<int>(json['currentBoxes']),
       status: serializer.fromJson<int>(json['status']),
@@ -5454,6 +5476,7 @@ class StocktakeItemRecord extends DataClass
       'productCode': serializer.toJson<String>(productCode),
       'batchCode': serializer.toJson<String>(batchCode),
       'dateBatch': serializer.toJson<String>(dateBatch),
+      'initialBoxes': serializer.toJson<int>(initialBoxes),
       'boxesPerBoard': serializer.toJson<int>(boxesPerBoard),
       'currentBoxes': serializer.toJson<int>(currentBoxes),
       'status': serializer.toJson<int>(status),
@@ -5470,6 +5493,7 @@ class StocktakeItemRecord extends DataClass
           String? productCode,
           String? batchCode,
           String? dateBatch,
+          int? initialBoxes,
           int? boxesPerBoard,
           int? currentBoxes,
           int? status,
@@ -5483,6 +5507,7 @@ class StocktakeItemRecord extends DataClass
         productCode: productCode ?? this.productCode,
         batchCode: batchCode ?? this.batchCode,
         dateBatch: dateBatch ?? this.dateBatch,
+        initialBoxes: initialBoxes ?? this.initialBoxes,
         boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
         currentBoxes: currentBoxes ?? this.currentBoxes,
         status: status ?? this.status,
@@ -5499,6 +5524,9 @@ class StocktakeItemRecord extends DataClass
           data.productCode.present ? data.productCode.value : this.productCode,
       batchCode: data.batchCode.present ? data.batchCode.value : this.batchCode,
       dateBatch: data.dateBatch.present ? data.dateBatch.value : this.dateBatch,
+      initialBoxes: data.initialBoxes.present
+          ? data.initialBoxes.value
+          : this.initialBoxes,
       boxesPerBoard: data.boxesPerBoard.present
           ? data.boxesPerBoard.value
           : this.boxesPerBoard,
@@ -5521,6 +5549,7 @@ class StocktakeItemRecord extends DataClass
           ..write('productCode: $productCode, ')
           ..write('batchCode: $batchCode, ')
           ..write('dateBatch: $dateBatch, ')
+          ..write('initialBoxes: $initialBoxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('currentBoxes: $currentBoxes, ')
           ..write('status: $status, ')
@@ -5539,6 +5568,7 @@ class StocktakeItemRecord extends DataClass
       productCode,
       batchCode,
       dateBatch,
+      initialBoxes,
       boxesPerBoard,
       currentBoxes,
       status,
@@ -5555,6 +5585,7 @@ class StocktakeItemRecord extends DataClass
           other.productCode == this.productCode &&
           other.batchCode == this.batchCode &&
           other.dateBatch == this.dateBatch &&
+          other.initialBoxes == this.initialBoxes &&
           other.boxesPerBoard == this.boxesPerBoard &&
           other.currentBoxes == this.currentBoxes &&
           other.status == this.status &&
@@ -5570,6 +5601,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
   final Value<String> productCode;
   final Value<String> batchCode;
   final Value<String> dateBatch;
+  final Value<int> initialBoxes;
   final Value<int> boxesPerBoard;
   final Value<int> currentBoxes;
   final Value<int> status;
@@ -5583,6 +5615,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
     this.productCode = const Value.absent(),
     this.batchCode = const Value.absent(),
     this.dateBatch = const Value.absent(),
+    this.initialBoxes = const Value.absent(),
     this.boxesPerBoard = const Value.absent(),
     this.currentBoxes = const Value.absent(),
     this.status = const Value.absent(),
@@ -5597,6 +5630,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
     required String productCode,
     required String batchCode,
     required String dateBatch,
+    this.initialBoxes = const Value.absent(),
     this.boxesPerBoard = const Value.absent(),
     required int currentBoxes,
     this.status = const Value.absent(),
@@ -5617,6 +5651,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
     Expression<String>? productCode,
     Expression<String>? batchCode,
     Expression<String>? dateBatch,
+    Expression<int>? initialBoxes,
     Expression<int>? boxesPerBoard,
     Expression<int>? currentBoxes,
     Expression<int>? status,
@@ -5631,6 +5666,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
       if (productCode != null) 'product_code': productCode,
       if (batchCode != null) 'batch_code': batchCode,
       if (dateBatch != null) 'date_batch': dateBatch,
+      if (initialBoxes != null) 'initial_boxes': initialBoxes,
       if (boxesPerBoard != null) 'boxes_per_board': boxesPerBoard,
       if (currentBoxes != null) 'current_boxes': currentBoxes,
       if (status != null) 'status': status,
@@ -5647,6 +5683,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
       Value<String>? productCode,
       Value<String>? batchCode,
       Value<String>? dateBatch,
+      Value<int>? initialBoxes,
       Value<int>? boxesPerBoard,
       Value<int>? currentBoxes,
       Value<int>? status,
@@ -5660,6 +5697,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
       productCode: productCode ?? this.productCode,
       batchCode: batchCode ?? this.batchCode,
       dateBatch: dateBatch ?? this.dateBatch,
+      initialBoxes: initialBoxes ?? this.initialBoxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       currentBoxes: currentBoxes ?? this.currentBoxes,
       status: status ?? this.status,
@@ -5692,6 +5730,9 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
     if (dateBatch.present) {
       map['date_batch'] = Variable<String>(dateBatch.value);
     }
+    if (initialBoxes.present) {
+      map['initial_boxes'] = Variable<int>(initialBoxes.value);
+    }
     if (boxesPerBoard.present) {
       map['boxes_per_board'] = Variable<int>(boxesPerBoard.value);
     }
@@ -5720,6 +5761,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
           ..write('productCode: $productCode, ')
           ..write('batchCode: $batchCode, ')
           ..write('dateBatch: $dateBatch, ')
+          ..write('initialBoxes: $initialBoxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('currentBoxes: $currentBoxes, ')
           ..write('status: $status, ')
@@ -9447,6 +9489,7 @@ typedef $$StocktakeItemsTableCreateCompanionBuilder = StocktakeItemsCompanion
   required String productCode,
   required String batchCode,
   required String dateBatch,
+  Value<int> initialBoxes,
   Value<int> boxesPerBoard,
   required int currentBoxes,
   Value<int> status,
@@ -9462,6 +9505,7 @@ typedef $$StocktakeItemsTableUpdateCompanionBuilder = StocktakeItemsCompanion
   Value<String> productCode,
   Value<String> batchCode,
   Value<String> dateBatch,
+  Value<int> initialBoxes,
   Value<int> boxesPerBoard,
   Value<int> currentBoxes,
   Value<int> status,
@@ -9541,6 +9585,9 @@ class $$StocktakeItemsTableFilterComposer
 
   ColumnFilters<String> get dateBatch => $composableBuilder(
       column: $table.dateBatch, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard, builder: (column) => ColumnFilters(column));
@@ -9638,6 +9685,10 @@ class $$StocktakeItemsTableOrderingComposer
 
   ColumnOrderings<String> get dateBatch => $composableBuilder(
       column: $table.dateBatch, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes,
+      builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard,
@@ -9737,6 +9788,9 @@ class $$StocktakeItemsTableAnnotationComposer
 
   GeneratedColumn<String> get dateBatch =>
       $composableBuilder(column: $table.dateBatch, builder: (column) => column);
+
+  GeneratedColumn<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes, builder: (column) => column);
 
   GeneratedColumn<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard, builder: (column) => column);
@@ -9846,6 +9900,7 @@ class $$StocktakeItemsTableTableManager extends RootTableManager<
             Value<String> productCode = const Value.absent(),
             Value<String> batchCode = const Value.absent(),
             Value<String> dateBatch = const Value.absent(),
+            Value<int> initialBoxes = const Value.absent(),
             Value<int> boxesPerBoard = const Value.absent(),
             Value<int> currentBoxes = const Value.absent(),
             Value<int> status = const Value.absent(),
@@ -9860,6 +9915,7 @@ class $$StocktakeItemsTableTableManager extends RootTableManager<
             productCode: productCode,
             batchCode: batchCode,
             dateBatch: dateBatch,
+            initialBoxes: initialBoxes,
             boxesPerBoard: boxesPerBoard,
             currentBoxes: currentBoxes,
             status: status,
@@ -9874,6 +9930,7 @@ class $$StocktakeItemsTableTableManager extends RootTableManager<
             required String productCode,
             required String batchCode,
             required String dateBatch,
+            Value<int> initialBoxes = const Value.absent(),
             Value<int> boxesPerBoard = const Value.absent(),
             required int currentBoxes,
             Value<int> status = const Value.absent(),
@@ -9888,6 +9945,7 @@ class $$StocktakeItemsTableTableManager extends RootTableManager<
             productCode: productCode,
             batchCode: batchCode,
             dateBatch: dateBatch,
+            initialBoxes: initialBoxes,
             boxesPerBoard: boxesPerBoard,
             currentBoxes: currentBoxes,
             status: status,

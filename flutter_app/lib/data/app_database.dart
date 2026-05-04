@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -110,6 +110,13 @@ class AppDatabase extends _$AppDatabase {
               )
               WHERE boxes_per_board <= 1;
             ''');
+          }
+          if (from < 13) {
+            final hasInitialBoxes =
+                await _hasColumn('stocktake_items', 'initial_boxes');
+            if (!hasInitialBoxes) {
+              await m.addColumn(stocktakeItems, stocktakeItems.initialBoxes);
+            }
           }
         },
       );

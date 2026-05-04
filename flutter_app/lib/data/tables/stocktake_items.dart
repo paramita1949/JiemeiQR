@@ -13,6 +13,7 @@ class StocktakeItems extends Table {
   TextColumn get productCode => text()();
   TextColumn get batchCode => text()();
   TextColumn get dateBatch => text()();
+  IntColumn get initialBoxes => integer().withDefault(const Constant(0))();
   IntColumn get boxesPerBoard => integer().withDefault(const Constant(1))();
   IntColumn get currentBoxes => integer()();
   IntColumn get status => integer().withDefault(const Constant(0))();
