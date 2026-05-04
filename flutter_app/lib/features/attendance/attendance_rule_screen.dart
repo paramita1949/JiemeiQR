@@ -1,8 +1,10 @@
 import 'package:drift/drift.dart' hide Column;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -32,6 +34,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _checkInRemindEnabled = true;
   bool _checkOutRemindEnabled = false;
   String _weekendType = 'double';
+  String _providerSummary = '系统融合定位（GPS/北斗/网络）';
+  AttendancePermissionState? _permissionState;
   List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
 
@@ -67,6 +71,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _weekendType = rule.weekendType;
     _backups = await _dao.listAttendanceBackups();
     _todayGeofenceState = await _dao.getTodayGeofenceState();
+    _providerSummary = await AttendanceGeofenceBridge.providerSummary();
+    _permissionState = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+      requestIfNeeded: false,
+    );
     if (!mounted) return;
     setState(() => _loading = false);
   }
@@ -88,6 +96,16 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         checkoutReminderEnabled: Value(_checkOutRemindEnabled),
       ),
     );
+    try {
+      await AttendanceGeofenceBridge.syncGeofence(
+        enabled: _geofenceEnabled,
+        lat: double.tryParse(_latController.text.trim()),
+        lng: double.tryParse(_lngController.text.trim()),
+        radius: normalizedRadius,
+      );
+    } catch (_) {
+      // Keep rule saving resilient when geofence registration fails on device.
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('规则已保存')),
@@ -205,6 +223,16 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                     label: const Text('检测并开启系统权限'),
                   ),
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _providerSummary,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                ),
                 _rowField('纬度', _latController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 _rowField('经度', _lngController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 _rowField('范围半径(m)', _radiusController, keyboardType: TextInputType.number),
@@ -317,6 +345,83 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             ),
             onPressed: _save,
             child: const Text('保存设置'),
+          ),
+          const SizedBox(height: 14),
+          _debugPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _debugPanel() {
+    final p = _permissionState;
+    final notify = p == null ? '--' : (p.notificationGranted ? '已开启' : '未开启');
+    final service = p == null ? '--' : (p.locationServiceEnabled ? '已开启' : '未开启');
+    String location = '--';
+    if (p != null) {
+      switch (p.locationPermission) {
+        case LocationPermission.always:
+          location = '始终允许';
+          break;
+        case LocationPermission.whileInUse:
+          location = '仅使用时允许';
+          break;
+        case LocationPermission.denied:
+          location = '已拒绝';
+          break;
+        case LocationPermission.deniedForever:
+          location = '永久拒绝';
+          break;
+        case LocationPermission.unableToDetermine:
+          location = '未知';
+          break;
+      }
+    }
+    return _glassCard(
+      title: '临时调试',
+      icon: Icons.bug_report_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('通知权限：$notify', style: const TextStyle(color: Color(0xFF475569))),
+          Text('定位权限：$location', style: const TextStyle(color: Color(0xFF475569))),
+          Text('定位服务：$service', style: const TextStyle(color: Color(0xFF475569))),
+          Text(_providerSummary, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final next = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+                      requestIfNeeded: false,
+                    );
+                    final provider = await AttendanceGeofenceBridge.providerSummary();
+                    if (!mounted) return;
+                    setState(() {
+                      _permissionState = next;
+                      _providerSummary = provider;
+                    });
+                  },
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('刷新状态'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    await AttendanceGeofenceReminderService.showDebugNotification();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已发送测试通知')),
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  label: const Text('发送测试通知'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

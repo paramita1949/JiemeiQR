@@ -70,6 +70,25 @@ class AttendanceGeofenceReminderService {
     _initialized = true;
   }
 
+  static Future<void> showDebugNotification() async {
+    await _initNotification();
+    const android = AndroidNotificationDetails(
+      'attendance_checkin_channel',
+      '考勤签到提醒',
+      channelDescription: '进入公司围栏后的签到提醒',
+      importance: Importance.max,
+      priority: Priority.max,
+      visibility: NotificationVisibility.public,
+    );
+    const details = NotificationDetails(android: android);
+    await _notifications.show(
+      20260506,
+      '调试通知',
+      '如果你看到这条，说明通知链路可用',
+      details,
+    );
+  }
+
   static Future<AttendancePermissionState> ensureSystemPermissions({
     bool requestIfNeeded = true,
   }) async {

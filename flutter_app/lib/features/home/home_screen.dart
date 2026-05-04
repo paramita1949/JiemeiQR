@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   _HomeStats? _stats;
   bool _loadingStats = true;
   bool _handlingIntentImport = false;
+  bool _notiHintShownInSession = false;
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     unawaited(_refreshStats());
     unawaited(_consumePendingImportIntent());
     unawaited(_runAttendanceReminderCheck());
+    unawaited(_ensureNotificationPermissionHint());
   }
 
   @override
@@ -96,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(_refreshStats());
       unawaited(_consumePendingImportIntent());
       unawaited(_runAttendanceReminderCheck());
+      unawaited(_ensureNotificationPermissionHint());
     }
   }
 
@@ -278,6 +281,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     } catch (_) {
       // Keep home resilient when location/notification fails on some devices.
+    }
+  }
+
+  Future<void> _ensureNotificationPermissionHint() async {
+    if (!mounted || _notiHintShownInSession) return;
+    try {
+      final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+        requestIfNeeded: false,
+      );
+      if (!mounted || state.notificationGranted) return;
+      _notiHintShownInSession = true;
+      final enable = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('开启通知权限'),
+          content: const Text('未开启通知权限，围栏签到提醒与锁屏提醒将无法正常弹出。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('稍后'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('立即开启'),
+            ),
+          ],
+        ),
+      );
+      if (enable == true) {
+        await AttendanceGeofenceReminderService.ensureSystemPermissions(
+          requestIfNeeded: true,
+        );
+      }
+    } catch (_) {
+      // Ignore permission hint failures to keep home flow resilient.
     }
   }
 

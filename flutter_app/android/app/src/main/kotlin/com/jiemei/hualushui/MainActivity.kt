@@ -1,6 +1,7 @@
 package com.jiemei.hualushui
 
 import android.content.Intent
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -36,6 +37,54 @@ class MainActivity : FlutterActivity() {
                 result.success(path)
             } else {
                 result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.jiemei.hualushui/geofence",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "registerGeofence" -> {
+                    val lat = call.argument<Double>("lat")
+                    val lng = call.argument<Double>("lng")
+                    val radius = call.argument<Double>("radius")
+                    if (lat == null || lng == null || radius == null) {
+                        result.error("INVALID_ARGS", "lat/lng/radius required", null)
+                        return@setMethodCallHandler
+                    }
+                    val registerResult = GeofenceRegistrar.register(
+                        context = applicationContext,
+                        latitude = lat,
+                        longitude = lng,
+                        radiusMeters = radius.toFloat(),
+                    )
+                    if (registerResult.isSuccess) {
+                        result.success(registerResult.getOrNull())
+                    } else {
+                        result.error("REGISTER_FAILED", registerResult.exceptionOrNull()?.message, null)
+                    }
+                }
+
+                "unregisterGeofence" -> {
+                    val unregisterResult = GeofenceRegistrar.unregister(applicationContext)
+                    if (unregisterResult.isSuccess) {
+                        result.success(unregisterResult.getOrNull())
+                    } else {
+                        result.error("UNREGISTER_FAILED", unregisterResult.exceptionOrNull()?.message, null)
+                    }
+                }
+
+                "getLocationProviderSummary" -> {
+                    val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+                    val gpsEnabled = runCatching { manager.isProviderEnabled(LocationManager.GPS_PROVIDER) }.getOrDefault(false)
+                    val networkEnabled = runCatching { manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }.getOrDefault(false)
+                    val passiveEnabled = runCatching { manager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER) }.getOrDefault(false)
+                    val summary = "系统融合定位（GPS/北斗/网络），当前开关：GPS=${if (gpsEnabled) "开" else "关"} 网络=${if (networkEnabled) "开" else "关"} 被动=${if (passiveEnabled) "开" else "关"}"
+                    result.success(summary)
+                }
+
+                else -> result.notImplemented()
             }
         }
     }
