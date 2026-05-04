@@ -35,6 +35,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   QrBoardRangeEstimate? _lastEstimate;
   String? _lastSerialTail3Range;
   String? _lastSerialTail4Range;
+  int? _rangeSpan;
   int? _matchedBoxesPerBoard;
   MatchedBaseInfo? _matchedBaseInfo;
   QrBuildResult? _latestBuildResult;
@@ -93,14 +94,8 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     final parsed = QrParser.parse(content.trim());
     if (parsed == null) {
       _showMessage('格式不匹配，请扫箱贴码');
-    } else if (!_accepts(parsed)) {
-      _showMessage('仅支持同产品、同批号、同日期批次');
     } else {
-      setState(() => _scans.add(parsed));
-      if (_matchedBoxesPerBoard == null) {
-        _loadMatchedBoxesPerBoard(parsed.batch);
-      }
-      _recomputeEstimate();
+      _appendScan(parsed);
     }
   }
 
@@ -164,6 +159,10 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
           rejected += 1;
           continue;
         }
+        if (_isOutlierSerial(parsed)) {
+          rejected += 1;
+          continue;
+        }
         _scans.add(parsed);
         accepted += 1;
       }
@@ -221,6 +220,36 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     return '继续补扫';
   }
 
+  void _appendScan(ParsedQr parsed) {
+    if (!_accepts(parsed)) {
+      _showMessage('仅支持同产品、同批号、同日期批次');
+      return;
+    }
+    if (_isOutlierSerial(parsed)) {
+      _showMessage('该编码偏离范围过大（>100），已忽略');
+      return;
+    }
+    setState(() => _scans.add(parsed));
+    if (_matchedBoxesPerBoard == null) {
+      _loadMatchedBoxesPerBoard(parsed.batch);
+    }
+    _recomputeEstimate();
+  }
+
+  bool _isOutlierSerial(ParsedQr parsed) {
+    if (_scans.length < 2) {
+      return false;
+    }
+    var minDistance = 1 << 30;
+    for (final item in _scans) {
+      final diff = (item.serialInt - parsed.serialInt).abs();
+      if (diff < minDistance) {
+        minDistance = diff;
+      }
+    }
+    return minDistance > 100;
+  }
+
   void _recomputeEstimate() {
     final first = _scans.isEmpty ? null : _scans.first;
     final boxesPerBoard = _matchedBoxesPerBoard;
@@ -252,10 +281,13 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         _latestBuildResult = result;
         final startSerial = result.records.first.serial;
         final endSerial = result.records.last.serial;
+        final startSerialInt = int.tryParse(startSerial) ?? 0;
+        final endSerialInt = int.tryParse(endSerial) ?? 0;
         _lastSerialTail3Range =
             '${_tailOfSerial(startSerial, 3)} - ${_tailOfSerial(endSerial, 3)}';
         _lastSerialTail4Range =
             '${_tailOfSerial(startSerial, 4)} - ${_tailOfSerial(endSerial, 4)}';
+        _rangeSpan = (endSerialInt - startSerialInt).abs();
       });
     } catch (_) {
       // keep scanning with existing last estimate if any
@@ -385,6 +417,14 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               ),
               if (_lastEstimate != null) ...[
                 const SizedBox(height: 8),
+                Text(
+                  '范围跨度：${_rangeSpan ?? "-"}',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   '流水号末3位范围：${_lastSerialTail3Range ?? "-"}',
                   style: const TextStyle(
