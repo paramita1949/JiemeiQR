@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -90,8 +90,15 @@ class AppDatabase extends _$AppDatabase {
           if (from < 10) {
             final exists = await _hasColumn('stocktake_items', 'boxes_per_board');
             if (!exists) {
-              await m.addColumn(stocktakeItems, stocktakeItems.boxesPerBoard);
+              await m.database.customStatement(
+                'ALTER TABLE stocktake_items ADD COLUMN boxes_per_board INTEGER NOT NULL DEFAULT 1;',
+              );
             }
+          }
+          if (from < 11) {
+            await m.database.customStatement(
+              'UPDATE stocktake_items SET boxes_per_board = 1 WHERE boxes_per_board IS NULL OR boxes_per_board <= 0;',
+            );
           }
         },
       );

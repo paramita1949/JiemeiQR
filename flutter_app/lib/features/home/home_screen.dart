@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
@@ -123,6 +124,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 loading: _loadingStats,
               ),
               const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: _copyDebugLog,
+                  icon: const Icon(Icons.bug_report_outlined, size: 18),
+                  label: const Text('日志'),
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 '常用功能',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -395,6 +405,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _loadingStats = false;
       });
     }
+  }
+
+  Future<void> _copyDebugLog() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final buffer = StringBuffer();
+    buffer.writeln('time=${DateTime.now().toIso8601String()}');
+    buffer.writeln('schema=${_database.schemaVersion}');
+    try {
+      final userVersionRow =
+          await _database.customSelect('PRAGMA user_version;').getSingle();
+      buffer.writeln('sqlite_user_version=${userVersionRow.data['user_version']}');
+    } catch (error) {
+      buffer.writeln('sqlite_user_version_error=$error');
+    }
+
+    Future<void> addCount(String table) async {
+      try {
+        final row = await _database
+            .customSelect('SELECT COUNT(*) AS c FROM $table;')
+            .getSingle();
+        buffer.writeln('count_$table=${row.data['c']}');
+      } catch (error) {
+        buffer.writeln('count_${table}_error=$error');
+      }
+    }
+
+    await addCount('products');
+    await addCount('batches');
+    await addCount('orders');
+    await addCount('order_items');
+    await addCount('stock_movements');
+    await addCount('stocktake_sessions');
+    await addCount('stocktake_items');
+
+    if (_stats != null) {
+      buffer.writeln('home_total_pieces=${_stats!.totalPieces}');
+      buffer.writeln('home_projected_pieces=${_stats!.projectedPieces}');
+      buffer.writeln('home_today_orders=${_stats!.todayOrders}');
+      buffer.writeln('home_pending_orders=${_stats!.pendingOrders}');
+    } else {
+      buffer.writeln('home_stats=null');
+    }
+
+    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('日志已复制')),
+    );
   }
 }
 
