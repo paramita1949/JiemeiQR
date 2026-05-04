@@ -47,7 +47,7 @@ class StocktakeDao {
                 productCode: row.product.code,
                 batchCode: row.batch.actualBatch,
                 dateBatch: row.batch.dateBatch,
-                boxesPerBoard: row.batch.boxesPerBoard,
+                boxesPerBoard: Value(row.batch.boxesPerBoard),
                 currentBoxes: row.currentBoxes,
                 status: Value(StocktakeItemStatus.pending.index),
               ),
@@ -108,6 +108,17 @@ class StocktakeDao {
         completedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  Future<void> deleteSession(int sessionId) async {
+    await _database.transaction(() async {
+      await (_database.delete(_database.stocktakeItems)
+            ..where((t) => t.sessionId.equals(sessionId)))
+          .go();
+      await (_database.delete(_database.stocktakeSessions)
+            ..where((t) => t.id.equals(sessionId)))
+          .go();
+    });
   }
 
   String _monthKey(DateTime month) {

@@ -5195,7 +5195,9 @@ class $StocktakeItemsTable extends StocktakeItems
   @override
   late final GeneratedColumn<int> boxesPerBoard = GeneratedColumn<int>(
       'boxes_per_board', aliasedName, false,
-      type: DriftSqlType.int, requiredDuringInsert: true);
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(1));
   static const VerificationMeta _currentBoxesMeta =
       const VerificationMeta('currentBoxes');
   @override
@@ -5292,8 +5294,6 @@ class $StocktakeItemsTable extends StocktakeItems
           _boxesPerBoardMeta,
           boxesPerBoard.isAcceptableOrUnknown(
               data['boxes_per_board']!, _boxesPerBoardMeta));
-    } else if (isInserting) {
-      context.missing(_boxesPerBoardMeta);
     }
     if (data.containsKey('current_boxes')) {
       context.handle(
@@ -5597,7 +5597,7 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
     required String productCode,
     required String batchCode,
     required String dateBatch,
-    required int boxesPerBoard,
+    this.boxesPerBoard = const Value.absent(),
     required int currentBoxes,
     this.status = const Value.absent(),
     this.note = const Value.absent(),
@@ -5608,7 +5608,6 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
         productCode = Value(productCode),
         batchCode = Value(batchCode),
         dateBatch = Value(dateBatch),
-        boxesPerBoard = Value(boxesPerBoard),
         currentBoxes = Value(currentBoxes);
   static Insertable<StocktakeItemRecord> custom({
     Expression<int>? id,
@@ -9448,7 +9447,7 @@ typedef $$StocktakeItemsTableCreateCompanionBuilder = StocktakeItemsCompanion
   required String productCode,
   required String batchCode,
   required String dateBatch,
-  required int boxesPerBoard,
+  Value<int> boxesPerBoard,
   required int currentBoxes,
   Value<int> status,
   Value<String?> note,
@@ -9875,7 +9874,7 @@ class $$StocktakeItemsTableTableManager extends RootTableManager<
             required String productCode,
             required String batchCode,
             required String dateBatch,
-            required int boxesPerBoard,
+            Value<int> boxesPerBoard = const Value.absent(),
             required int currentBoxes,
             Value<int> status = const Value.absent(),
             Value<String?> note = const Value.absent(),

@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -99,6 +99,17 @@ class AppDatabase extends _$AppDatabase {
             await m.database.customStatement(
               'UPDATE stocktake_items SET boxes_per_board = 1 WHERE boxes_per_board IS NULL OR boxes_per_board <= 0;',
             );
+          }
+          if (from < 12) {
+            await m.database.customStatement('''
+              UPDATE stocktake_items
+              SET boxes_per_board = (
+                SELECT b.boxes_per_board
+                FROM batches b
+                WHERE b.id = stocktake_items.batch_id
+              )
+              WHERE boxes_per_board <= 1;
+            ''');
           }
         },
       );

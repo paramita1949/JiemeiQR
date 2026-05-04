@@ -213,7 +213,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '当前库存 $boardText',
+            '当前库存 ${item.currentBoxes}箱（$boardText）',
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w700,
@@ -325,12 +325,27 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
             ..._recentSessions.map(
               (session) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '${session.monthKey} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${session.monthKey} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '删除盘库记录',
+                      onPressed: () => _deleteSession(session),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: Color(0xFFB91C1C),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -441,6 +456,37 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       _loading = false;
     });
   }
+
+  Future<void> _deleteSession(StocktakeSessionRecord session) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除盘库记录'),
+        content: Text('确认删除 ${session.monthKey} 记录？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _stocktakeDao.deleteSession(session.id);
+    if (!mounted) return;
+    if (_bundle?.session.id == session.id) {
+      setState(() => _bundle = null);
+    }
+    await _loadRecent();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已删除盘库记录')),
+    );
+  }
 }
 
 String _formatMonth(DateTime month) {
@@ -460,7 +506,7 @@ String _formatBoard(int boxes, int boxesPerBoard) {
   final board = boxes ~/ boxesPerBoard;
   final remain = boxes % boxesPerBoard;
   if (board <= 0) {
-    return '$remain箱';
+    return '$boxes箱';
   }
   if (remain == 0) {
     return '$board板';
