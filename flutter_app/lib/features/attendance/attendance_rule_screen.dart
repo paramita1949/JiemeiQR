@@ -544,7 +544,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                     );
                   },
                   icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: const Text('发送测试通知'),
+                  label: const Text('发送通知'),
                 ),
               ),
             ],
