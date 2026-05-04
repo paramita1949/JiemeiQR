@@ -47,7 +47,7 @@ class StocktakeDao {
                 productCode: row.product.code,
                 batchCode: row.batch.actualBatch,
                 dateBatch: row.batch.dateBatch,
-                initialBoxes: row.batch.initialBoxes,
+                boxesPerBoard: row.batch.boxesPerBoard,
                 currentBoxes: row.currentBoxes,
                 status: Value(StocktakeItemStatus.pending.index),
               ),

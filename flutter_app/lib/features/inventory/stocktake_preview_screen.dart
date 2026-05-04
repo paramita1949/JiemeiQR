@@ -193,7 +193,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
 
   Widget _itemCard(StocktakeItemRecord item, {required bool readOnly}) {
     final status = StocktakeItemStatus.values[item.status];
-    final delta = item.currentBoxes - item.initialBoxes;
+    final boardText = _formatBoard(item.currentBoxes, item.boxesPerBoard);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -213,7 +213,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '初始 ${item.initialBoxes}箱  当前 ${item.currentBoxes}箱  变化 ${delta > 0 ? '+' : ''}$delta箱',
+            '当前库存 $boardText',
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w700,
@@ -451,4 +451,19 @@ DateTime _defaultMonth() {
   final now = DateTime.now();
   final current = DateTime(now.year, now.month);
   return DateTime(current.year, current.month - 1);
+}
+
+String _formatBoard(int boxes, int boxesPerBoard) {
+  if (boxesPerBoard <= 0) {
+    return '$boxes箱';
+  }
+  final board = boxes ~/ boxesPerBoard;
+  final remain = boxes % boxesPerBoard;
+  if (board <= 0) {
+    return '$remain箱';
+  }
+  if (remain == 0) {
+    return '$board板';
+  }
+  return '$board板+$remain箱';
 }
