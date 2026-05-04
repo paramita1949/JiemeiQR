@@ -90,6 +90,27 @@ class AttendanceGeofenceReminderService {
     );
   }
 
+  static Future<void> showCheckinReminderNotification() async {
+    await _initNotification();
+    const android = AndroidNotificationDetails(
+      'attendance_checkin_channel',
+      '考勤签到提醒',
+      channelDescription: '进入公司围栏后的签到提醒',
+      importance: Importance.max,
+      priority: Priority.max,
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.reminder,
+      fullScreenIntent: true,
+    );
+    const details = NotificationDetails(android: android);
+    await _notifications.show(
+      202605052,
+      '签到提醒',
+      '已进入围栏范围，请完成签到',
+      details,
+    );
+  }
+
   static Future<void> showPrecheckinNotification() async {
     await _initNotification();
     const android = AndroidNotificationDetails(

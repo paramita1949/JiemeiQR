@@ -493,40 +493,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       buffer.writeln('sqlite_user_version_error=$error');
     }
 
-    Future<void> addCount(String table) async {
-      try {
-        final row = await _database
-            .customSelect('SELECT COUNT(*) AS c FROM $table;')
-            .getSingle();
-        buffer.writeln('count_$table=${row.data['c']}');
-      } catch (error) {
-        buffer.writeln('count_${table}_error=$error');
-      }
-    }
-
-    await addCount('products');
-    await addCount('batches');
-    await addCount('orders');
-    await addCount('order_items');
-    await addCount('stock_movements');
-    await addCount('stocktake_sessions');
-    await addCount('stocktake_items');
-
-    if (_stats != null) {
-      buffer.writeln('home_total_pieces=${_stats!.totalPieces}');
-      buffer.writeln('home_projected_pieces=${_stats!.projectedPieces}');
-      buffer.writeln('home_today_orders=${_stats!.todayOrders}');
-      buffer.writeln('home_pending_orders=${_stats!.pendingOrders}');
-    } else {
-      buffer.writeln('home_stats=null');
-    }
-
     buffer.writeln('--- recent_debug_events ---');
     final events = DebugEventLog.dump();
-    if (events.isEmpty) {
+    const allowTags = <String>[
+      '[GEOFENCE_',
+      '[PRECHECKIN]',
+      '[PERMISSION]',
+    ];
+    final filtered = events.where((e) {
+      for (final tag in allowTags) {
+        if (e.contains(tag)) return true;
+      }
+      return false;
+    }).toList();
+    if (filtered.isEmpty) {
       buffer.writeln('recent_debug_events=empty');
     } else {
-      for (final e in events) {
+      for (final e in filtered) {
         buffer.writeln(e);
       }
     }

@@ -13,6 +13,11 @@ import com.google.android.gms.location.LocationServices
 
 object GeofenceRegistrar {
     private const val GEOFENCE_ID = "jiemei_attendance_geofence"
+    private const val PREFS = "attendance_geofence_config"
+    private const val KEY_ENABLED = "enabled"
+    private const val KEY_LAT = "lat"
+    private const val KEY_LNG = "lng"
+    private const val KEY_RADIUS = "radius"
 
     fun register(context: Context, latitude: Double, longitude: Double, radiusMeters: Float): Result<String> {
         if (!hasLocationPermission(context)) {
@@ -34,6 +39,7 @@ object GeofenceRegistrar {
         return try {
             client.removeGeofences(pendingIntent(context))
             client.addGeofences(request, pendingIntent(context))
+            saveConfig(context, enabled = true, latitude = latitude, longitude = longitude, radiusMeters = radiusMeters)
             Result.success("REGISTER_REQUEST_SUBMITTED")
         } catch (t: Throwable) {
             Result.failure(t)
@@ -44,10 +50,31 @@ object GeofenceRegistrar {
         val client: GeofencingClient = LocationServices.getGeofencingClient(context)
         return try {
             client.removeGeofences(pendingIntent(context))
+            saveConfig(context, enabled = false, latitude = null, longitude = null, radiusMeters = null)
             Result.success("UNREGISTER_REQUEST_SUBMITTED")
         } catch (t: Throwable) {
             Result.failure(t)
         }
+    }
+
+    fun restoreIfNeeded(context: Context): Result<String> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val enabled = prefs.getBoolean(KEY_ENABLED, false)
+        if (!enabled) {
+            return Result.success("RESTORE_SKIPPED_DISABLED")
+        }
+        if (!hasLocationPermission(context)) {
+            return Result.failure(IllegalStateException("LOCATION_PERMISSION_MISSING"))
+        }
+        val latBits = prefs.getLong(KEY_LAT, Long.MIN_VALUE)
+        val lngBits = prefs.getLong(KEY_LNG, Long.MIN_VALUE)
+        val radiusBits = prefs.getInt(KEY_RADIUS, -1)
+        if (latBits == Long.MIN_VALUE || lngBits == Long.MIN_VALUE || radiusBits <= 0) {
+            return Result.failure(IllegalStateException("CONFIG_MISSING"))
+        }
+        val latitude = java.lang.Double.longBitsToDouble(latBits)
+        val longitude = java.lang.Double.longBitsToDouble(lngBits)
+        return register(context, latitude, longitude, radiusBits.toFloat())
     }
 
     private fun pendingIntent(context: Context): PendingIntent {
@@ -65,5 +92,25 @@ object GeofenceRegistrar {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         return fine || coarse
+    }
+
+    private fun saveConfig(
+        context: Context,
+        enabled: Boolean,
+        latitude: Double?,
+        longitude: Double?,
+        radiusMeters: Float?,
+    ) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val editor = prefs.edit().putBoolean(KEY_ENABLED, enabled)
+        if (!enabled || latitude == null || longitude == null || radiusMeters == null) {
+            editor.remove(KEY_LAT).remove(KEY_LNG).remove(KEY_RADIUS).apply()
+            return
+        }
+        editor
+            .putLong(KEY_LAT, java.lang.Double.doubleToRawLongBits(latitude))
+            .putLong(KEY_LNG, java.lang.Double.doubleToRawLongBits(longitude))
+            .putInt(KEY_RADIUS, radiusMeters.toInt())
+            .apply()
     }
 }

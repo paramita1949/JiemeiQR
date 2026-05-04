@@ -230,6 +230,96 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
   }
 
+  Future<void> _runGeofenceTest() async {
+    final messenger = ScaffoldMessenger.of(context);
+    DebugEventLog.add('GEOFENCE_TEST', 'tap 围栏测试');
+    final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+      requestIfNeeded: true,
+    );
+    if (!state.locationServiceEnabled ||
+        state.locationPermission == LocationPermission.denied ||
+        state.locationPermission == LocationPermission.deniedForever) {
+      DebugEventLog.add('GEOFENCE_TEST', 'permission/location_service_not_ready');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('定位服务或定位权限未就绪，无法执行围栏测试')),
+      );
+      return;
+    }
+
+    final fenceLat = double.tryParse(_latController.text.trim());
+    final fenceLng = double.tryParse(_lngController.text.trim());
+    final radius = (int.tryParse(_radiusController.text.trim()) ?? 300).clamp(50, 2000);
+    if (fenceLat == null || fenceLng == null) {
+      DebugEventLog.add('GEOFENCE_TEST', 'fence_center_missing');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('请先设置围栏经纬度')),
+      );
+      return;
+    }
+
+    Position? pos;
+    try {
+      pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 5),
+      );
+    } catch (_) {}
+    try {
+      pos ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+    } catch (_) {}
+    pos ??= await Geolocator.getLastKnownPosition();
+    if (pos == null) {
+      DebugEventLog.add('GEOFENCE_TEST', 'position_null');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('定位失败，请稍后重试')),
+      );
+      return;
+    }
+    final currentPos = pos;
+
+    final distance = Geolocator.distanceBetween(
+      currentPos.latitude,
+      currentPos.longitude,
+      fenceLat,
+      fenceLng,
+    );
+    final inside = distance <= radius;
+    DebugEventLog.add(
+      'GEOFENCE_TEST',
+      'distance=${distance.toStringAsFixed(1)} radius=$radius inside=$inside lat=${currentPos.latitude} lng=${currentPos.longitude}',
+    );
+
+    if (inside) {
+      await AttendanceGeofenceReminderService.showCheckinReminderNotification();
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('围栏测试结果'),
+        content: Text(
+          '当前定位：${currentPos.latitude.toStringAsFixed(6)}, ${currentPos.longitude.toStringAsFixed(6)}\n'
+          '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
+          '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
+          '${inside ? '判定：已进入围栏（已触发正式签到提醒）' : '判定：未进入围栏（未触发提醒）'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _exportAttendanceBackup() async {
     final file = await _dao.createAttendanceBackup();
     _backups = await _dao.listAttendanceBackups();
@@ -537,14 +627,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: () async {
-                    await AttendanceGeofenceReminderService.showDebugNotification();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已发送测试通知')),
-                    );
+                    await _runGeofenceTest();
                   },
                   icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: const Text('发送通知'),
+                  label: const Text('围栏测试'),
                 ),
               ),
             ],
