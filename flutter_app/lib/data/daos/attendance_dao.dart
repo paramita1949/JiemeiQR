@@ -295,6 +295,10 @@ class AttendanceDao {
     await _saveNormalizedRecord(updated, rule: rule);
   }
 
+  Future<void> deleteRecordById(int recordId) async {
+    await (_db.delete(_db.attendanceRecords)..where((t) => t.id.equals(recordId))).go();
+  }
+
   Future<AttendanceRecord> getOrCreateRecordByDay(DateTime day) async {
     final normalized = DateTime(day.year, day.month, day.day);
     final existing = await (_db.select(_db.attendanceRecords)

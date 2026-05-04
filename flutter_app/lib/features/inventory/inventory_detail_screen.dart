@@ -89,19 +89,24 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     ),
                     const SizedBox(width: 8),
                     if (compactActions) ...[
-                      IconButton.filled(
+                      _HeaderActionButton(
                         key: const Key('inventoryStocktakeButton'),
-                        tooltip: '盘库',
+                        label: '盘',
+                        icon: Icons.fact_check_outlined,
+                        primary: true,
+                        compact: true,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const StocktakePreviewScreen(),
                           ),
                         ),
-                        icon: const Icon(Icons.fact_check_outlined),
                       ),
                       const SizedBox(width: 8),
-                      IconButton.filled(
-                        tooltip: '录入',
+                      _HeaderActionButton(
+                        label: '录',
+                        icon: Icons.add,
+                        primary: false,
+                        compact: true,
                         onPressed: () async {
                           await pushAndRefresh(
                             context,
@@ -113,21 +118,26 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                             onRefresh: () => _refreshRows(refreshTotals: true),
                           );
                         },
-                        icon: const Icon(Icons.add),
                       ),
                     ] else ...[
-                      FilledButton.icon(
+                      _HeaderActionButton(
                         key: const Key('inventoryStocktakeButton'),
+                        label: '盘',
+                        icon: Icons.fact_check_outlined,
+                        primary: true,
+                        compact: false,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const StocktakePreviewScreen(),
                           ),
                         ),
-                        icon: const Icon(Icons.fact_check_outlined),
-                        label: const Text('盘库'),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton.icon(
+                      _HeaderActionButton(
+                        label: '录',
+                        icon: Icons.add,
+                        primary: false,
+                        compact: false,
                         onPressed: () async {
                           await pushAndRefresh(
                             context,
@@ -139,8 +149,6 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                             onRefresh: () => _refreshRows(refreshTotals: true),
                           );
                         },
-                        icon: const Icon(Icons.add),
-                        label: const Text('录入'),
                       ),
                     ],
                   ],
@@ -926,6 +934,101 @@ class _StatusPill extends StatelessWidget {
           color: color,
           fontSize: 12,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderActionButton extends StatelessWidget {
+  const _HeaderActionButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    required this.primary,
+    required this.compact,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool primary;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = primary ? Colors.white : const Color(0xFF1D4ED8);
+    final backgroundTop = primary
+        ? const Color(0xFF2D6BFF)
+        : const Color(0xFFF1F6FF);
+    final backgroundBottom = primary
+        ? const Color(0xFF1D4ED8)
+        : const Color(0xFFE4EEFF);
+    final border = primary ? const Color(0xFF3B82F6) : const Color(0xFFC9DBFF);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(color: border, width: 1),
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: primary ? 0.12 : 0.06),
+            blurRadius: primary ? 18 : 12,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: primary
+                ? Colors.white.withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.75),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Material(
+        shape: shape,
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              colors: [backgroundTop, backgroundBottom],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 11 : 13,
+                vertical: compact ? 8 : 9,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: compact ? 19 : 20,
+                    color: foreground,
+                  ),
+                  SizedBox(width: compact ? 5 : 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: compact ? 16 : 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

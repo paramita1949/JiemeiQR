@@ -81,6 +81,28 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
     Navigator.of(context).pop(true);
   }
 
+  Future<void> _deleteRecord() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('删除当天记录'),
+        content: Text('确认删除 ${_md(widget.record.day)} 的签到记录吗？删除后无法恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.dao.deleteRecordById(widget.record.id);
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,6 +161,19 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
           ),
           const SizedBox(height: 16),
           FilledButton(onPressed: _save, child: const Text('保存')),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626),
+                side: const BorderSide(color: Color(0xFFFCA5A5)),
+              ),
+              onPressed: _deleteRecord,
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('彻底删除当天记录'),
+            ),
+          ),
         ],
       ),
     );
