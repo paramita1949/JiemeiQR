@@ -112,6 +112,73 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     );
   }
 
+  Future<void> _saveGeofenceOnly({bool silent = true}) async {
+    final radius = int.tryParse(_radiusController.text.trim()) ?? 300;
+    final normalizedRadius = radius.clamp(50, 2000);
+    final lat = double.tryParse(_latController.text.trim());
+    final lng = double.tryParse(_lngController.text.trim());
+
+    await _dao.saveRule(
+      AttendanceRulesCompanion(
+        officeLat: Value(lat),
+        officeLng: Value(lng),
+        officeRadiusMeters: Value(normalizedRadius),
+        geofenceEnabled: Value(_geofenceEnabled),
+        checkinReminderEnabled: Value(_checkInRemindEnabled),
+        checkoutReminderEnabled: Value(_checkOutRemindEnabled),
+      ),
+    );
+
+    try {
+      await AttendanceGeofenceBridge.syncGeofence(
+        enabled: _geofenceEnabled,
+        lat: lat,
+        lng: lng,
+        radius: normalizedRadius,
+      );
+    } catch (_) {}
+
+    if (!mounted || silent) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('围栏设置已保存')),
+    );
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+      requestIfNeeded: true,
+    );
+    if (!state.locationServiceEnabled ||
+        state.locationPermission == LocationPermission.denied ||
+        state.locationPermission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('定位不可用，请先开启定位服务与定位权限')),
+      );
+      return;
+    }
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      if (!mounted) return;
+      setState(() {
+        _latController.text = pos.latitude.toStringAsFixed(6);
+        _lngController.text = pos.longitude.toStringAsFixed(6);
+      });
+      await _saveGeofenceOnly(silent: true);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('已获取当前位置：${_latController.text}, ${_lngController.text}')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('获取当前位置失败，请稍后重试')),
+      );
+    }
+  }
+
   Future<void> _exportAttendanceBackup() async {
     final file = await _dao.createAttendanceBackup();
     _backups = await _dao.listAttendanceBackups();
@@ -205,6 +272,14 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             child: Column(
               children: [
                 _switchTile('启用围栏提醒', _geofenceEnabled, (v) => setState(() => _geofenceEnabled = v)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _useCurrentLocation,
+                    icon: const Icon(Icons.my_location_rounded, size: 18),
+                    label: const Text('获取当前位置'),
+                  ),
+                ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -485,7 +560,12 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         activeThumbColor: const Color(0xFF1D4ED8),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         value: value,
-        onChanged: onChanged,
+        onChanged: (v) async {
+          onChanged(v);
+          if (title == '启用围栏提醒' || title == '上班提醒' || title == '下班提醒') {
+            await _saveGeofenceOnly();
+          }
+        },
       ),
     );
   }
