@@ -174,26 +174,58 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
     try {
       DebugEventLog.add('GEOFENCE_LOCATE', 'begin Geolocator.getCurrentPosition');
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      Position? pos;
+      try {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'try accuracy=balanced');
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 5),
+        );
+      } catch (e) {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'balanced failed: $e');
+      }
+      if (pos != null) {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'balanced success');
+      } else {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'try accuracy=high');
+      }
+      try {
+        pos ??= await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+      } catch (e) {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'high failed: $e');
+      }
+      pos ??= await Geolocator.getLastKnownPosition();
+      if (pos == null) {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'lastKnownPosition is null');
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('定位超时：请先打开系统地图定位一次，再重试')),
+        );
+        return;
+      }
+      final currentPos = pos!;
       DebugEventLog.add(
         'GEOFENCE_LOCATE',
-        'position lat=${pos.latitude} lng=${pos.longitude} accuracy=${pos.accuracy}',
+        'position lat=${currentPos.latitude} lng=${currentPos.longitude} accuracy=${currentPos.accuracy}',
       );
       if (!mounted) return;
       setState(() {
-        _latController.text = pos.latitude.toStringAsFixed(6);
-        _lngController.text = pos.longitude.toStringAsFixed(6);
+        _latController.text = currentPos.latitude.toStringAsFixed(6);
+        _lngController.text = currentPos.longitude.toStringAsFixed(6);
       });
       await _saveGeofenceOnly(silent: true);
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('已获取当前位置：${_latController.text}, ${_lngController.text}')),
       );
-    } catch (_) {
-      DebugEventLog.add('GEOFENCE_LOCATE', 'getCurrentPosition failed');
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_LOCATE', 'get location failed: $e');
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('获取当前位置失败，请稍后重试')),
+        SnackBar(content: Text('获取当前位置失败：$e')),
       );
     }
   }
