@@ -36,6 +36,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   String? _lastSerialTail3Range;
   String? _lastSerialTail4Range;
   int? _rangeSpan;
+  int _ignoredOutlierCount = 0;
   int? _matchedBoxesPerBoard;
   MatchedBaseInfo? _matchedBaseInfo;
   QrBuildResult? _latestBuildResult;
@@ -159,10 +160,6 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
           rejected += 1;
           continue;
         }
-        if (_isOutlierSerial(parsed)) {
-          rejected += 1;
-          continue;
-        }
         _scans.add(parsed);
         accepted += 1;
       }
@@ -225,29 +222,11 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       _showMessage('仅支持同产品、同批号、同日期批次');
       return;
     }
-    if (_isOutlierSerial(parsed)) {
-      _showMessage('该编码偏离范围过大（>100），已忽略');
-      return;
-    }
     setState(() => _scans.add(parsed));
     if (_matchedBoxesPerBoard == null) {
       _loadMatchedBoxesPerBoard(parsed.batch);
     }
     _recomputeEstimate();
-  }
-
-  bool _isOutlierSerial(ParsedQr parsed) {
-    if (_scans.length < 2) {
-      return false;
-    }
-    var minDistance = 1 << 30;
-    for (final item in _scans) {
-      final diff = (item.serialInt - parsed.serialInt).abs();
-      if (diff < minDistance) {
-        minDistance = diff;
-      }
-    }
-    return minDistance > 100;
   }
 
   void _recomputeEstimate() {
@@ -256,11 +235,20 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     if (first == null || boxesPerBoard == null) {
       return;
     }
-    final serials = _scans.map((e) => e.serialInt).toSet().toList()..sort();
-    if (serials.length < 2) {
+    final stable = _selectStableSerials();
+    if (stable.serials.length < 2) {
+      setState(() {
+        _ignoredOutlierCount = stable.ignoredCount;
+        _lastEstimate = null;
+        _latestBuildResult = null;
+        _lastSerialTail3Range = null;
+        _lastSerialTail4Range = null;
+        _rangeSpan = null;
+      });
       return;
     }
     try {
+      final serials = stable.serials;
       final sample = min(6, serials.length);
       final estimate = QrBoardAiEstimator.estimateRange(
         boxesPerBoard: boxesPerBoard,
@@ -277,6 +265,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         startSerial: estimate.startSerial,
       );
       setState(() {
+        _ignoredOutlierCount = stable.ignoredCount;
         _lastEstimate = estimate;
         _latestBuildResult = result;
         final startSerial = result.records.first.serial;
@@ -292,6 +281,42 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     } catch (_) {
       // keep scanning with existing last estimate if any
     }
+  }
+
+  _StableSerials _selectStableSerials() {
+    final serials = _scans.map((e) => e.serialInt).toSet().toList()..sort();
+    if (serials.length <= 1) {
+      return _StableSerials(serials, 0);
+    }
+
+    const maxNeighborGap = 100;
+    final clusters = <List<int>>[];
+    var current = <int>[serials.first];
+    for (var i = 1; i < serials.length; i++) {
+      final value = serials[i];
+      final prev = serials[i - 1];
+      if ((value - prev).abs() <= maxNeighborGap) {
+        current.add(value);
+      } else {
+        clusters.add(current);
+        current = <int>[value];
+      }
+    }
+    clusters.add(current);
+
+    clusters.sort((a, b) {
+      final byCount = b.length.compareTo(a.length);
+      if (byCount != 0) {
+        return byCount;
+      }
+      final aSpan = (a.last - a.first).abs();
+      final bSpan = (b.last - b.first).abs();
+      return aSpan.compareTo(bSpan);
+    });
+
+    final best = clusters.first;
+    final ignored = serials.length - best.length;
+    return _StableSerials(best, ignored);
   }
 
   void _openPreview() {
@@ -424,6 +449,16 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (_ignoredOutlierCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '已自动忽略偏差样本：$_ignoredOutlierCount',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   '流水号末3位范围：${_lastSerialTail3Range ?? "-"}',
@@ -497,4 +532,11 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     }
     return serial.substring(serial.length - digits);
   }
+}
+
+class _StableSerials {
+  const _StableSerials(this.serials, this.ignoredCount);
+
+  final List<int> serials;
+  final int ignoredCount;
 }
