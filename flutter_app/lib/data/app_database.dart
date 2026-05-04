@@ -72,10 +72,22 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(geofenceDailyStates);
           }
           if (from < 8) {
-            await m.addColumn(attendanceRecords, attendanceRecords.leaveMinutes);
+            final exists = await _hasColumn('attendance_records', 'leave_minutes');
+            if (!exists) {
+              await m.addColumn(attendanceRecords, attendanceRecords.leaveMinutes);
+            }
           }
         },
       );
+
+  Future<bool> _hasColumn(String table, String column) async {
+    final rows = await customSelect('PRAGMA table_info($table);').get();
+    for (final row in rows) {
+      final name = row.data['name']?.toString();
+      if (name == column) return true;
+    }
+    return false;
+  }
 
   Future<void> _createPerformanceIndexes(Migrator m) async {
     await m.database.customStatement(
