@@ -16,6 +16,7 @@ import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_import_intent_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -113,10 +114,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(18),
             children: [
-              const PageTitle(
-                icon: Icons.warehouse_outlined,
-                title: '洁美',
-                subtitle: '浙江仓订单与库存工作台',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Expanded(
+                    child: PageTitle(
+                      icon: Icons.warehouse_outlined,
+                      title: '洁美',
+                      subtitle: '浙江仓订单与库存工作台',
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: '复制日志',
+                    onPressed: _copyDebugLog,
+                    icon: const Icon(Icons.bug_report_outlined),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               _InventoryStatsSection(
@@ -124,15 +137,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 loading: _loadingStats,
               ),
               const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: _copyDebugLog,
-                  icon: const Icon(Icons.bug_report_outlined, size: 18),
-                  label: const Text('日志'),
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 '常用功能',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -446,6 +450,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       buffer.writeln('home_pending_orders=${_stats!.pendingOrders}');
     } else {
       buffer.writeln('home_stats=null');
+    }
+
+    buffer.writeln('--- recent_debug_events ---');
+    final events = DebugEventLog.dump();
+    if (events.isEmpty) {
+      buffer.writeln('recent_debug_events=empty');
+    } else {
+      for (final e in events) {
+        buffer.writeln(e);
+      }
     }
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));

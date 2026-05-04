@@ -6,6 +6,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:share_plus/share_plus.dart';
 
 class AttendanceRuleScreen extends StatefulWidget {
@@ -118,6 +119,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
 
+    DebugEventLog.add(
+      'GEOFENCE_SAVE',
+      'start enabled=$_geofenceEnabled lat=$lat lng=$lng radius=$normalizedRadius',
+    );
     await _dao.saveRule(
       AttendanceRulesCompanion(
         officeLat: Value(lat),
@@ -136,7 +141,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         lng: lng,
         radius: normalizedRadius,
       );
-    } catch (_) {}
+      DebugEventLog.add('GEOFENCE_SAVE', 'syncGeofence success');
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_SAVE', 'syncGeofence failed: $e');
+    }
 
     if (!mounted || silent) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -146,8 +154,13 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   Future<void> _useCurrentLocation() async {
     final messenger = ScaffoldMessenger.of(context);
+    DebugEventLog.add('GEOFENCE_LOCATE', 'tap 获取当前位置');
     final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
       requestIfNeeded: true,
+    );
+    DebugEventLog.add(
+      'GEOFENCE_LOCATE',
+      'permission service=${state.locationServiceEnabled} location=${state.locationPermission.name} notification=${state.notificationGranted}',
     );
     if (!state.locationServiceEnabled ||
         state.locationPermission == LocationPermission.denied ||
@@ -160,7 +173,12 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
 
     try {
+      DebugEventLog.add('GEOFENCE_LOCATE', 'begin Geolocator.getCurrentPosition');
       final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      DebugEventLog.add(
+        'GEOFENCE_LOCATE',
+        'position lat=${pos.latitude} lng=${pos.longitude} accuracy=${pos.accuracy}',
+      );
       if (!mounted) return;
       setState(() {
         _latController.text = pos.latitude.toStringAsFixed(6);
@@ -172,6 +190,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         SnackBar(content: Text('已获取当前位置：${_latController.text}, ${_lngController.text}')),
       );
     } catch (_) {
+      DebugEventLog.add('GEOFENCE_LOCATE', 'getCurrentPosition failed');
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('获取当前位置失败，请稍后重试')),

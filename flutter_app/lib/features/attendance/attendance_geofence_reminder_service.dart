@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 class AttendanceGeofenceReminderService {
   AttendanceGeofenceReminderService._();
@@ -93,6 +94,7 @@ class AttendanceGeofenceReminderService {
     bool requestIfNeeded = true,
   }) async {
     await _initNotification();
+    DebugEventLog.add('PERMISSION', 'ensureSystemPermissions request=$requestIfNeeded');
     final locationServiceEnabled = await Geolocator.isLocationServiceEnabled();
     var locationPermission = await Geolocator.checkPermission();
     if (requestIfNeeded && locationPermission == LocationPermission.denied) {
@@ -108,6 +110,10 @@ class AttendanceGeofenceReminderService {
         notificationGranted = await androidPlugin.requestNotificationsPermission();
       }
     }
+    DebugEventLog.add(
+      'PERMISSION',
+      'result service=$locationServiceEnabled location=${locationPermission.name} notification=${notificationGranted ?? true}',
+    );
 
     return AttendancePermissionState(
       locationServiceEnabled: locationServiceEnabled,
