@@ -2356,6 +2356,2441 @@ class StockMovementsCompanion extends UpdateCompanion<StockMovement> {
   }
 }
 
+class $AttendanceRulesTable extends AttendanceRules
+    with TableInfo<$AttendanceRulesTable, AttendanceRule> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AttendanceRulesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _workStartTimeMeta =
+      const VerificationMeta('workStartTime');
+  @override
+  late final GeneratedColumn<String> workStartTime = GeneratedColumn<String>(
+      'work_start_time', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('08:00'));
+  static const VerificationMeta _workEndTimeMeta =
+      const VerificationMeta('workEndTime');
+  @override
+  late final GeneratedColumn<String> workEndTime = GeneratedColumn<String>(
+      'work_end_time', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('17:00'));
+  static const VerificationMeta _lateGraceMinutesMeta =
+      const VerificationMeta('lateGraceMinutes');
+  @override
+  late final GeneratedColumn<int> lateGraceMinutes = GeneratedColumn<int>(
+      'late_grace_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _weekendTypeMeta =
+      const VerificationMeta('weekendType');
+  @override
+  late final GeneratedColumn<String> weekendType = GeneratedColumn<String>(
+      'weekend_type', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('double'));
+  static const VerificationMeta _overtimeRoundingMinutesMeta =
+      const VerificationMeta('overtimeRoundingMinutes');
+  @override
+  late final GeneratedColumn<int> overtimeRoundingMinutes =
+      GeneratedColumn<int>('overtime_rounding_minutes', aliasedName, false,
+          type: DriftSqlType.int,
+          requiredDuringInsert: false,
+          defaultValue: const Constant(30));
+  static const VerificationMeta _officeLatMeta =
+      const VerificationMeta('officeLat');
+  @override
+  late final GeneratedColumn<double> officeLat = GeneratedColumn<double>(
+      'office_lat', aliasedName, true,
+      type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _officeLngMeta =
+      const VerificationMeta('officeLng');
+  @override
+  late final GeneratedColumn<double> officeLng = GeneratedColumn<double>(
+      'office_lng', aliasedName, true,
+      type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _officeRadiusMetersMeta =
+      const VerificationMeta('officeRadiusMeters');
+  @override
+  late final GeneratedColumn<int> officeRadiusMeters = GeneratedColumn<int>(
+      'office_radius_meters', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(300));
+  static const VerificationMeta _geofenceEnabledMeta =
+      const VerificationMeta('geofenceEnabled');
+  @override
+  late final GeneratedColumn<bool> geofenceEnabled = GeneratedColumn<bool>(
+      'geofence_enabled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("geofence_enabled" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _checkinReminderEnabledMeta =
+      const VerificationMeta('checkinReminderEnabled');
+  @override
+  late final GeneratedColumn<bool> checkinReminderEnabled =
+      GeneratedColumn<bool>('checkin_reminder_enabled', aliasedName, false,
+          type: DriftSqlType.bool,
+          requiredDuringInsert: false,
+          defaultConstraints: GeneratedColumn.constraintIsAlways(
+              'CHECK ("checkin_reminder_enabled" IN (0, 1))'),
+          defaultValue: const Constant(true));
+  static const VerificationMeta _checkoutReminderEnabledMeta =
+      const VerificationMeta('checkoutReminderEnabled');
+  @override
+  late final GeneratedColumn<bool> checkoutReminderEnabled =
+      GeneratedColumn<bool>('checkout_reminder_enabled', aliasedName, false,
+          type: DriftSqlType.bool,
+          requiredDuringInsert: false,
+          defaultConstraints: GeneratedColumn.constraintIsAlways(
+              'CHECK ("checkout_reminder_enabled" IN (0, 1))'),
+          defaultValue: const Constant(false));
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        workStartTime,
+        workEndTime,
+        lateGraceMinutes,
+        weekendType,
+        overtimeRoundingMinutes,
+        officeLat,
+        officeLng,
+        officeRadiusMeters,
+        geofenceEnabled,
+        checkinReminderEnabled,
+        checkoutReminderEnabled,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'attendance_rules';
+  @override
+  VerificationContext validateIntegrity(Insertable<AttendanceRule> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('work_start_time')) {
+      context.handle(
+          _workStartTimeMeta,
+          workStartTime.isAcceptableOrUnknown(
+              data['work_start_time']!, _workStartTimeMeta));
+    }
+    if (data.containsKey('work_end_time')) {
+      context.handle(
+          _workEndTimeMeta,
+          workEndTime.isAcceptableOrUnknown(
+              data['work_end_time']!, _workEndTimeMeta));
+    }
+    if (data.containsKey('late_grace_minutes')) {
+      context.handle(
+          _lateGraceMinutesMeta,
+          lateGraceMinutes.isAcceptableOrUnknown(
+              data['late_grace_minutes']!, _lateGraceMinutesMeta));
+    }
+    if (data.containsKey('weekend_type')) {
+      context.handle(
+          _weekendTypeMeta,
+          weekendType.isAcceptableOrUnknown(
+              data['weekend_type']!, _weekendTypeMeta));
+    }
+    if (data.containsKey('overtime_rounding_minutes')) {
+      context.handle(
+          _overtimeRoundingMinutesMeta,
+          overtimeRoundingMinutes.isAcceptableOrUnknown(
+              data['overtime_rounding_minutes']!,
+              _overtimeRoundingMinutesMeta));
+    }
+    if (data.containsKey('office_lat')) {
+      context.handle(_officeLatMeta,
+          officeLat.isAcceptableOrUnknown(data['office_lat']!, _officeLatMeta));
+    }
+    if (data.containsKey('office_lng')) {
+      context.handle(_officeLngMeta,
+          officeLng.isAcceptableOrUnknown(data['office_lng']!, _officeLngMeta));
+    }
+    if (data.containsKey('office_radius_meters')) {
+      context.handle(
+          _officeRadiusMetersMeta,
+          officeRadiusMeters.isAcceptableOrUnknown(
+              data['office_radius_meters']!, _officeRadiusMetersMeta));
+    }
+    if (data.containsKey('geofence_enabled')) {
+      context.handle(
+          _geofenceEnabledMeta,
+          geofenceEnabled.isAcceptableOrUnknown(
+              data['geofence_enabled']!, _geofenceEnabledMeta));
+    }
+    if (data.containsKey('checkin_reminder_enabled')) {
+      context.handle(
+          _checkinReminderEnabledMeta,
+          checkinReminderEnabled.isAcceptableOrUnknown(
+              data['checkin_reminder_enabled']!, _checkinReminderEnabledMeta));
+    }
+    if (data.containsKey('checkout_reminder_enabled')) {
+      context.handle(
+          _checkoutReminderEnabledMeta,
+          checkoutReminderEnabled.isAcceptableOrUnknown(
+              data['checkout_reminder_enabled']!,
+              _checkoutReminderEnabledMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AttendanceRule map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AttendanceRule(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      workStartTime: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}work_start_time'])!,
+      workEndTime: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}work_end_time'])!,
+      lateGraceMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}late_grace_minutes'])!,
+      weekendType: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}weekend_type'])!,
+      overtimeRoundingMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}overtime_rounding_minutes'])!,
+      officeLat: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}office_lat']),
+      officeLng: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}office_lng']),
+      officeRadiusMeters: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}office_radius_meters'])!,
+      geofenceEnabled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}geofence_enabled'])!,
+      checkinReminderEnabled: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool,
+          data['${effectivePrefix}checkin_reminder_enabled'])!,
+      checkoutReminderEnabled: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool,
+          data['${effectivePrefix}checkout_reminder_enabled'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $AttendanceRulesTable createAlias(String alias) {
+    return $AttendanceRulesTable(attachedDatabase, alias);
+  }
+}
+
+class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
+  final int id;
+  final String workStartTime;
+  final String workEndTime;
+  final int lateGraceMinutes;
+  final String weekendType;
+  final int overtimeRoundingMinutes;
+  final double? officeLat;
+  final double? officeLng;
+  final int officeRadiusMeters;
+  final bool geofenceEnabled;
+  final bool checkinReminderEnabled;
+  final bool checkoutReminderEnabled;
+  final DateTime updatedAt;
+  const AttendanceRule(
+      {required this.id,
+      required this.workStartTime,
+      required this.workEndTime,
+      required this.lateGraceMinutes,
+      required this.weekendType,
+      required this.overtimeRoundingMinutes,
+      this.officeLat,
+      this.officeLng,
+      required this.officeRadiusMeters,
+      required this.geofenceEnabled,
+      required this.checkinReminderEnabled,
+      required this.checkoutReminderEnabled,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['work_start_time'] = Variable<String>(workStartTime);
+    map['work_end_time'] = Variable<String>(workEndTime);
+    map['late_grace_minutes'] = Variable<int>(lateGraceMinutes);
+    map['weekend_type'] = Variable<String>(weekendType);
+    map['overtime_rounding_minutes'] = Variable<int>(overtimeRoundingMinutes);
+    if (!nullToAbsent || officeLat != null) {
+      map['office_lat'] = Variable<double>(officeLat);
+    }
+    if (!nullToAbsent || officeLng != null) {
+      map['office_lng'] = Variable<double>(officeLng);
+    }
+    map['office_radius_meters'] = Variable<int>(officeRadiusMeters);
+    map['geofence_enabled'] = Variable<bool>(geofenceEnabled);
+    map['checkin_reminder_enabled'] = Variable<bool>(checkinReminderEnabled);
+    map['checkout_reminder_enabled'] = Variable<bool>(checkoutReminderEnabled);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AttendanceRulesCompanion toCompanion(bool nullToAbsent) {
+    return AttendanceRulesCompanion(
+      id: Value(id),
+      workStartTime: Value(workStartTime),
+      workEndTime: Value(workEndTime),
+      lateGraceMinutes: Value(lateGraceMinutes),
+      weekendType: Value(weekendType),
+      overtimeRoundingMinutes: Value(overtimeRoundingMinutes),
+      officeLat: officeLat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(officeLat),
+      officeLng: officeLng == null && nullToAbsent
+          ? const Value.absent()
+          : Value(officeLng),
+      officeRadiusMeters: Value(officeRadiusMeters),
+      geofenceEnabled: Value(geofenceEnabled),
+      checkinReminderEnabled: Value(checkinReminderEnabled),
+      checkoutReminderEnabled: Value(checkoutReminderEnabled),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AttendanceRule.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AttendanceRule(
+      id: serializer.fromJson<int>(json['id']),
+      workStartTime: serializer.fromJson<String>(json['workStartTime']),
+      workEndTime: serializer.fromJson<String>(json['workEndTime']),
+      lateGraceMinutes: serializer.fromJson<int>(json['lateGraceMinutes']),
+      weekendType: serializer.fromJson<String>(json['weekendType']),
+      overtimeRoundingMinutes:
+          serializer.fromJson<int>(json['overtimeRoundingMinutes']),
+      officeLat: serializer.fromJson<double?>(json['officeLat']),
+      officeLng: serializer.fromJson<double?>(json['officeLng']),
+      officeRadiusMeters: serializer.fromJson<int>(json['officeRadiusMeters']),
+      geofenceEnabled: serializer.fromJson<bool>(json['geofenceEnabled']),
+      checkinReminderEnabled:
+          serializer.fromJson<bool>(json['checkinReminderEnabled']),
+      checkoutReminderEnabled:
+          serializer.fromJson<bool>(json['checkoutReminderEnabled']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'workStartTime': serializer.toJson<String>(workStartTime),
+      'workEndTime': serializer.toJson<String>(workEndTime),
+      'lateGraceMinutes': serializer.toJson<int>(lateGraceMinutes),
+      'weekendType': serializer.toJson<String>(weekendType),
+      'overtimeRoundingMinutes':
+          serializer.toJson<int>(overtimeRoundingMinutes),
+      'officeLat': serializer.toJson<double?>(officeLat),
+      'officeLng': serializer.toJson<double?>(officeLng),
+      'officeRadiusMeters': serializer.toJson<int>(officeRadiusMeters),
+      'geofenceEnabled': serializer.toJson<bool>(geofenceEnabled),
+      'checkinReminderEnabled': serializer.toJson<bool>(checkinReminderEnabled),
+      'checkoutReminderEnabled':
+          serializer.toJson<bool>(checkoutReminderEnabled),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AttendanceRule copyWith(
+          {int? id,
+          String? workStartTime,
+          String? workEndTime,
+          int? lateGraceMinutes,
+          String? weekendType,
+          int? overtimeRoundingMinutes,
+          Value<double?> officeLat = const Value.absent(),
+          Value<double?> officeLng = const Value.absent(),
+          int? officeRadiusMeters,
+          bool? geofenceEnabled,
+          bool? checkinReminderEnabled,
+          bool? checkoutReminderEnabled,
+          DateTime? updatedAt}) =>
+      AttendanceRule(
+        id: id ?? this.id,
+        workStartTime: workStartTime ?? this.workStartTime,
+        workEndTime: workEndTime ?? this.workEndTime,
+        lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
+        weekendType: weekendType ?? this.weekendType,
+        overtimeRoundingMinutes:
+            overtimeRoundingMinutes ?? this.overtimeRoundingMinutes,
+        officeLat: officeLat.present ? officeLat.value : this.officeLat,
+        officeLng: officeLng.present ? officeLng.value : this.officeLng,
+        officeRadiusMeters: officeRadiusMeters ?? this.officeRadiusMeters,
+        geofenceEnabled: geofenceEnabled ?? this.geofenceEnabled,
+        checkinReminderEnabled:
+            checkinReminderEnabled ?? this.checkinReminderEnabled,
+        checkoutReminderEnabled:
+            checkoutReminderEnabled ?? this.checkoutReminderEnabled,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  AttendanceRule copyWithCompanion(AttendanceRulesCompanion data) {
+    return AttendanceRule(
+      id: data.id.present ? data.id.value : this.id,
+      workStartTime: data.workStartTime.present
+          ? data.workStartTime.value
+          : this.workStartTime,
+      workEndTime:
+          data.workEndTime.present ? data.workEndTime.value : this.workEndTime,
+      lateGraceMinutes: data.lateGraceMinutes.present
+          ? data.lateGraceMinutes.value
+          : this.lateGraceMinutes,
+      weekendType:
+          data.weekendType.present ? data.weekendType.value : this.weekendType,
+      overtimeRoundingMinutes: data.overtimeRoundingMinutes.present
+          ? data.overtimeRoundingMinutes.value
+          : this.overtimeRoundingMinutes,
+      officeLat: data.officeLat.present ? data.officeLat.value : this.officeLat,
+      officeLng: data.officeLng.present ? data.officeLng.value : this.officeLng,
+      officeRadiusMeters: data.officeRadiusMeters.present
+          ? data.officeRadiusMeters.value
+          : this.officeRadiusMeters,
+      geofenceEnabled: data.geofenceEnabled.present
+          ? data.geofenceEnabled.value
+          : this.geofenceEnabled,
+      checkinReminderEnabled: data.checkinReminderEnabled.present
+          ? data.checkinReminderEnabled.value
+          : this.checkinReminderEnabled,
+      checkoutReminderEnabled: data.checkoutReminderEnabled.present
+          ? data.checkoutReminderEnabled.value
+          : this.checkoutReminderEnabled,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttendanceRule(')
+          ..write('id: $id, ')
+          ..write('workStartTime: $workStartTime, ')
+          ..write('workEndTime: $workEndTime, ')
+          ..write('lateGraceMinutes: $lateGraceMinutes, ')
+          ..write('weekendType: $weekendType, ')
+          ..write('overtimeRoundingMinutes: $overtimeRoundingMinutes, ')
+          ..write('officeLat: $officeLat, ')
+          ..write('officeLng: $officeLng, ')
+          ..write('officeRadiusMeters: $officeRadiusMeters, ')
+          ..write('geofenceEnabled: $geofenceEnabled, ')
+          ..write('checkinReminderEnabled: $checkinReminderEnabled, ')
+          ..write('checkoutReminderEnabled: $checkoutReminderEnabled, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      workStartTime,
+      workEndTime,
+      lateGraceMinutes,
+      weekendType,
+      overtimeRoundingMinutes,
+      officeLat,
+      officeLng,
+      officeRadiusMeters,
+      geofenceEnabled,
+      checkinReminderEnabled,
+      checkoutReminderEnabled,
+      updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AttendanceRule &&
+          other.id == this.id &&
+          other.workStartTime == this.workStartTime &&
+          other.workEndTime == this.workEndTime &&
+          other.lateGraceMinutes == this.lateGraceMinutes &&
+          other.weekendType == this.weekendType &&
+          other.overtimeRoundingMinutes == this.overtimeRoundingMinutes &&
+          other.officeLat == this.officeLat &&
+          other.officeLng == this.officeLng &&
+          other.officeRadiusMeters == this.officeRadiusMeters &&
+          other.geofenceEnabled == this.geofenceEnabled &&
+          other.checkinReminderEnabled == this.checkinReminderEnabled &&
+          other.checkoutReminderEnabled == this.checkoutReminderEnabled &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
+  final Value<int> id;
+  final Value<String> workStartTime;
+  final Value<String> workEndTime;
+  final Value<int> lateGraceMinutes;
+  final Value<String> weekendType;
+  final Value<int> overtimeRoundingMinutes;
+  final Value<double?> officeLat;
+  final Value<double?> officeLng;
+  final Value<int> officeRadiusMeters;
+  final Value<bool> geofenceEnabled;
+  final Value<bool> checkinReminderEnabled;
+  final Value<bool> checkoutReminderEnabled;
+  final Value<DateTime> updatedAt;
+  const AttendanceRulesCompanion({
+    this.id = const Value.absent(),
+    this.workStartTime = const Value.absent(),
+    this.workEndTime = const Value.absent(),
+    this.lateGraceMinutes = const Value.absent(),
+    this.weekendType = const Value.absent(),
+    this.overtimeRoundingMinutes = const Value.absent(),
+    this.officeLat = const Value.absent(),
+    this.officeLng = const Value.absent(),
+    this.officeRadiusMeters = const Value.absent(),
+    this.geofenceEnabled = const Value.absent(),
+    this.checkinReminderEnabled = const Value.absent(),
+    this.checkoutReminderEnabled = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  AttendanceRulesCompanion.insert({
+    this.id = const Value.absent(),
+    this.workStartTime = const Value.absent(),
+    this.workEndTime = const Value.absent(),
+    this.lateGraceMinutes = const Value.absent(),
+    this.weekendType = const Value.absent(),
+    this.overtimeRoundingMinutes = const Value.absent(),
+    this.officeLat = const Value.absent(),
+    this.officeLng = const Value.absent(),
+    this.officeRadiusMeters = const Value.absent(),
+    this.geofenceEnabled = const Value.absent(),
+    this.checkinReminderEnabled = const Value.absent(),
+    this.checkoutReminderEnabled = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  static Insertable<AttendanceRule> custom({
+    Expression<int>? id,
+    Expression<String>? workStartTime,
+    Expression<String>? workEndTime,
+    Expression<int>? lateGraceMinutes,
+    Expression<String>? weekendType,
+    Expression<int>? overtimeRoundingMinutes,
+    Expression<double>? officeLat,
+    Expression<double>? officeLng,
+    Expression<int>? officeRadiusMeters,
+    Expression<bool>? geofenceEnabled,
+    Expression<bool>? checkinReminderEnabled,
+    Expression<bool>? checkoutReminderEnabled,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (workStartTime != null) 'work_start_time': workStartTime,
+      if (workEndTime != null) 'work_end_time': workEndTime,
+      if (lateGraceMinutes != null) 'late_grace_minutes': lateGraceMinutes,
+      if (weekendType != null) 'weekend_type': weekendType,
+      if (overtimeRoundingMinutes != null)
+        'overtime_rounding_minutes': overtimeRoundingMinutes,
+      if (officeLat != null) 'office_lat': officeLat,
+      if (officeLng != null) 'office_lng': officeLng,
+      if (officeRadiusMeters != null)
+        'office_radius_meters': officeRadiusMeters,
+      if (geofenceEnabled != null) 'geofence_enabled': geofenceEnabled,
+      if (checkinReminderEnabled != null)
+        'checkin_reminder_enabled': checkinReminderEnabled,
+      if (checkoutReminderEnabled != null)
+        'checkout_reminder_enabled': checkoutReminderEnabled,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  AttendanceRulesCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? workStartTime,
+      Value<String>? workEndTime,
+      Value<int>? lateGraceMinutes,
+      Value<String>? weekendType,
+      Value<int>? overtimeRoundingMinutes,
+      Value<double?>? officeLat,
+      Value<double?>? officeLng,
+      Value<int>? officeRadiusMeters,
+      Value<bool>? geofenceEnabled,
+      Value<bool>? checkinReminderEnabled,
+      Value<bool>? checkoutReminderEnabled,
+      Value<DateTime>? updatedAt}) {
+    return AttendanceRulesCompanion(
+      id: id ?? this.id,
+      workStartTime: workStartTime ?? this.workStartTime,
+      workEndTime: workEndTime ?? this.workEndTime,
+      lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
+      weekendType: weekendType ?? this.weekendType,
+      overtimeRoundingMinutes:
+          overtimeRoundingMinutes ?? this.overtimeRoundingMinutes,
+      officeLat: officeLat ?? this.officeLat,
+      officeLng: officeLng ?? this.officeLng,
+      officeRadiusMeters: officeRadiusMeters ?? this.officeRadiusMeters,
+      geofenceEnabled: geofenceEnabled ?? this.geofenceEnabled,
+      checkinReminderEnabled:
+          checkinReminderEnabled ?? this.checkinReminderEnabled,
+      checkoutReminderEnabled:
+          checkoutReminderEnabled ?? this.checkoutReminderEnabled,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (workStartTime.present) {
+      map['work_start_time'] = Variable<String>(workStartTime.value);
+    }
+    if (workEndTime.present) {
+      map['work_end_time'] = Variable<String>(workEndTime.value);
+    }
+    if (lateGraceMinutes.present) {
+      map['late_grace_minutes'] = Variable<int>(lateGraceMinutes.value);
+    }
+    if (weekendType.present) {
+      map['weekend_type'] = Variable<String>(weekendType.value);
+    }
+    if (overtimeRoundingMinutes.present) {
+      map['overtime_rounding_minutes'] =
+          Variable<int>(overtimeRoundingMinutes.value);
+    }
+    if (officeLat.present) {
+      map['office_lat'] = Variable<double>(officeLat.value);
+    }
+    if (officeLng.present) {
+      map['office_lng'] = Variable<double>(officeLng.value);
+    }
+    if (officeRadiusMeters.present) {
+      map['office_radius_meters'] = Variable<int>(officeRadiusMeters.value);
+    }
+    if (geofenceEnabled.present) {
+      map['geofence_enabled'] = Variable<bool>(geofenceEnabled.value);
+    }
+    if (checkinReminderEnabled.present) {
+      map['checkin_reminder_enabled'] =
+          Variable<bool>(checkinReminderEnabled.value);
+    }
+    if (checkoutReminderEnabled.present) {
+      map['checkout_reminder_enabled'] =
+          Variable<bool>(checkoutReminderEnabled.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttendanceRulesCompanion(')
+          ..write('id: $id, ')
+          ..write('workStartTime: $workStartTime, ')
+          ..write('workEndTime: $workEndTime, ')
+          ..write('lateGraceMinutes: $lateGraceMinutes, ')
+          ..write('weekendType: $weekendType, ')
+          ..write('overtimeRoundingMinutes: $overtimeRoundingMinutes, ')
+          ..write('officeLat: $officeLat, ')
+          ..write('officeLng: $officeLng, ')
+          ..write('officeRadiusMeters: $officeRadiusMeters, ')
+          ..write('geofenceEnabled: $geofenceEnabled, ')
+          ..write('checkinReminderEnabled: $checkinReminderEnabled, ')
+          ..write('checkoutReminderEnabled: $checkoutReminderEnabled, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AttendanceRecordsTable extends AttendanceRecords
+    with TableInfo<$AttendanceRecordsTable, AttendanceRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AttendanceRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
+      'day', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _checkInAtMeta =
+      const VerificationMeta('checkInAt');
+  @override
+  late final GeneratedColumn<DateTime> checkInAt = GeneratedColumn<DateTime>(
+      'check_in_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _checkOutAtMeta =
+      const VerificationMeta('checkOutAt');
+  @override
+  late final GeneratedColumn<DateTime> checkOutAt = GeneratedColumn<DateTime>(
+      'check_out_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _isWorkdayMeta =
+      const VerificationMeta('isWorkday');
+  @override
+  late final GeneratedColumn<bool> isWorkday = GeneratedColumn<bool>(
+      'is_workday', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_workday" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _isLateMeta = const VerificationMeta('isLate');
+  @override
+  late final GeneratedColumn<bool> isLate = GeneratedColumn<bool>(
+      'is_late', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_late" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _isEarlyLeaveMeta =
+      const VerificationMeta('isEarlyLeave');
+  @override
+  late final GeneratedColumn<bool> isEarlyLeave = GeneratedColumn<bool>(
+      'is_early_leave', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_early_leave" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _isAbsentMeta =
+      const VerificationMeta('isAbsent');
+  @override
+  late final GeneratedColumn<bool> isAbsent = GeneratedColumn<bool>(
+      'is_absent', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_absent" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _isLeaveMeta =
+      const VerificationMeta('isLeave');
+  @override
+  late final GeneratedColumn<bool> isLeave = GeneratedColumn<bool>(
+      'is_leave', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_leave" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _isExceptionMeta =
+      const VerificationMeta('isException');
+  @override
+  late final GeneratedColumn<bool> isException = GeneratedColumn<bool>(
+      'is_exception', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_exception" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _needsPatchMeta =
+      const VerificationMeta('needsPatch');
+  @override
+  late final GeneratedColumn<bool> needsPatch = GeneratedColumn<bool>(
+      'needs_patch', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("needs_patch" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _patchedMeta =
+      const VerificationMeta('patched');
+  @override
+  late final GeneratedColumn<bool> patched = GeneratedColumn<bool>(
+      'patched', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("patched" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _overtimeMinutesRawMeta =
+      const VerificationMeta('overtimeMinutesRaw');
+  @override
+  late final GeneratedColumn<int> overtimeMinutesRaw = GeneratedColumn<int>(
+      'overtime_minutes_raw', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _leaveMinutesMeta =
+      const VerificationMeta('leaveMinutes');
+  @override
+  late final GeneratedColumn<int> leaveMinutes = GeneratedColumn<int>(
+      'leave_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _overtimeHoursRoundedMeta =
+      const VerificationMeta('overtimeHoursRounded');
+  @override
+  late final GeneratedColumn<double> overtimeHoursRounded =
+      GeneratedColumn<double>('overtime_hours_rounded', aliasedName, false,
+          type: DriftSqlType.double,
+          requiredDuringInsert: false,
+          defaultValue: const Constant(0.0));
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+      'source', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('manual'));
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        day,
+        checkInAt,
+        checkOutAt,
+        isWorkday,
+        isLate,
+        isEarlyLeave,
+        isAbsent,
+        isLeave,
+        isException,
+        needsPatch,
+        patched,
+        overtimeMinutesRaw,
+        leaveMinutes,
+        overtimeHoursRounded,
+        source,
+        note,
+        createdAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'attendance_records';
+  @override
+  VerificationContext validateIntegrity(Insertable<AttendanceRecord> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('check_in_at')) {
+      context.handle(
+          _checkInAtMeta,
+          checkInAt.isAcceptableOrUnknown(
+              data['check_in_at']!, _checkInAtMeta));
+    }
+    if (data.containsKey('check_out_at')) {
+      context.handle(
+          _checkOutAtMeta,
+          checkOutAt.isAcceptableOrUnknown(
+              data['check_out_at']!, _checkOutAtMeta));
+    }
+    if (data.containsKey('is_workday')) {
+      context.handle(_isWorkdayMeta,
+          isWorkday.isAcceptableOrUnknown(data['is_workday']!, _isWorkdayMeta));
+    }
+    if (data.containsKey('is_late')) {
+      context.handle(_isLateMeta,
+          isLate.isAcceptableOrUnknown(data['is_late']!, _isLateMeta));
+    }
+    if (data.containsKey('is_early_leave')) {
+      context.handle(
+          _isEarlyLeaveMeta,
+          isEarlyLeave.isAcceptableOrUnknown(
+              data['is_early_leave']!, _isEarlyLeaveMeta));
+    }
+    if (data.containsKey('is_absent')) {
+      context.handle(_isAbsentMeta,
+          isAbsent.isAcceptableOrUnknown(data['is_absent']!, _isAbsentMeta));
+    }
+    if (data.containsKey('is_leave')) {
+      context.handle(_isLeaveMeta,
+          isLeave.isAcceptableOrUnknown(data['is_leave']!, _isLeaveMeta));
+    }
+    if (data.containsKey('is_exception')) {
+      context.handle(
+          _isExceptionMeta,
+          isException.isAcceptableOrUnknown(
+              data['is_exception']!, _isExceptionMeta));
+    }
+    if (data.containsKey('needs_patch')) {
+      context.handle(
+          _needsPatchMeta,
+          needsPatch.isAcceptableOrUnknown(
+              data['needs_patch']!, _needsPatchMeta));
+    }
+    if (data.containsKey('patched')) {
+      context.handle(_patchedMeta,
+          patched.isAcceptableOrUnknown(data['patched']!, _patchedMeta));
+    }
+    if (data.containsKey('overtime_minutes_raw')) {
+      context.handle(
+          _overtimeMinutesRawMeta,
+          overtimeMinutesRaw.isAcceptableOrUnknown(
+              data['overtime_minutes_raw']!, _overtimeMinutesRawMeta));
+    }
+    if (data.containsKey('leave_minutes')) {
+      context.handle(
+          _leaveMinutesMeta,
+          leaveMinutes.isAcceptableOrUnknown(
+              data['leave_minutes']!, _leaveMinutesMeta));
+    }
+    if (data.containsKey('overtime_hours_rounded')) {
+      context.handle(
+          _overtimeHoursRoundedMeta,
+          overtimeHoursRounded.isAcceptableOrUnknown(
+              data['overtime_hours_rounded']!, _overtimeHoursRoundedMeta));
+    }
+    if (data.containsKey('source')) {
+      context.handle(_sourceMeta,
+          source.isAcceptableOrUnknown(data['source']!, _sourceMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AttendanceRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AttendanceRecord(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
+      checkInAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}check_in_at']),
+      checkOutAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}check_out_at']),
+      isWorkday: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_workday'])!,
+      isLate: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_late'])!,
+      isEarlyLeave: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_early_leave'])!,
+      isAbsent: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_absent'])!,
+      isLeave: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_leave'])!,
+      isException: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_exception'])!,
+      needsPatch: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}needs_patch'])!,
+      patched: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}patched'])!,
+      overtimeMinutesRaw: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}overtime_minutes_raw'])!,
+      leaveMinutes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}leave_minutes'])!,
+      overtimeHoursRounded: attachedDatabase.typeMapping.read(
+          DriftSqlType.double,
+          data['${effectivePrefix}overtime_hours_rounded'])!,
+      source: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}source'])!,
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $AttendanceRecordsTable createAlias(String alias) {
+    return $AttendanceRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class AttendanceRecord extends DataClass
+    implements Insertable<AttendanceRecord> {
+  final int id;
+  final DateTime day;
+  final DateTime? checkInAt;
+  final DateTime? checkOutAt;
+  final bool isWorkday;
+  final bool isLate;
+  final bool isEarlyLeave;
+  final bool isAbsent;
+  final bool isLeave;
+  final bool isException;
+  final bool needsPatch;
+  final bool patched;
+  final int overtimeMinutesRaw;
+  final int leaveMinutes;
+  final double overtimeHoursRounded;
+  final String source;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const AttendanceRecord(
+      {required this.id,
+      required this.day,
+      this.checkInAt,
+      this.checkOutAt,
+      required this.isWorkday,
+      required this.isLate,
+      required this.isEarlyLeave,
+      required this.isAbsent,
+      required this.isLeave,
+      required this.isException,
+      required this.needsPatch,
+      required this.patched,
+      required this.overtimeMinutesRaw,
+      required this.leaveMinutes,
+      required this.overtimeHoursRounded,
+      required this.source,
+      this.note,
+      required this.createdAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['day'] = Variable<DateTime>(day);
+    if (!nullToAbsent || checkInAt != null) {
+      map['check_in_at'] = Variable<DateTime>(checkInAt);
+    }
+    if (!nullToAbsent || checkOutAt != null) {
+      map['check_out_at'] = Variable<DateTime>(checkOutAt);
+    }
+    map['is_workday'] = Variable<bool>(isWorkday);
+    map['is_late'] = Variable<bool>(isLate);
+    map['is_early_leave'] = Variable<bool>(isEarlyLeave);
+    map['is_absent'] = Variable<bool>(isAbsent);
+    map['is_leave'] = Variable<bool>(isLeave);
+    map['is_exception'] = Variable<bool>(isException);
+    map['needs_patch'] = Variable<bool>(needsPatch);
+    map['patched'] = Variable<bool>(patched);
+    map['overtime_minutes_raw'] = Variable<int>(overtimeMinutesRaw);
+    map['leave_minutes'] = Variable<int>(leaveMinutes);
+    map['overtime_hours_rounded'] = Variable<double>(overtimeHoursRounded);
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AttendanceRecordsCompanion toCompanion(bool nullToAbsent) {
+    return AttendanceRecordsCompanion(
+      id: Value(id),
+      day: Value(day),
+      checkInAt: checkInAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checkInAt),
+      checkOutAt: checkOutAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checkOutAt),
+      isWorkday: Value(isWorkday),
+      isLate: Value(isLate),
+      isEarlyLeave: Value(isEarlyLeave),
+      isAbsent: Value(isAbsent),
+      isLeave: Value(isLeave),
+      isException: Value(isException),
+      needsPatch: Value(needsPatch),
+      patched: Value(patched),
+      overtimeMinutesRaw: Value(overtimeMinutesRaw),
+      leaveMinutes: Value(leaveMinutes),
+      overtimeHoursRounded: Value(overtimeHoursRounded),
+      source: Value(source),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AttendanceRecord.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AttendanceRecord(
+      id: serializer.fromJson<int>(json['id']),
+      day: serializer.fromJson<DateTime>(json['day']),
+      checkInAt: serializer.fromJson<DateTime?>(json['checkInAt']),
+      checkOutAt: serializer.fromJson<DateTime?>(json['checkOutAt']),
+      isWorkday: serializer.fromJson<bool>(json['isWorkday']),
+      isLate: serializer.fromJson<bool>(json['isLate']),
+      isEarlyLeave: serializer.fromJson<bool>(json['isEarlyLeave']),
+      isAbsent: serializer.fromJson<bool>(json['isAbsent']),
+      isLeave: serializer.fromJson<bool>(json['isLeave']),
+      isException: serializer.fromJson<bool>(json['isException']),
+      needsPatch: serializer.fromJson<bool>(json['needsPatch']),
+      patched: serializer.fromJson<bool>(json['patched']),
+      overtimeMinutesRaw: serializer.fromJson<int>(json['overtimeMinutesRaw']),
+      leaveMinutes: serializer.fromJson<int>(json['leaveMinutes']),
+      overtimeHoursRounded:
+          serializer.fromJson<double>(json['overtimeHoursRounded']),
+      source: serializer.fromJson<String>(json['source']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'day': serializer.toJson<DateTime>(day),
+      'checkInAt': serializer.toJson<DateTime?>(checkInAt),
+      'checkOutAt': serializer.toJson<DateTime?>(checkOutAt),
+      'isWorkday': serializer.toJson<bool>(isWorkday),
+      'isLate': serializer.toJson<bool>(isLate),
+      'isEarlyLeave': serializer.toJson<bool>(isEarlyLeave),
+      'isAbsent': serializer.toJson<bool>(isAbsent),
+      'isLeave': serializer.toJson<bool>(isLeave),
+      'isException': serializer.toJson<bool>(isException),
+      'needsPatch': serializer.toJson<bool>(needsPatch),
+      'patched': serializer.toJson<bool>(patched),
+      'overtimeMinutesRaw': serializer.toJson<int>(overtimeMinutesRaw),
+      'leaveMinutes': serializer.toJson<int>(leaveMinutes),
+      'overtimeHoursRounded': serializer.toJson<double>(overtimeHoursRounded),
+      'source': serializer.toJson<String>(source),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AttendanceRecord copyWith(
+          {int? id,
+          DateTime? day,
+          Value<DateTime?> checkInAt = const Value.absent(),
+          Value<DateTime?> checkOutAt = const Value.absent(),
+          bool? isWorkday,
+          bool? isLate,
+          bool? isEarlyLeave,
+          bool? isAbsent,
+          bool? isLeave,
+          bool? isException,
+          bool? needsPatch,
+          bool? patched,
+          int? overtimeMinutesRaw,
+          int? leaveMinutes,
+          double? overtimeHoursRounded,
+          String? source,
+          Value<String?> note = const Value.absent(),
+          DateTime? createdAt,
+          DateTime? updatedAt}) =>
+      AttendanceRecord(
+        id: id ?? this.id,
+        day: day ?? this.day,
+        checkInAt: checkInAt.present ? checkInAt.value : this.checkInAt,
+        checkOutAt: checkOutAt.present ? checkOutAt.value : this.checkOutAt,
+        isWorkday: isWorkday ?? this.isWorkday,
+        isLate: isLate ?? this.isLate,
+        isEarlyLeave: isEarlyLeave ?? this.isEarlyLeave,
+        isAbsent: isAbsent ?? this.isAbsent,
+        isLeave: isLeave ?? this.isLeave,
+        isException: isException ?? this.isException,
+        needsPatch: needsPatch ?? this.needsPatch,
+        patched: patched ?? this.patched,
+        overtimeMinutesRaw: overtimeMinutesRaw ?? this.overtimeMinutesRaw,
+        leaveMinutes: leaveMinutes ?? this.leaveMinutes,
+        overtimeHoursRounded: overtimeHoursRounded ?? this.overtimeHoursRounded,
+        source: source ?? this.source,
+        note: note.present ? note.value : this.note,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  AttendanceRecord copyWithCompanion(AttendanceRecordsCompanion data) {
+    return AttendanceRecord(
+      id: data.id.present ? data.id.value : this.id,
+      day: data.day.present ? data.day.value : this.day,
+      checkInAt: data.checkInAt.present ? data.checkInAt.value : this.checkInAt,
+      checkOutAt:
+          data.checkOutAt.present ? data.checkOutAt.value : this.checkOutAt,
+      isWorkday: data.isWorkday.present ? data.isWorkday.value : this.isWorkday,
+      isLate: data.isLate.present ? data.isLate.value : this.isLate,
+      isEarlyLeave: data.isEarlyLeave.present
+          ? data.isEarlyLeave.value
+          : this.isEarlyLeave,
+      isAbsent: data.isAbsent.present ? data.isAbsent.value : this.isAbsent,
+      isLeave: data.isLeave.present ? data.isLeave.value : this.isLeave,
+      isException:
+          data.isException.present ? data.isException.value : this.isException,
+      needsPatch:
+          data.needsPatch.present ? data.needsPatch.value : this.needsPatch,
+      patched: data.patched.present ? data.patched.value : this.patched,
+      overtimeMinutesRaw: data.overtimeMinutesRaw.present
+          ? data.overtimeMinutesRaw.value
+          : this.overtimeMinutesRaw,
+      leaveMinutes: data.leaveMinutes.present
+          ? data.leaveMinutes.value
+          : this.leaveMinutes,
+      overtimeHoursRounded: data.overtimeHoursRounded.present
+          ? data.overtimeHoursRounded.value
+          : this.overtimeHoursRounded,
+      source: data.source.present ? data.source.value : this.source,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttendanceRecord(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('checkInAt: $checkInAt, ')
+          ..write('checkOutAt: $checkOutAt, ')
+          ..write('isWorkday: $isWorkday, ')
+          ..write('isLate: $isLate, ')
+          ..write('isEarlyLeave: $isEarlyLeave, ')
+          ..write('isAbsent: $isAbsent, ')
+          ..write('isLeave: $isLeave, ')
+          ..write('isException: $isException, ')
+          ..write('needsPatch: $needsPatch, ')
+          ..write('patched: $patched, ')
+          ..write('overtimeMinutesRaw: $overtimeMinutesRaw, ')
+          ..write('leaveMinutes: $leaveMinutes, ')
+          ..write('overtimeHoursRounded: $overtimeHoursRounded, ')
+          ..write('source: $source, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      day,
+      checkInAt,
+      checkOutAt,
+      isWorkday,
+      isLate,
+      isEarlyLeave,
+      isAbsent,
+      isLeave,
+      isException,
+      needsPatch,
+      patched,
+      overtimeMinutesRaw,
+      leaveMinutes,
+      overtimeHoursRounded,
+      source,
+      note,
+      createdAt,
+      updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AttendanceRecord &&
+          other.id == this.id &&
+          other.day == this.day &&
+          other.checkInAt == this.checkInAt &&
+          other.checkOutAt == this.checkOutAt &&
+          other.isWorkday == this.isWorkday &&
+          other.isLate == this.isLate &&
+          other.isEarlyLeave == this.isEarlyLeave &&
+          other.isAbsent == this.isAbsent &&
+          other.isLeave == this.isLeave &&
+          other.isException == this.isException &&
+          other.needsPatch == this.needsPatch &&
+          other.patched == this.patched &&
+          other.overtimeMinutesRaw == this.overtimeMinutesRaw &&
+          other.leaveMinutes == this.leaveMinutes &&
+          other.overtimeHoursRounded == this.overtimeHoursRounded &&
+          other.source == this.source &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
+  final Value<int> id;
+  final Value<DateTime> day;
+  final Value<DateTime?> checkInAt;
+  final Value<DateTime?> checkOutAt;
+  final Value<bool> isWorkday;
+  final Value<bool> isLate;
+  final Value<bool> isEarlyLeave;
+  final Value<bool> isAbsent;
+  final Value<bool> isLeave;
+  final Value<bool> isException;
+  final Value<bool> needsPatch;
+  final Value<bool> patched;
+  final Value<int> overtimeMinutesRaw;
+  final Value<int> leaveMinutes;
+  final Value<double> overtimeHoursRounded;
+  final Value<String> source;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const AttendanceRecordsCompanion({
+    this.id = const Value.absent(),
+    this.day = const Value.absent(),
+    this.checkInAt = const Value.absent(),
+    this.checkOutAt = const Value.absent(),
+    this.isWorkday = const Value.absent(),
+    this.isLate = const Value.absent(),
+    this.isEarlyLeave = const Value.absent(),
+    this.isAbsent = const Value.absent(),
+    this.isLeave = const Value.absent(),
+    this.isException = const Value.absent(),
+    this.needsPatch = const Value.absent(),
+    this.patched = const Value.absent(),
+    this.overtimeMinutesRaw = const Value.absent(),
+    this.leaveMinutes = const Value.absent(),
+    this.overtimeHoursRounded = const Value.absent(),
+    this.source = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  AttendanceRecordsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime day,
+    this.checkInAt = const Value.absent(),
+    this.checkOutAt = const Value.absent(),
+    this.isWorkday = const Value.absent(),
+    this.isLate = const Value.absent(),
+    this.isEarlyLeave = const Value.absent(),
+    this.isAbsent = const Value.absent(),
+    this.isLeave = const Value.absent(),
+    this.isException = const Value.absent(),
+    this.needsPatch = const Value.absent(),
+    this.patched = const Value.absent(),
+    this.overtimeMinutesRaw = const Value.absent(),
+    this.leaveMinutes = const Value.absent(),
+    this.overtimeHoursRounded = const Value.absent(),
+    this.source = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : day = Value(day);
+  static Insertable<AttendanceRecord> custom({
+    Expression<int>? id,
+    Expression<DateTime>? day,
+    Expression<DateTime>? checkInAt,
+    Expression<DateTime>? checkOutAt,
+    Expression<bool>? isWorkday,
+    Expression<bool>? isLate,
+    Expression<bool>? isEarlyLeave,
+    Expression<bool>? isAbsent,
+    Expression<bool>? isLeave,
+    Expression<bool>? isException,
+    Expression<bool>? needsPatch,
+    Expression<bool>? patched,
+    Expression<int>? overtimeMinutesRaw,
+    Expression<int>? leaveMinutes,
+    Expression<double>? overtimeHoursRounded,
+    Expression<String>? source,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (day != null) 'day': day,
+      if (checkInAt != null) 'check_in_at': checkInAt,
+      if (checkOutAt != null) 'check_out_at': checkOutAt,
+      if (isWorkday != null) 'is_workday': isWorkday,
+      if (isLate != null) 'is_late': isLate,
+      if (isEarlyLeave != null) 'is_early_leave': isEarlyLeave,
+      if (isAbsent != null) 'is_absent': isAbsent,
+      if (isLeave != null) 'is_leave': isLeave,
+      if (isException != null) 'is_exception': isException,
+      if (needsPatch != null) 'needs_patch': needsPatch,
+      if (patched != null) 'patched': patched,
+      if (overtimeMinutesRaw != null)
+        'overtime_minutes_raw': overtimeMinutesRaw,
+      if (leaveMinutes != null) 'leave_minutes': leaveMinutes,
+      if (overtimeHoursRounded != null)
+        'overtime_hours_rounded': overtimeHoursRounded,
+      if (source != null) 'source': source,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  AttendanceRecordsCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? day,
+      Value<DateTime?>? checkInAt,
+      Value<DateTime?>? checkOutAt,
+      Value<bool>? isWorkday,
+      Value<bool>? isLate,
+      Value<bool>? isEarlyLeave,
+      Value<bool>? isAbsent,
+      Value<bool>? isLeave,
+      Value<bool>? isException,
+      Value<bool>? needsPatch,
+      Value<bool>? patched,
+      Value<int>? overtimeMinutesRaw,
+      Value<int>? leaveMinutes,
+      Value<double>? overtimeHoursRounded,
+      Value<String>? source,
+      Value<String?>? note,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? updatedAt}) {
+    return AttendanceRecordsCompanion(
+      id: id ?? this.id,
+      day: day ?? this.day,
+      checkInAt: checkInAt ?? this.checkInAt,
+      checkOutAt: checkOutAt ?? this.checkOutAt,
+      isWorkday: isWorkday ?? this.isWorkday,
+      isLate: isLate ?? this.isLate,
+      isEarlyLeave: isEarlyLeave ?? this.isEarlyLeave,
+      isAbsent: isAbsent ?? this.isAbsent,
+      isLeave: isLeave ?? this.isLeave,
+      isException: isException ?? this.isException,
+      needsPatch: needsPatch ?? this.needsPatch,
+      patched: patched ?? this.patched,
+      overtimeMinutesRaw: overtimeMinutesRaw ?? this.overtimeMinutesRaw,
+      leaveMinutes: leaveMinutes ?? this.leaveMinutes,
+      overtimeHoursRounded: overtimeHoursRounded ?? this.overtimeHoursRounded,
+      source: source ?? this.source,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<DateTime>(day.value);
+    }
+    if (checkInAt.present) {
+      map['check_in_at'] = Variable<DateTime>(checkInAt.value);
+    }
+    if (checkOutAt.present) {
+      map['check_out_at'] = Variable<DateTime>(checkOutAt.value);
+    }
+    if (isWorkday.present) {
+      map['is_workday'] = Variable<bool>(isWorkday.value);
+    }
+    if (isLate.present) {
+      map['is_late'] = Variable<bool>(isLate.value);
+    }
+    if (isEarlyLeave.present) {
+      map['is_early_leave'] = Variable<bool>(isEarlyLeave.value);
+    }
+    if (isAbsent.present) {
+      map['is_absent'] = Variable<bool>(isAbsent.value);
+    }
+    if (isLeave.present) {
+      map['is_leave'] = Variable<bool>(isLeave.value);
+    }
+    if (isException.present) {
+      map['is_exception'] = Variable<bool>(isException.value);
+    }
+    if (needsPatch.present) {
+      map['needs_patch'] = Variable<bool>(needsPatch.value);
+    }
+    if (patched.present) {
+      map['patched'] = Variable<bool>(patched.value);
+    }
+    if (overtimeMinutesRaw.present) {
+      map['overtime_minutes_raw'] = Variable<int>(overtimeMinutesRaw.value);
+    }
+    if (leaveMinutes.present) {
+      map['leave_minutes'] = Variable<int>(leaveMinutes.value);
+    }
+    if (overtimeHoursRounded.present) {
+      map['overtime_hours_rounded'] =
+          Variable<double>(overtimeHoursRounded.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttendanceRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('checkInAt: $checkInAt, ')
+          ..write('checkOutAt: $checkOutAt, ')
+          ..write('isWorkday: $isWorkday, ')
+          ..write('isLate: $isLate, ')
+          ..write('isEarlyLeave: $isEarlyLeave, ')
+          ..write('isAbsent: $isAbsent, ')
+          ..write('isLeave: $isLeave, ')
+          ..write('isException: $isException, ')
+          ..write('needsPatch: $needsPatch, ')
+          ..write('patched: $patched, ')
+          ..write('overtimeMinutesRaw: $overtimeMinutesRaw, ')
+          ..write('leaveMinutes: $leaveMinutes, ')
+          ..write('overtimeHoursRounded: $overtimeHoursRounded, ')
+          ..write('source: $source, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PatchRequestsTable extends PatchRequests
+    with TableInfo<$PatchRequestsTable, PatchRequest> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PatchRequestsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
+      'day', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _patchTypeMeta =
+      const VerificationMeta('patchType');
+  @override
+  late final GeneratedColumn<String> patchType = GeneratedColumn<String>(
+      'patch_type', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _requestedCheckInAtMeta =
+      const VerificationMeta('requestedCheckInAt');
+  @override
+  late final GeneratedColumn<DateTime> requestedCheckInAt =
+      GeneratedColumn<DateTime>('requested_check_in_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _requestedCheckOutAtMeta =
+      const VerificationMeta('requestedCheckOutAt');
+  @override
+  late final GeneratedColumn<DateTime> requestedCheckOutAt =
+      GeneratedColumn<DateTime>('requested_check_out_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+      'reason', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('pending'));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _reviewedAtMeta =
+      const VerificationMeta('reviewedAt');
+  @override
+  late final GeneratedColumn<DateTime> reviewedAt = GeneratedColumn<DateTime>(
+      'reviewed_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        day,
+        patchType,
+        requestedCheckInAt,
+        requestedCheckOutAt,
+        reason,
+        status,
+        createdAt,
+        reviewedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'patch_requests';
+  @override
+  VerificationContext validateIntegrity(Insertable<PatchRequest> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('patch_type')) {
+      context.handle(_patchTypeMeta,
+          patchType.isAcceptableOrUnknown(data['patch_type']!, _patchTypeMeta));
+    } else if (isInserting) {
+      context.missing(_patchTypeMeta);
+    }
+    if (data.containsKey('requested_check_in_at')) {
+      context.handle(
+          _requestedCheckInAtMeta,
+          requestedCheckInAt.isAcceptableOrUnknown(
+              data['requested_check_in_at']!, _requestedCheckInAtMeta));
+    }
+    if (data.containsKey('requested_check_out_at')) {
+      context.handle(
+          _requestedCheckOutAtMeta,
+          requestedCheckOutAt.isAcceptableOrUnknown(
+              data['requested_check_out_at']!, _requestedCheckOutAtMeta));
+    }
+    if (data.containsKey('reason')) {
+      context.handle(_reasonMeta,
+          reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta));
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('reviewed_at')) {
+      context.handle(
+          _reviewedAtMeta,
+          reviewedAt.isAcceptableOrUnknown(
+              data['reviewed_at']!, _reviewedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PatchRequest map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PatchRequest(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
+      patchType: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}patch_type'])!,
+      requestedCheckInAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}requested_check_in_at']),
+      requestedCheckOutAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}requested_check_out_at']),
+      reason: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}reason'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      reviewedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}reviewed_at']),
+    );
+  }
+
+  @override
+  $PatchRequestsTable createAlias(String alias) {
+    return $PatchRequestsTable(attachedDatabase, alias);
+  }
+}
+
+class PatchRequest extends DataClass implements Insertable<PatchRequest> {
+  final int id;
+  final DateTime day;
+  final String patchType;
+  final DateTime? requestedCheckInAt;
+  final DateTime? requestedCheckOutAt;
+  final String reason;
+  final String status;
+  final DateTime createdAt;
+  final DateTime? reviewedAt;
+  const PatchRequest(
+      {required this.id,
+      required this.day,
+      required this.patchType,
+      this.requestedCheckInAt,
+      this.requestedCheckOutAt,
+      required this.reason,
+      required this.status,
+      required this.createdAt,
+      this.reviewedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['day'] = Variable<DateTime>(day);
+    map['patch_type'] = Variable<String>(patchType);
+    if (!nullToAbsent || requestedCheckInAt != null) {
+      map['requested_check_in_at'] = Variable<DateTime>(requestedCheckInAt);
+    }
+    if (!nullToAbsent || requestedCheckOutAt != null) {
+      map['requested_check_out_at'] = Variable<DateTime>(requestedCheckOutAt);
+    }
+    map['reason'] = Variable<String>(reason);
+    map['status'] = Variable<String>(status);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || reviewedAt != null) {
+      map['reviewed_at'] = Variable<DateTime>(reviewedAt);
+    }
+    return map;
+  }
+
+  PatchRequestsCompanion toCompanion(bool nullToAbsent) {
+    return PatchRequestsCompanion(
+      id: Value(id),
+      day: Value(day),
+      patchType: Value(patchType),
+      requestedCheckInAt: requestedCheckInAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestedCheckInAt),
+      requestedCheckOutAt: requestedCheckOutAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestedCheckOutAt),
+      reason: Value(reason),
+      status: Value(status),
+      createdAt: Value(createdAt),
+      reviewedAt: reviewedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reviewedAt),
+    );
+  }
+
+  factory PatchRequest.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PatchRequest(
+      id: serializer.fromJson<int>(json['id']),
+      day: serializer.fromJson<DateTime>(json['day']),
+      patchType: serializer.fromJson<String>(json['patchType']),
+      requestedCheckInAt:
+          serializer.fromJson<DateTime?>(json['requestedCheckInAt']),
+      requestedCheckOutAt:
+          serializer.fromJson<DateTime?>(json['requestedCheckOutAt']),
+      reason: serializer.fromJson<String>(json['reason']),
+      status: serializer.fromJson<String>(json['status']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      reviewedAt: serializer.fromJson<DateTime?>(json['reviewedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'day': serializer.toJson<DateTime>(day),
+      'patchType': serializer.toJson<String>(patchType),
+      'requestedCheckInAt': serializer.toJson<DateTime?>(requestedCheckInAt),
+      'requestedCheckOutAt': serializer.toJson<DateTime?>(requestedCheckOutAt),
+      'reason': serializer.toJson<String>(reason),
+      'status': serializer.toJson<String>(status),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'reviewedAt': serializer.toJson<DateTime?>(reviewedAt),
+    };
+  }
+
+  PatchRequest copyWith(
+          {int? id,
+          DateTime? day,
+          String? patchType,
+          Value<DateTime?> requestedCheckInAt = const Value.absent(),
+          Value<DateTime?> requestedCheckOutAt = const Value.absent(),
+          String? reason,
+          String? status,
+          DateTime? createdAt,
+          Value<DateTime?> reviewedAt = const Value.absent()}) =>
+      PatchRequest(
+        id: id ?? this.id,
+        day: day ?? this.day,
+        patchType: patchType ?? this.patchType,
+        requestedCheckInAt: requestedCheckInAt.present
+            ? requestedCheckInAt.value
+            : this.requestedCheckInAt,
+        requestedCheckOutAt: requestedCheckOutAt.present
+            ? requestedCheckOutAt.value
+            : this.requestedCheckOutAt,
+        reason: reason ?? this.reason,
+        status: status ?? this.status,
+        createdAt: createdAt ?? this.createdAt,
+        reviewedAt: reviewedAt.present ? reviewedAt.value : this.reviewedAt,
+      );
+  PatchRequest copyWithCompanion(PatchRequestsCompanion data) {
+    return PatchRequest(
+      id: data.id.present ? data.id.value : this.id,
+      day: data.day.present ? data.day.value : this.day,
+      patchType: data.patchType.present ? data.patchType.value : this.patchType,
+      requestedCheckInAt: data.requestedCheckInAt.present
+          ? data.requestedCheckInAt.value
+          : this.requestedCheckInAt,
+      requestedCheckOutAt: data.requestedCheckOutAt.present
+          ? data.requestedCheckOutAt.value
+          : this.requestedCheckOutAt,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      reviewedAt:
+          data.reviewedAt.present ? data.reviewedAt.value : this.reviewedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PatchRequest(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('patchType: $patchType, ')
+          ..write('requestedCheckInAt: $requestedCheckInAt, ')
+          ..write('requestedCheckOutAt: $requestedCheckOutAt, ')
+          ..write('reason: $reason, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('reviewedAt: $reviewedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, day, patchType, requestedCheckInAt,
+      requestedCheckOutAt, reason, status, createdAt, reviewedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PatchRequest &&
+          other.id == this.id &&
+          other.day == this.day &&
+          other.patchType == this.patchType &&
+          other.requestedCheckInAt == this.requestedCheckInAt &&
+          other.requestedCheckOutAt == this.requestedCheckOutAt &&
+          other.reason == this.reason &&
+          other.status == this.status &&
+          other.createdAt == this.createdAt &&
+          other.reviewedAt == this.reviewedAt);
+}
+
+class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
+  final Value<int> id;
+  final Value<DateTime> day;
+  final Value<String> patchType;
+  final Value<DateTime?> requestedCheckInAt;
+  final Value<DateTime?> requestedCheckOutAt;
+  final Value<String> reason;
+  final Value<String> status;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> reviewedAt;
+  const PatchRequestsCompanion({
+    this.id = const Value.absent(),
+    this.day = const Value.absent(),
+    this.patchType = const Value.absent(),
+    this.requestedCheckInAt = const Value.absent(),
+    this.requestedCheckOutAt = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.reviewedAt = const Value.absent(),
+  });
+  PatchRequestsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime day,
+    required String patchType,
+    this.requestedCheckInAt = const Value.absent(),
+    this.requestedCheckOutAt = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.reviewedAt = const Value.absent(),
+  })  : day = Value(day),
+        patchType = Value(patchType);
+  static Insertable<PatchRequest> custom({
+    Expression<int>? id,
+    Expression<DateTime>? day,
+    Expression<String>? patchType,
+    Expression<DateTime>? requestedCheckInAt,
+    Expression<DateTime>? requestedCheckOutAt,
+    Expression<String>? reason,
+    Expression<String>? status,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? reviewedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (day != null) 'day': day,
+      if (patchType != null) 'patch_type': patchType,
+      if (requestedCheckInAt != null)
+        'requested_check_in_at': requestedCheckInAt,
+      if (requestedCheckOutAt != null)
+        'requested_check_out_at': requestedCheckOutAt,
+      if (reason != null) 'reason': reason,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+      if (reviewedAt != null) 'reviewed_at': reviewedAt,
+    });
+  }
+
+  PatchRequestsCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? day,
+      Value<String>? patchType,
+      Value<DateTime?>? requestedCheckInAt,
+      Value<DateTime?>? requestedCheckOutAt,
+      Value<String>? reason,
+      Value<String>? status,
+      Value<DateTime>? createdAt,
+      Value<DateTime?>? reviewedAt}) {
+    return PatchRequestsCompanion(
+      id: id ?? this.id,
+      day: day ?? this.day,
+      patchType: patchType ?? this.patchType,
+      requestedCheckInAt: requestedCheckInAt ?? this.requestedCheckInAt,
+      requestedCheckOutAt: requestedCheckOutAt ?? this.requestedCheckOutAt,
+      reason: reason ?? this.reason,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<DateTime>(day.value);
+    }
+    if (patchType.present) {
+      map['patch_type'] = Variable<String>(patchType.value);
+    }
+    if (requestedCheckInAt.present) {
+      map['requested_check_in_at'] =
+          Variable<DateTime>(requestedCheckInAt.value);
+    }
+    if (requestedCheckOutAt.present) {
+      map['requested_check_out_at'] =
+          Variable<DateTime>(requestedCheckOutAt.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (reviewedAt.present) {
+      map['reviewed_at'] = Variable<DateTime>(reviewedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PatchRequestsCompanion(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('patchType: $patchType, ')
+          ..write('requestedCheckInAt: $requestedCheckInAt, ')
+          ..write('requestedCheckOutAt: $requestedCheckOutAt, ')
+          ..write('reason: $reason, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('reviewedAt: $reviewedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GeofenceDailyStatesTable extends GeofenceDailyStates
+    with TableInfo<$GeofenceDailyStatesTable, GeofenceDailyState> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GeofenceDailyStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
+      'day', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
+  static const VerificationMeta _wasInsideMeta =
+      const VerificationMeta('wasInside');
+  @override
+  late final GeneratedColumn<bool> wasInside = GeneratedColumn<bool>(
+      'was_inside', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("was_inside" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _triggeredMeta =
+      const VerificationMeta('triggered');
+  @override
+  late final GeneratedColumn<bool> triggered = GeneratedColumn<bool>(
+      'triggered', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("triggered" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _triggeredCountMeta =
+      const VerificationMeta('triggeredCount');
+  @override
+  late final GeneratedColumn<int> triggeredCount = GeneratedColumn<int>(
+      'triggered_count', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _lastTriggeredAtMeta =
+      const VerificationMeta('lastTriggeredAt');
+  @override
+  late final GeneratedColumn<DateTime> lastTriggeredAt =
+      GeneratedColumn<DateTime>('last_triggered_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        day,
+        wasInside,
+        triggered,
+        triggeredCount,
+        lastTriggeredAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'geofence_daily_states';
+  @override
+  VerificationContext validateIntegrity(Insertable<GeofenceDailyState> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('was_inside')) {
+      context.handle(_wasInsideMeta,
+          wasInside.isAcceptableOrUnknown(data['was_inside']!, _wasInsideMeta));
+    }
+    if (data.containsKey('triggered')) {
+      context.handle(_triggeredMeta,
+          triggered.isAcceptableOrUnknown(data['triggered']!, _triggeredMeta));
+    }
+    if (data.containsKey('triggered_count')) {
+      context.handle(
+          _triggeredCountMeta,
+          triggeredCount.isAcceptableOrUnknown(
+              data['triggered_count']!, _triggeredCountMeta));
+    }
+    if (data.containsKey('last_triggered_at')) {
+      context.handle(
+          _lastTriggeredAtMeta,
+          lastTriggeredAt.isAcceptableOrUnknown(
+              data['last_triggered_at']!, _lastTriggeredAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GeofenceDailyState map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GeofenceDailyState(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
+      wasInside: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}was_inside'])!,
+      triggered: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}triggered'])!,
+      triggeredCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}triggered_count'])!,
+      lastTriggeredAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_triggered_at']),
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $GeofenceDailyStatesTable createAlias(String alias) {
+    return $GeofenceDailyStatesTable(attachedDatabase, alias);
+  }
+}
+
+class GeofenceDailyState extends DataClass
+    implements Insertable<GeofenceDailyState> {
+  final int id;
+  final DateTime day;
+  final bool wasInside;
+  final bool triggered;
+  final int triggeredCount;
+  final DateTime? lastTriggeredAt;
+  final DateTime updatedAt;
+  const GeofenceDailyState(
+      {required this.id,
+      required this.day,
+      required this.wasInside,
+      required this.triggered,
+      required this.triggeredCount,
+      this.lastTriggeredAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['day'] = Variable<DateTime>(day);
+    map['was_inside'] = Variable<bool>(wasInside);
+    map['triggered'] = Variable<bool>(triggered);
+    map['triggered_count'] = Variable<int>(triggeredCount);
+    if (!nullToAbsent || lastTriggeredAt != null) {
+      map['last_triggered_at'] = Variable<DateTime>(lastTriggeredAt);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  GeofenceDailyStatesCompanion toCompanion(bool nullToAbsent) {
+    return GeofenceDailyStatesCompanion(
+      id: Value(id),
+      day: Value(day),
+      wasInside: Value(wasInside),
+      triggered: Value(triggered),
+      triggeredCount: Value(triggeredCount),
+      lastTriggeredAt: lastTriggeredAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastTriggeredAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory GeofenceDailyState.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GeofenceDailyState(
+      id: serializer.fromJson<int>(json['id']),
+      day: serializer.fromJson<DateTime>(json['day']),
+      wasInside: serializer.fromJson<bool>(json['wasInside']),
+      triggered: serializer.fromJson<bool>(json['triggered']),
+      triggeredCount: serializer.fromJson<int>(json['triggeredCount']),
+      lastTriggeredAt: serializer.fromJson<DateTime?>(json['lastTriggeredAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'day': serializer.toJson<DateTime>(day),
+      'wasInside': serializer.toJson<bool>(wasInside),
+      'triggered': serializer.toJson<bool>(triggered),
+      'triggeredCount': serializer.toJson<int>(triggeredCount),
+      'lastTriggeredAt': serializer.toJson<DateTime?>(lastTriggeredAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  GeofenceDailyState copyWith(
+          {int? id,
+          DateTime? day,
+          bool? wasInside,
+          bool? triggered,
+          int? triggeredCount,
+          Value<DateTime?> lastTriggeredAt = const Value.absent(),
+          DateTime? updatedAt}) =>
+      GeofenceDailyState(
+        id: id ?? this.id,
+        day: day ?? this.day,
+        wasInside: wasInside ?? this.wasInside,
+        triggered: triggered ?? this.triggered,
+        triggeredCount: triggeredCount ?? this.triggeredCount,
+        lastTriggeredAt: lastTriggeredAt.present
+            ? lastTriggeredAt.value
+            : this.lastTriggeredAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  GeofenceDailyState copyWithCompanion(GeofenceDailyStatesCompanion data) {
+    return GeofenceDailyState(
+      id: data.id.present ? data.id.value : this.id,
+      day: data.day.present ? data.day.value : this.day,
+      wasInside: data.wasInside.present ? data.wasInside.value : this.wasInside,
+      triggered: data.triggered.present ? data.triggered.value : this.triggered,
+      triggeredCount: data.triggeredCount.present
+          ? data.triggeredCount.value
+          : this.triggeredCount,
+      lastTriggeredAt: data.lastTriggeredAt.present
+          ? data.lastTriggeredAt.value
+          : this.lastTriggeredAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GeofenceDailyState(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('wasInside: $wasInside, ')
+          ..write('triggered: $triggered, ')
+          ..write('triggeredCount: $triggeredCount, ')
+          ..write('lastTriggeredAt: $lastTriggeredAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, day, wasInside, triggered, triggeredCount,
+      lastTriggeredAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GeofenceDailyState &&
+          other.id == this.id &&
+          other.day == this.day &&
+          other.wasInside == this.wasInside &&
+          other.triggered == this.triggered &&
+          other.triggeredCount == this.triggeredCount &&
+          other.lastTriggeredAt == this.lastTriggeredAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
+  final Value<int> id;
+  final Value<DateTime> day;
+  final Value<bool> wasInside;
+  final Value<bool> triggered;
+  final Value<int> triggeredCount;
+  final Value<DateTime?> lastTriggeredAt;
+  final Value<DateTime> updatedAt;
+  const GeofenceDailyStatesCompanion({
+    this.id = const Value.absent(),
+    this.day = const Value.absent(),
+    this.wasInside = const Value.absent(),
+    this.triggered = const Value.absent(),
+    this.triggeredCount = const Value.absent(),
+    this.lastTriggeredAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  GeofenceDailyStatesCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime day,
+    this.wasInside = const Value.absent(),
+    this.triggered = const Value.absent(),
+    this.triggeredCount = const Value.absent(),
+    this.lastTriggeredAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : day = Value(day);
+  static Insertable<GeofenceDailyState> custom({
+    Expression<int>? id,
+    Expression<DateTime>? day,
+    Expression<bool>? wasInside,
+    Expression<bool>? triggered,
+    Expression<int>? triggeredCount,
+    Expression<DateTime>? lastTriggeredAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (day != null) 'day': day,
+      if (wasInside != null) 'was_inside': wasInside,
+      if (triggered != null) 'triggered': triggered,
+      if (triggeredCount != null) 'triggered_count': triggeredCount,
+      if (lastTriggeredAt != null) 'last_triggered_at': lastTriggeredAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  GeofenceDailyStatesCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? day,
+      Value<bool>? wasInside,
+      Value<bool>? triggered,
+      Value<int>? triggeredCount,
+      Value<DateTime?>? lastTriggeredAt,
+      Value<DateTime>? updatedAt}) {
+    return GeofenceDailyStatesCompanion(
+      id: id ?? this.id,
+      day: day ?? this.day,
+      wasInside: wasInside ?? this.wasInside,
+      triggered: triggered ?? this.triggered,
+      triggeredCount: triggeredCount ?? this.triggeredCount,
+      lastTriggeredAt: lastTriggeredAt ?? this.lastTriggeredAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<DateTime>(day.value);
+    }
+    if (wasInside.present) {
+      map['was_inside'] = Variable<bool>(wasInside.value);
+    }
+    if (triggered.present) {
+      map['triggered'] = Variable<bool>(triggered.value);
+    }
+    if (triggeredCount.present) {
+      map['triggered_count'] = Variable<int>(triggeredCount.value);
+    }
+    if (lastTriggeredAt.present) {
+      map['last_triggered_at'] = Variable<DateTime>(lastTriggeredAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GeofenceDailyStatesCompanion(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('wasInside: $wasInside, ')
+          ..write('triggered: $triggered, ')
+          ..write('triggeredCount: $triggeredCount, ')
+          ..write('lastTriggeredAt: $lastTriggeredAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2364,12 +4799,28 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $OrdersTable orders = $OrdersTable(this);
   late final $OrderItemsTable orderItems = $OrderItemsTable(this);
   late final $StockMovementsTable stockMovements = $StockMovementsTable(this);
+  late final $AttendanceRulesTable attendanceRules =
+      $AttendanceRulesTable(this);
+  late final $AttendanceRecordsTable attendanceRecords =
+      $AttendanceRecordsTable(this);
+  late final $PatchRequestsTable patchRequests = $PatchRequestsTable(this);
+  late final $GeofenceDailyStatesTable geofenceDailyStates =
+      $GeofenceDailyStatesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [products, batches, orders, orderItems, stockMovements];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        products,
+        batches,
+        orders,
+        orderItems,
+        stockMovements,
+        attendanceRules,
+        attendanceRecords,
+        patchRequests,
+        geofenceDailyStates
+      ];
 }
 
 typedef $$ProductsTableCreateCompanionBuilder = ProductsCompanion Function({
@@ -4499,6 +6950,1129 @@ typedef $$StockMovementsTableProcessedTableManager = ProcessedTableManager<
     (StockMovement, $$StockMovementsTableReferences),
     StockMovement,
     PrefetchHooks Function({bool batchId, bool orderId})>;
+typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
+    Function({
+  Value<int> id,
+  Value<String> workStartTime,
+  Value<String> workEndTime,
+  Value<int> lateGraceMinutes,
+  Value<String> weekendType,
+  Value<int> overtimeRoundingMinutes,
+  Value<double?> officeLat,
+  Value<double?> officeLng,
+  Value<int> officeRadiusMeters,
+  Value<bool> geofenceEnabled,
+  Value<bool> checkinReminderEnabled,
+  Value<bool> checkoutReminderEnabled,
+  Value<DateTime> updatedAt,
+});
+typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
+    Function({
+  Value<int> id,
+  Value<String> workStartTime,
+  Value<String> workEndTime,
+  Value<int> lateGraceMinutes,
+  Value<String> weekendType,
+  Value<int> overtimeRoundingMinutes,
+  Value<double?> officeLat,
+  Value<double?> officeLng,
+  Value<int> officeRadiusMeters,
+  Value<bool> geofenceEnabled,
+  Value<bool> checkinReminderEnabled,
+  Value<bool> checkoutReminderEnabled,
+  Value<DateTime> updatedAt,
+});
+
+class $$AttendanceRulesTableFilterComposer
+    extends Composer<_$AppDatabase, $AttendanceRulesTable> {
+  $$AttendanceRulesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get workStartTime => $composableBuilder(
+      column: $table.workStartTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get workEndTime => $composableBuilder(
+      column: $table.workEndTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get lateGraceMinutes => $composableBuilder(
+      column: $table.lateGraceMinutes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get weekendType => $composableBuilder(
+      column: $table.weekendType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get overtimeRoundingMinutes => $composableBuilder(
+      column: $table.overtimeRoundingMinutes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get officeLat => $composableBuilder(
+      column: $table.officeLat, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get officeLng => $composableBuilder(
+      column: $table.officeLng, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get officeRadiusMeters => $composableBuilder(
+      column: $table.officeRadiusMeters,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get geofenceEnabled => $composableBuilder(
+      column: $table.geofenceEnabled,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get checkinReminderEnabled => $composableBuilder(
+      column: $table.checkinReminderEnabled,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get checkoutReminderEnabled => $composableBuilder(
+      column: $table.checkoutReminderEnabled,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$AttendanceRulesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AttendanceRulesTable> {
+  $$AttendanceRulesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get workStartTime => $composableBuilder(
+      column: $table.workStartTime,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get workEndTime => $composableBuilder(
+      column: $table.workEndTime, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get lateGraceMinutes => $composableBuilder(
+      column: $table.lateGraceMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get weekendType => $composableBuilder(
+      column: $table.weekendType, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get overtimeRoundingMinutes => $composableBuilder(
+      column: $table.overtimeRoundingMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get officeLat => $composableBuilder(
+      column: $table.officeLat, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get officeLng => $composableBuilder(
+      column: $table.officeLng, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get officeRadiusMeters => $composableBuilder(
+      column: $table.officeRadiusMeters,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get geofenceEnabled => $composableBuilder(
+      column: $table.geofenceEnabled,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get checkinReminderEnabled => $composableBuilder(
+      column: $table.checkinReminderEnabled,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get checkoutReminderEnabled => $composableBuilder(
+      column: $table.checkoutReminderEnabled,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$AttendanceRulesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AttendanceRulesTable> {
+  $$AttendanceRulesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get workStartTime => $composableBuilder(
+      column: $table.workStartTime, builder: (column) => column);
+
+  GeneratedColumn<String> get workEndTime => $composableBuilder(
+      column: $table.workEndTime, builder: (column) => column);
+
+  GeneratedColumn<int> get lateGraceMinutes => $composableBuilder(
+      column: $table.lateGraceMinutes, builder: (column) => column);
+
+  GeneratedColumn<String> get weekendType => $composableBuilder(
+      column: $table.weekendType, builder: (column) => column);
+
+  GeneratedColumn<int> get overtimeRoundingMinutes => $composableBuilder(
+      column: $table.overtimeRoundingMinutes, builder: (column) => column);
+
+  GeneratedColumn<double> get officeLat =>
+      $composableBuilder(column: $table.officeLat, builder: (column) => column);
+
+  GeneratedColumn<double> get officeLng =>
+      $composableBuilder(column: $table.officeLng, builder: (column) => column);
+
+  GeneratedColumn<int> get officeRadiusMeters => $composableBuilder(
+      column: $table.officeRadiusMeters, builder: (column) => column);
+
+  GeneratedColumn<bool> get geofenceEnabled => $composableBuilder(
+      column: $table.geofenceEnabled, builder: (column) => column);
+
+  GeneratedColumn<bool> get checkinReminderEnabled => $composableBuilder(
+      column: $table.checkinReminderEnabled, builder: (column) => column);
+
+  GeneratedColumn<bool> get checkoutReminderEnabled => $composableBuilder(
+      column: $table.checkoutReminderEnabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AttendanceRulesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AttendanceRulesTable,
+    AttendanceRule,
+    $$AttendanceRulesTableFilterComposer,
+    $$AttendanceRulesTableOrderingComposer,
+    $$AttendanceRulesTableAnnotationComposer,
+    $$AttendanceRulesTableCreateCompanionBuilder,
+    $$AttendanceRulesTableUpdateCompanionBuilder,
+    (
+      AttendanceRule,
+      BaseReferences<_$AppDatabase, $AttendanceRulesTable, AttendanceRule>
+    ),
+    AttendanceRule,
+    PrefetchHooks Function()> {
+  $$AttendanceRulesTableTableManager(
+      _$AppDatabase db, $AttendanceRulesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AttendanceRulesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AttendanceRulesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AttendanceRulesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> workStartTime = const Value.absent(),
+            Value<String> workEndTime = const Value.absent(),
+            Value<int> lateGraceMinutes = const Value.absent(),
+            Value<String> weekendType = const Value.absent(),
+            Value<int> overtimeRoundingMinutes = const Value.absent(),
+            Value<double?> officeLat = const Value.absent(),
+            Value<double?> officeLng = const Value.absent(),
+            Value<int> officeRadiusMeters = const Value.absent(),
+            Value<bool> geofenceEnabled = const Value.absent(),
+            Value<bool> checkinReminderEnabled = const Value.absent(),
+            Value<bool> checkoutReminderEnabled = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              AttendanceRulesCompanion(
+            id: id,
+            workStartTime: workStartTime,
+            workEndTime: workEndTime,
+            lateGraceMinutes: lateGraceMinutes,
+            weekendType: weekendType,
+            overtimeRoundingMinutes: overtimeRoundingMinutes,
+            officeLat: officeLat,
+            officeLng: officeLng,
+            officeRadiusMeters: officeRadiusMeters,
+            geofenceEnabled: geofenceEnabled,
+            checkinReminderEnabled: checkinReminderEnabled,
+            checkoutReminderEnabled: checkoutReminderEnabled,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> workStartTime = const Value.absent(),
+            Value<String> workEndTime = const Value.absent(),
+            Value<int> lateGraceMinutes = const Value.absent(),
+            Value<String> weekendType = const Value.absent(),
+            Value<int> overtimeRoundingMinutes = const Value.absent(),
+            Value<double?> officeLat = const Value.absent(),
+            Value<double?> officeLng = const Value.absent(),
+            Value<int> officeRadiusMeters = const Value.absent(),
+            Value<bool> geofenceEnabled = const Value.absent(),
+            Value<bool> checkinReminderEnabled = const Value.absent(),
+            Value<bool> checkoutReminderEnabled = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              AttendanceRulesCompanion.insert(
+            id: id,
+            workStartTime: workStartTime,
+            workEndTime: workEndTime,
+            lateGraceMinutes: lateGraceMinutes,
+            weekendType: weekendType,
+            overtimeRoundingMinutes: overtimeRoundingMinutes,
+            officeLat: officeLat,
+            officeLng: officeLng,
+            officeRadiusMeters: officeRadiusMeters,
+            geofenceEnabled: geofenceEnabled,
+            checkinReminderEnabled: checkinReminderEnabled,
+            checkoutReminderEnabled: checkoutReminderEnabled,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AttendanceRulesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AttendanceRulesTable,
+    AttendanceRule,
+    $$AttendanceRulesTableFilterComposer,
+    $$AttendanceRulesTableOrderingComposer,
+    $$AttendanceRulesTableAnnotationComposer,
+    $$AttendanceRulesTableCreateCompanionBuilder,
+    $$AttendanceRulesTableUpdateCompanionBuilder,
+    (
+      AttendanceRule,
+      BaseReferences<_$AppDatabase, $AttendanceRulesTable, AttendanceRule>
+    ),
+    AttendanceRule,
+    PrefetchHooks Function()>;
+typedef $$AttendanceRecordsTableCreateCompanionBuilder
+    = AttendanceRecordsCompanion Function({
+  Value<int> id,
+  required DateTime day,
+  Value<DateTime?> checkInAt,
+  Value<DateTime?> checkOutAt,
+  Value<bool> isWorkday,
+  Value<bool> isLate,
+  Value<bool> isEarlyLeave,
+  Value<bool> isAbsent,
+  Value<bool> isLeave,
+  Value<bool> isException,
+  Value<bool> needsPatch,
+  Value<bool> patched,
+  Value<int> overtimeMinutesRaw,
+  Value<int> leaveMinutes,
+  Value<double> overtimeHoursRounded,
+  Value<String> source,
+  Value<String?> note,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+typedef $$AttendanceRecordsTableUpdateCompanionBuilder
+    = AttendanceRecordsCompanion Function({
+  Value<int> id,
+  Value<DateTime> day,
+  Value<DateTime?> checkInAt,
+  Value<DateTime?> checkOutAt,
+  Value<bool> isWorkday,
+  Value<bool> isLate,
+  Value<bool> isEarlyLeave,
+  Value<bool> isAbsent,
+  Value<bool> isLeave,
+  Value<bool> isException,
+  Value<bool> needsPatch,
+  Value<bool> patched,
+  Value<int> overtimeMinutesRaw,
+  Value<int> leaveMinutes,
+  Value<double> overtimeHoursRounded,
+  Value<String> source,
+  Value<String?> note,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+
+class $$AttendanceRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $AttendanceRecordsTable> {
+  $$AttendanceRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get checkInAt => $composableBuilder(
+      column: $table.checkInAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get checkOutAt => $composableBuilder(
+      column: $table.checkOutAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isWorkday => $composableBuilder(
+      column: $table.isWorkday, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isLate => $composableBuilder(
+      column: $table.isLate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isEarlyLeave => $composableBuilder(
+      column: $table.isEarlyLeave, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isAbsent => $composableBuilder(
+      column: $table.isAbsent, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isLeave => $composableBuilder(
+      column: $table.isLeave, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get needsPatch => $composableBuilder(
+      column: $table.needsPatch, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get patched => $composableBuilder(
+      column: $table.patched, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get overtimeMinutesRaw => $composableBuilder(
+      column: $table.overtimeMinutesRaw,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get leaveMinutes => $composableBuilder(
+      column: $table.leaveMinutes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get overtimeHoursRounded => $composableBuilder(
+      column: $table.overtimeHoursRounded,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get source => $composableBuilder(
+      column: $table.source, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$AttendanceRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AttendanceRecordsTable> {
+  $$AttendanceRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get checkInAt => $composableBuilder(
+      column: $table.checkInAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get checkOutAt => $composableBuilder(
+      column: $table.checkOutAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isWorkday => $composableBuilder(
+      column: $table.isWorkday, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isLate => $composableBuilder(
+      column: $table.isLate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isEarlyLeave => $composableBuilder(
+      column: $table.isEarlyLeave,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isAbsent => $composableBuilder(
+      column: $table.isAbsent, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isLeave => $composableBuilder(
+      column: $table.isLeave, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get needsPatch => $composableBuilder(
+      column: $table.needsPatch, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get patched => $composableBuilder(
+      column: $table.patched, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get overtimeMinutesRaw => $composableBuilder(
+      column: $table.overtimeMinutesRaw,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get leaveMinutes => $composableBuilder(
+      column: $table.leaveMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get overtimeHoursRounded => $composableBuilder(
+      column: $table.overtimeHoursRounded,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get source => $composableBuilder(
+      column: $table.source, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$AttendanceRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AttendanceRecordsTable> {
+  $$AttendanceRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get checkInAt =>
+      $composableBuilder(column: $table.checkInAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get checkOutAt => $composableBuilder(
+      column: $table.checkOutAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get isWorkday =>
+      $composableBuilder(column: $table.isWorkday, builder: (column) => column);
+
+  GeneratedColumn<bool> get isLate =>
+      $composableBuilder(column: $table.isLate, builder: (column) => column);
+
+  GeneratedColumn<bool> get isEarlyLeave => $composableBuilder(
+      column: $table.isEarlyLeave, builder: (column) => column);
+
+  GeneratedColumn<bool> get isAbsent =>
+      $composableBuilder(column: $table.isAbsent, builder: (column) => column);
+
+  GeneratedColumn<bool> get isLeave =>
+      $composableBuilder(column: $table.isLeave, builder: (column) => column);
+
+  GeneratedColumn<bool> get isException => $composableBuilder(
+      column: $table.isException, builder: (column) => column);
+
+  GeneratedColumn<bool> get needsPatch => $composableBuilder(
+      column: $table.needsPatch, builder: (column) => column);
+
+  GeneratedColumn<bool> get patched =>
+      $composableBuilder(column: $table.patched, builder: (column) => column);
+
+  GeneratedColumn<int> get overtimeMinutesRaw => $composableBuilder(
+      column: $table.overtimeMinutesRaw, builder: (column) => column);
+
+  GeneratedColumn<int> get leaveMinutes => $composableBuilder(
+      column: $table.leaveMinutes, builder: (column) => column);
+
+  GeneratedColumn<double> get overtimeHoursRounded => $composableBuilder(
+      column: $table.overtimeHoursRounded, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AttendanceRecordsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AttendanceRecordsTable,
+    AttendanceRecord,
+    $$AttendanceRecordsTableFilterComposer,
+    $$AttendanceRecordsTableOrderingComposer,
+    $$AttendanceRecordsTableAnnotationComposer,
+    $$AttendanceRecordsTableCreateCompanionBuilder,
+    $$AttendanceRecordsTableUpdateCompanionBuilder,
+    (
+      AttendanceRecord,
+      BaseReferences<_$AppDatabase, $AttendanceRecordsTable, AttendanceRecord>
+    ),
+    AttendanceRecord,
+    PrefetchHooks Function()> {
+  $$AttendanceRecordsTableTableManager(
+      _$AppDatabase db, $AttendanceRecordsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AttendanceRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AttendanceRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AttendanceRecordsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> day = const Value.absent(),
+            Value<DateTime?> checkInAt = const Value.absent(),
+            Value<DateTime?> checkOutAt = const Value.absent(),
+            Value<bool> isWorkday = const Value.absent(),
+            Value<bool> isLate = const Value.absent(),
+            Value<bool> isEarlyLeave = const Value.absent(),
+            Value<bool> isAbsent = const Value.absent(),
+            Value<bool> isLeave = const Value.absent(),
+            Value<bool> isException = const Value.absent(),
+            Value<bool> needsPatch = const Value.absent(),
+            Value<bool> patched = const Value.absent(),
+            Value<int> overtimeMinutesRaw = const Value.absent(),
+            Value<int> leaveMinutes = const Value.absent(),
+            Value<double> overtimeHoursRounded = const Value.absent(),
+            Value<String> source = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              AttendanceRecordsCompanion(
+            id: id,
+            day: day,
+            checkInAt: checkInAt,
+            checkOutAt: checkOutAt,
+            isWorkday: isWorkday,
+            isLate: isLate,
+            isEarlyLeave: isEarlyLeave,
+            isAbsent: isAbsent,
+            isLeave: isLeave,
+            isException: isException,
+            needsPatch: needsPatch,
+            patched: patched,
+            overtimeMinutesRaw: overtimeMinutesRaw,
+            leaveMinutes: leaveMinutes,
+            overtimeHoursRounded: overtimeHoursRounded,
+            source: source,
+            note: note,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime day,
+            Value<DateTime?> checkInAt = const Value.absent(),
+            Value<DateTime?> checkOutAt = const Value.absent(),
+            Value<bool> isWorkday = const Value.absent(),
+            Value<bool> isLate = const Value.absent(),
+            Value<bool> isEarlyLeave = const Value.absent(),
+            Value<bool> isAbsent = const Value.absent(),
+            Value<bool> isLeave = const Value.absent(),
+            Value<bool> isException = const Value.absent(),
+            Value<bool> needsPatch = const Value.absent(),
+            Value<bool> patched = const Value.absent(),
+            Value<int> overtimeMinutesRaw = const Value.absent(),
+            Value<int> leaveMinutes = const Value.absent(),
+            Value<double> overtimeHoursRounded = const Value.absent(),
+            Value<String> source = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              AttendanceRecordsCompanion.insert(
+            id: id,
+            day: day,
+            checkInAt: checkInAt,
+            checkOutAt: checkOutAt,
+            isWorkday: isWorkday,
+            isLate: isLate,
+            isEarlyLeave: isEarlyLeave,
+            isAbsent: isAbsent,
+            isLeave: isLeave,
+            isException: isException,
+            needsPatch: needsPatch,
+            patched: patched,
+            overtimeMinutesRaw: overtimeMinutesRaw,
+            leaveMinutes: leaveMinutes,
+            overtimeHoursRounded: overtimeHoursRounded,
+            source: source,
+            note: note,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AttendanceRecordsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AttendanceRecordsTable,
+    AttendanceRecord,
+    $$AttendanceRecordsTableFilterComposer,
+    $$AttendanceRecordsTableOrderingComposer,
+    $$AttendanceRecordsTableAnnotationComposer,
+    $$AttendanceRecordsTableCreateCompanionBuilder,
+    $$AttendanceRecordsTableUpdateCompanionBuilder,
+    (
+      AttendanceRecord,
+      BaseReferences<_$AppDatabase, $AttendanceRecordsTable, AttendanceRecord>
+    ),
+    AttendanceRecord,
+    PrefetchHooks Function()>;
+typedef $$PatchRequestsTableCreateCompanionBuilder = PatchRequestsCompanion
+    Function({
+  Value<int> id,
+  required DateTime day,
+  required String patchType,
+  Value<DateTime?> requestedCheckInAt,
+  Value<DateTime?> requestedCheckOutAt,
+  Value<String> reason,
+  Value<String> status,
+  Value<DateTime> createdAt,
+  Value<DateTime?> reviewedAt,
+});
+typedef $$PatchRequestsTableUpdateCompanionBuilder = PatchRequestsCompanion
+    Function({
+  Value<int> id,
+  Value<DateTime> day,
+  Value<String> patchType,
+  Value<DateTime?> requestedCheckInAt,
+  Value<DateTime?> requestedCheckOutAt,
+  Value<String> reason,
+  Value<String> status,
+  Value<DateTime> createdAt,
+  Value<DateTime?> reviewedAt,
+});
+
+class $$PatchRequestsTableFilterComposer
+    extends Composer<_$AppDatabase, $PatchRequestsTable> {
+  $$PatchRequestsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get patchType => $composableBuilder(
+      column: $table.patchType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get requestedCheckInAt => $composableBuilder(
+      column: $table.requestedCheckInAt,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get requestedCheckOutAt => $composableBuilder(
+      column: $table.requestedCheckOutAt,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get reason => $composableBuilder(
+      column: $table.reason, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get reviewedAt => $composableBuilder(
+      column: $table.reviewedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$PatchRequestsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PatchRequestsTable> {
+  $$PatchRequestsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get patchType => $composableBuilder(
+      column: $table.patchType, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get requestedCheckInAt => $composableBuilder(
+      column: $table.requestedCheckInAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get requestedCheckOutAt => $composableBuilder(
+      column: $table.requestedCheckOutAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+      column: $table.reason, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get reviewedAt => $composableBuilder(
+      column: $table.reviewedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$PatchRequestsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PatchRequestsTable> {
+  $$PatchRequestsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<String> get patchType =>
+      $composableBuilder(column: $table.patchType, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get requestedCheckInAt => $composableBuilder(
+      column: $table.requestedCheckInAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get requestedCheckOutAt => $composableBuilder(
+      column: $table.requestedCheckOutAt, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get reviewedAt => $composableBuilder(
+      column: $table.reviewedAt, builder: (column) => column);
+}
+
+class $$PatchRequestsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $PatchRequestsTable,
+    PatchRequest,
+    $$PatchRequestsTableFilterComposer,
+    $$PatchRequestsTableOrderingComposer,
+    $$PatchRequestsTableAnnotationComposer,
+    $$PatchRequestsTableCreateCompanionBuilder,
+    $$PatchRequestsTableUpdateCompanionBuilder,
+    (
+      PatchRequest,
+      BaseReferences<_$AppDatabase, $PatchRequestsTable, PatchRequest>
+    ),
+    PatchRequest,
+    PrefetchHooks Function()> {
+  $$PatchRequestsTableTableManager(_$AppDatabase db, $PatchRequestsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PatchRequestsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PatchRequestsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PatchRequestsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> day = const Value.absent(),
+            Value<String> patchType = const Value.absent(),
+            Value<DateTime?> requestedCheckInAt = const Value.absent(),
+            Value<DateTime?> requestedCheckOutAt = const Value.absent(),
+            Value<String> reason = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> reviewedAt = const Value.absent(),
+          }) =>
+              PatchRequestsCompanion(
+            id: id,
+            day: day,
+            patchType: patchType,
+            requestedCheckInAt: requestedCheckInAt,
+            requestedCheckOutAt: requestedCheckOutAt,
+            reason: reason,
+            status: status,
+            createdAt: createdAt,
+            reviewedAt: reviewedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime day,
+            required String patchType,
+            Value<DateTime?> requestedCheckInAt = const Value.absent(),
+            Value<DateTime?> requestedCheckOutAt = const Value.absent(),
+            Value<String> reason = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> reviewedAt = const Value.absent(),
+          }) =>
+              PatchRequestsCompanion.insert(
+            id: id,
+            day: day,
+            patchType: patchType,
+            requestedCheckInAt: requestedCheckInAt,
+            requestedCheckOutAt: requestedCheckOutAt,
+            reason: reason,
+            status: status,
+            createdAt: createdAt,
+            reviewedAt: reviewedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$PatchRequestsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $PatchRequestsTable,
+    PatchRequest,
+    $$PatchRequestsTableFilterComposer,
+    $$PatchRequestsTableOrderingComposer,
+    $$PatchRequestsTableAnnotationComposer,
+    $$PatchRequestsTableCreateCompanionBuilder,
+    $$PatchRequestsTableUpdateCompanionBuilder,
+    (
+      PatchRequest,
+      BaseReferences<_$AppDatabase, $PatchRequestsTable, PatchRequest>
+    ),
+    PatchRequest,
+    PrefetchHooks Function()>;
+typedef $$GeofenceDailyStatesTableCreateCompanionBuilder
+    = GeofenceDailyStatesCompanion Function({
+  Value<int> id,
+  required DateTime day,
+  Value<bool> wasInside,
+  Value<bool> triggered,
+  Value<int> triggeredCount,
+  Value<DateTime?> lastTriggeredAt,
+  Value<DateTime> updatedAt,
+});
+typedef $$GeofenceDailyStatesTableUpdateCompanionBuilder
+    = GeofenceDailyStatesCompanion Function({
+  Value<int> id,
+  Value<DateTime> day,
+  Value<bool> wasInside,
+  Value<bool> triggered,
+  Value<int> triggeredCount,
+  Value<DateTime?> lastTriggeredAt,
+  Value<DateTime> updatedAt,
+});
+
+class $$GeofenceDailyStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $GeofenceDailyStatesTable> {
+  $$GeofenceDailyStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get wasInside => $composableBuilder(
+      column: $table.wasInside, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get triggered => $composableBuilder(
+      column: $table.triggered, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get triggeredCount => $composableBuilder(
+      column: $table.triggeredCount,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastTriggeredAt => $composableBuilder(
+      column: $table.lastTriggeredAt,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$GeofenceDailyStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $GeofenceDailyStatesTable> {
+  $$GeofenceDailyStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get wasInside => $composableBuilder(
+      column: $table.wasInside, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get triggered => $composableBuilder(
+      column: $table.triggered, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get triggeredCount => $composableBuilder(
+      column: $table.triggeredCount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastTriggeredAt => $composableBuilder(
+      column: $table.lastTriggeredAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$GeofenceDailyStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GeofenceDailyStatesTable> {
+  $$GeofenceDailyStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<bool> get wasInside =>
+      $composableBuilder(column: $table.wasInside, builder: (column) => column);
+
+  GeneratedColumn<bool> get triggered =>
+      $composableBuilder(column: $table.triggered, builder: (column) => column);
+
+  GeneratedColumn<int> get triggeredCount => $composableBuilder(
+      column: $table.triggeredCount, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastTriggeredAt => $composableBuilder(
+      column: $table.lastTriggeredAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$GeofenceDailyStatesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $GeofenceDailyStatesTable,
+    GeofenceDailyState,
+    $$GeofenceDailyStatesTableFilterComposer,
+    $$GeofenceDailyStatesTableOrderingComposer,
+    $$GeofenceDailyStatesTableAnnotationComposer,
+    $$GeofenceDailyStatesTableCreateCompanionBuilder,
+    $$GeofenceDailyStatesTableUpdateCompanionBuilder,
+    (
+      GeofenceDailyState,
+      BaseReferences<_$AppDatabase, $GeofenceDailyStatesTable,
+          GeofenceDailyState>
+    ),
+    GeofenceDailyState,
+    PrefetchHooks Function()> {
+  $$GeofenceDailyStatesTableTableManager(
+      _$AppDatabase db, $GeofenceDailyStatesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GeofenceDailyStatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GeofenceDailyStatesTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GeofenceDailyStatesTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> day = const Value.absent(),
+            Value<bool> wasInside = const Value.absent(),
+            Value<bool> triggered = const Value.absent(),
+            Value<int> triggeredCount = const Value.absent(),
+            Value<DateTime?> lastTriggeredAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              GeofenceDailyStatesCompanion(
+            id: id,
+            day: day,
+            wasInside: wasInside,
+            triggered: triggered,
+            triggeredCount: triggeredCount,
+            lastTriggeredAt: lastTriggeredAt,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime day,
+            Value<bool> wasInside = const Value.absent(),
+            Value<bool> triggered = const Value.absent(),
+            Value<int> triggeredCount = const Value.absent(),
+            Value<DateTime?> lastTriggeredAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              GeofenceDailyStatesCompanion.insert(
+            id: id,
+            day: day,
+            wasInside: wasInside,
+            triggered: triggered,
+            triggeredCount: triggeredCount,
+            lastTriggeredAt: lastTriggeredAt,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$GeofenceDailyStatesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $GeofenceDailyStatesTable,
+    GeofenceDailyState,
+    $$GeofenceDailyStatesTableFilterComposer,
+    $$GeofenceDailyStatesTableOrderingComposer,
+    $$GeofenceDailyStatesTableAnnotationComposer,
+    $$GeofenceDailyStatesTableCreateCompanionBuilder,
+    $$GeofenceDailyStatesTableUpdateCompanionBuilder,
+    (
+      GeofenceDailyState,
+      BaseReferences<_$AppDatabase, $GeofenceDailyStatesTable,
+          GeofenceDailyState>
+    ),
+    GeofenceDailyState,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4513,4 +8087,12 @@ class $AppDatabaseManager {
       $$OrderItemsTableTableManager(_db, _db.orderItems);
   $$StockMovementsTableTableManager get stockMovements =>
       $$StockMovementsTableTableManager(_db, _db.stockMovements);
+  $$AttendanceRulesTableTableManager get attendanceRules =>
+      $$AttendanceRulesTableTableManager(_db, _db.attendanceRules);
+  $$AttendanceRecordsTableTableManager get attendanceRecords =>
+      $$AttendanceRecordsTableTableManager(_db, _db.attendanceRecords);
+  $$PatchRequestsTableTableManager get patchRequests =>
+      $$PatchRequestsTableTableManager(_db, _db.patchRequests);
+  $$GeofenceDailyStatesTableTableManager get geofenceDailyStates =>
+      $$GeofenceDailyStatesTableTableManager(_db, _db.geofenceDailyStates);
 }

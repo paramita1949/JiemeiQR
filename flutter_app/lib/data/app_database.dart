@@ -8,8 +8,12 @@ import 'package:path_provider/path_provider.dart';
 
 import 'database_enums.dart';
 import 'tables/batches.dart';
+import 'tables/attendance_records.dart';
+import 'tables/attendance_rules.dart';
+import 'tables/geofence_daily_states.dart';
 import 'tables/order_items.dart';
 import 'tables/orders.dart';
+import 'tables/patch_requests.dart';
 import 'tables/products.dart';
 import 'tables/stock_movements.dart';
 
@@ -24,6 +28,10 @@ part 'app_database.g.dart';
     Orders,
     OrderItems,
     StockMovements,
+    AttendanceRules,
+    AttendanceRecords,
+    PatchRequests,
+    GeofenceDailyStates,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -32,13 +40,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
           await _createPerformanceIndexes(m);
+          await _createAttendanceIndexes(m);
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
@@ -52,6 +61,18 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 5) {
             await m.addColumn(orderItems, orderItems.isException);
+          }
+          if (from < 6) {
+            await m.createTable(attendanceRules);
+            await m.createTable(attendanceRecords);
+            await m.createTable(patchRequests);
+            await _createAttendanceIndexes(m);
+          }
+          if (from < 7) {
+            await m.createTable(geofenceDailyStates);
+          }
+          if (from < 8) {
+            await m.addColumn(attendanceRecords, attendanceRecords.leaveMinutes);
           }
         },
       );
@@ -83,6 +104,18 @@ class AppDatabase extends _$AppDatabase {
     );
     await m.database.customStatement(
       'CREATE INDEX IF NOT EXISTS idx_movements_order_id ON stock_movements(order_id);',
+    );
+  }
+
+  Future<void> _createAttendanceIndexes(Migrator m) async {
+    await m.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_attendance_day ON attendance_records(day);',
+    );
+    await m.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance_records(is_absent, is_late, needs_patch);',
+    );
+    await m.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_patch_day_status ON patch_requests(day, status);',
     );
   }
 }

@@ -23,7 +23,6 @@ class QrRangeScreen extends StatefulWidget {
 }
 
 class _QrRangeScreenState extends State<QrRangeScreen> {
-  static const String _endScanSignal = '__END_RANGE_SCAN__';
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final bool _ownsDatabase;
@@ -37,6 +36,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   String? _lastSerialTail3Range;
   String? _lastSerialTail4Range;
   int? _matchedBoxesPerBoard;
+  MatchedBaseInfo? _matchedBaseInfo;
   QrBuildResult? _latestBuildResult;
   final ImagePicker _picker = ImagePicker();
   final MobileScannerController _galleryAnalyzeController =
@@ -77,8 +77,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
           title: '箱码范围扫码',
           allowGalleryImport: true,
           showBottomGalleryButton: false,
-          showEndScanAction: true,
-          endScanResult: _endScanSignal,
+          showEndScanAction: false,
           minContinuousDetections: 1,
           validateResult: _acceptsDuringScan,
         ),
@@ -89,10 +88,6 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       return;
     }
     if (content == null) {
-      return;
-    }
-    if (content == _endScanSignal) {
-      setState(() => _scanStageActive = false);
       return;
     }
     final parsed = QrParser.parse(content.trim());
@@ -187,11 +182,16 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   }
 
   Future<void> _loadMatchedBoxesPerBoard(String batch) async {
-    final matched = await _productDao.findBoxesPerBoardByActualBatch(batch);
+    final matchedInfo = await _productDao.findMatchedBaseInfoByActualBatch(
+      batch,
+    );
     if (!mounted || _scans.isEmpty || _scans.first.batch != batch) {
       return;
     }
-    setState(() => _matchedBoxesPerBoard = matched);
+    setState(() {
+      _matchedBaseInfo = matchedInfo;
+      _matchedBoxesPerBoard = matchedInfo?.boxesPerBoard;
+    });
     _recomputeEstimate();
   }
 
@@ -219,13 +219,6 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       return '继续扫描';
     }
     return '继续补扫';
-  }
-
-  void _finishScanStage() {
-    if (!_scanStageActive) {
-      return;
-    }
-    setState(() => _scanStageActive = false);
   }
 
   void _recomputeEstimate() {
@@ -303,48 +296,38 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               const PageTitle(
                 icon: Icons.qr_code_scanner_outlined,
                 title: '箱码范围',
-                subtitle: '单次扫码后确认结果，手动继续；范围自动更新',
+                subtitle: '单次扫码后确认结果，手动继续',
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('rangePrimaryActionButton'),
-                  onPressed: canPrimaryAction && !_scanningNow
-                      ? _handlePrimaryAction
-                      : null,
-                  icon: Icon(
-                    _scanStageActive
-                        ? Icons.qr_code_scanner_outlined
-                        : Icons.refresh_outlined,
-                  ),
-                  label: Text(_primaryActionLabel()),
-                ),
-              ),
-              if (_scanStageActive)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _finishScanStage,
-                      icon: const Icon(Icons.stop_circle_outlined),
-                      label: const Text('结束扫描'),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      key: const Key('rangePrimaryActionButton'),
+                      onPressed: canPrimaryAction && !_scanningNow
+                          ? _handlePrimaryAction
+                          : null,
+                      icon: Icon(
+                        _scanStageActive
+                            ? Icons.qr_code_scanner_outlined
+                            : Icons.refresh_outlined,
+                      ),
+                      label: Text(_primaryActionLabel()),
                     ),
                   ),
-                ),
-              if (_scanStageActive) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    key: const Key('rangeMultiImportButton'),
-                    onPressed: _importMultipleImagesAndParse,
-                    icon: const Icon(Icons.collections_outlined),
-                    label: const Text('系统相册多选导入并解析'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const Key('rangeMultiImportButton'),
+                      onPressed: _scanStageActive
+                          ? _importMultipleImagesAndParse
+                          : null,
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('相册识别'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -356,25 +339,38 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              if (_matchedBoxesPerBoard != null)
+              if (_matchedBaseInfo != null)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEAF7FF),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    '已匹配基础资料：每板 $_matchedBoxesPerBoard 箱',
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '已匹配基础资料',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildInfoRow(
+                        '产品编号',
+                        _matchedBaseInfo!.productCode,
+                      ),
+                      _buildInfoRow('批号', _matchedBaseInfo!.actualBatch),
+                      _buildInfoRow('日期', _matchedBaseInfo!.dateBatch),
+                      _buildInfoRow('每板箱数', '${_matchedBaseInfo!.boxesPerBoard} 箱'),
+                    ],
                   ),
                 )
               else
                 const Text(
-                  '扫描中将自动匹配基础资料每板箱数',
+                  '扫描后自动匹配基础资料',
                   style: TextStyle(color: AppTheme.textSecondary),
                 ),
               const SizedBox(height: 8),
@@ -389,14 +385,6 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               ),
               if (_lastEstimate != null) ...[
                 const SizedBox(height: 8),
-                const Text(
-                  '范围已自动更新，可随时点击“生成预览”进入二维码预览',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
                 Text(
                   '流水号末3位范围：${_lastSerialTail3Range ?? "-"}',
                   style: const TextStyle(
@@ -430,6 +418,35 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 86,
+            child: Text(
+              '$label：',
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

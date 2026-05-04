@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
@@ -36,7 +38,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  static const _importExtensions = ['.jiemei', '.sqlite', '.zip'];
+  static const _importExtensions = [
+    '.jiemei',
+    '.sqlite',
+    '.zip',
+    '.attendance.json',
+  ];
   late AppDatabase _database;
   late bool _ownsDatabase;
   final BackupImportIntentService _backupImportIntentService =
@@ -53,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _database = widget.database ?? AppDatabase();
     unawaited(_refreshStats());
     unawaited(_consumePendingImportIntent());
+    unawaited(_runAttendanceReminderCheck());
   }
 
   @override
@@ -87,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshStats());
       unawaited(_consumePendingImportIntent());
+      unawaited(_runAttendanceReminderCheck());
     }
   }
 
@@ -190,6 +199,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       return;
     }
+    if (title == '考勤签到') {
+      await pushAndRefresh(
+        context,
+        route: MaterialPageRoute(
+          builder: (_) => AttendanceScreen(database: database),
+        ),
+        onRefresh: () => unawaited(_refreshStats()),
+      );
+      return;
+    }
   }
 
   Future<void> _openBackupScreen({String? initialImportPath}) async {
@@ -219,7 +238,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted || path == null || !_isSupportedImportPath(path)) {
         return;
       }
-      await _openBackupScreen(initialImportPath: path);
+      if (_isAttendanceBackupPath(path)) {
+        await pushAndRefresh(
+          context,
+          route: MaterialPageRoute(
+            builder: (_) => AttendanceScreen(
+              database: database,
+              initialImportPath: path,
+            ),
+          ),
+          onRefresh: () => unawaited(_refreshStats()),
+        );
+      } else {
+        await _openBackupScreen(initialImportPath: path);
+      }
     } catch (_) {
       // Swallow intent read errors to avoid interrupting normal home flows.
     } finally {
@@ -232,7 +264,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _importExtensions.any(normalized.endsWith);
   }
 
+  bool _isAttendanceBackupPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.attendance.json');
+  }
+
   AppDatabase get database => _database;
+
+  Future<void> _runAttendanceReminderCheck() async {
+    try {
+      await AttendanceGeofenceReminderService.checkAndMaybeNotify(
+        database: _database,
+      );
+    } catch (_) {
+      // Keep home resilient when location/notification fails on some devices.
+    }
+  }
 
   Future<_HomeStats> _loadStats() async {
     final stockDao = StockDao(_database);
@@ -626,6 +673,12 @@ class _ActionGrid extends StatelessWidget {
         title: 'AI识别',
         subtitle: 'AI智能填单',
         color: Color(0xFFF0FDF4),
+      ),
+      _HomeAction(
+        icon: Icons.fact_check_outlined,
+        title: '考勤签到',
+        subtitle: '签到 / 统计 / 围栏',
+        color: Color(0xFFEFF6FF),
       ),
     ];
 

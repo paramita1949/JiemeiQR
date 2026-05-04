@@ -99,6 +99,9 @@ class MainActivity : FlutterActivity() {
 
     private fun isImportFile(path: String): Boolean {
         val lowerPath = path.lowercase()
-        return lowerPath.endsWith(".jiemei") || lowerPath.endsWith(".sqlite") || lowerPath.endsWith(".zip")
+        return lowerPath.endsWith(".jiemei") ||
+            lowerPath.endsWith(".sqlite") ||
+            lowerPath.endsWith(".zip") ||
+            lowerPath.endsWith(".attendance.json")
     }
 }

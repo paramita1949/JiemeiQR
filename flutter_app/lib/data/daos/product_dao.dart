@@ -161,6 +161,41 @@ class ProductDao {
     return rows.first.boxesPerBoard;
   }
 
+  Future<MatchedBaseInfo?> findMatchedBaseInfoByActualBatch(
+    String actualBatch,
+  ) async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.code AS product_code,
+        p.name AS product_name,
+        b.actual_batch AS actual_batch,
+        b.date_batch AS date_batch,
+        b.boxes_per_board AS boxes_per_board
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      WHERE b.actual_batch = ?
+      ORDER BY b.updated_at DESC
+      LIMIT 1
+      ''',
+      variables: [Variable.withString(actualBatch)],
+      readsFrom: {
+        _database.products,
+        _database.batches,
+      },
+    ).getSingleOrNull();
+    if (rows == null) {
+      return null;
+    }
+    return MatchedBaseInfo(
+      productCode: rows.read<String>('product_code'),
+      productName: rows.read<String>('product_name'),
+      actualBatch: rows.read<String>('actual_batch'),
+      dateBatch: rows.read<String>('date_batch'),
+      boxesPerBoard: rows.read<int>('boxes_per_board'),
+    );
+  }
+
   Future<List<BatchRecord>> batchesForProduct(int productId) {
     return (_database.select(_database.batches)
           ..where((table) => table.productId.equals(productId))
@@ -614,4 +649,20 @@ class DeleteBatchResult {
 
   final int deletedBatchId;
   final int? deletedProductId;
+}
+
+class MatchedBaseInfo {
+  const MatchedBaseInfo({
+    required this.productCode,
+    required this.productName,
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.boxesPerBoard,
+  });
+
+  final String productCode;
+  final String productName;
+  final String actualBatch;
+  final String dateBatch;
+  final int boxesPerBoard;
 }

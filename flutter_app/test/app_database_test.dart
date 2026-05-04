@@ -19,8 +19,8 @@ void main() {
     await database.close();
   });
 
-  test('database starts at schema version 5', () {
-    expect(database.schemaVersion, 5);
+  test('database starts at schema version 7', () {
+    expect(database.schemaVersion, 7);
   });
 
   test('creates product and batch records', () async {
@@ -146,7 +146,7 @@ void main() {
     expect(await productDao.hasTsRequiredBatches(productId), isTrue);
   });
 
-  test('migrates v1 database to v5 without data loss', () async {
+  test('migrates v1 database to v7 without data loss', () async {
     final oldWarnSetting = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() {
@@ -243,7 +243,7 @@ void main() {
 
     final versionRow =
         await migrated.customSelect('PRAGMA user_version;').getSingle();
-    expect(versionRow.data['user_version'], 5);
+    expect(versionRow.data['user_version'], 7);
 
     final tsRequired = await migrated.customSelect(
       'SELECT ts_required FROM batches WHERE id = ?',

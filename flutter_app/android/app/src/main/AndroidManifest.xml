@@ -42,6 +42,7 @@
                 <data android:pathPattern=".*\\.jiemei" />
                 <data android:pathPattern=".*\\.sqlite" />
                 <data android:pathPattern=".*\\.zip" />
+                <data android:pathPattern=".*\\.attendance\\.json" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
