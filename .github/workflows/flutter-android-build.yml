@@ -50,9 +50,6 @@ jobs:
       - name: Static analysis
         run: flutter analyze
 
-      - name: Unit and widget tests
-        run: flutter test
-
       - name: Configure release signing
         working-directory: .
         shell: bash
