@@ -140,6 +140,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget build(BuildContext context) {
     final stats = _stats;
     final monthLabel = '${_month.month}月';
+    final today = DateTime.now();
+    final todayRow = _findTodayRow(_rows, today);
+    final todayCompleted = todayRow?.checkInAt != null && todayRow?.checkOutAt != null;
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -188,7 +191,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 nowText: _hhmm(DateTime.now()),
                 statusText: _heroStatusText(_rows),
                 actionText: _heroActionText(_rows),
-                onCheckIn: _checkIn,
+                onCheckIn: todayCompleted ? null : _checkIn,
               ),
               const SizedBox(height: 12),
               _MonthSummaryCard(
@@ -305,7 +308,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final todayRow = _findTodayRow(rows, today);
     if (todayRow == null || todayRow.checkInAt == null) return '上班签到';
     if (todayRow.checkOutAt == null) return '下班签到';
-    return '补记签到';
+    return '今日已完成';
   }
 
   AttendanceRecord? _findTodayRow(List<AttendanceRecord> rows, DateTime today) {
@@ -348,7 +351,7 @@ class _HeroCheckInCard extends StatelessWidget {
   final String nowText;
   final String statusText;
   final String actionText;
-  final Future<void> Function() onCheckIn;
+  final Future<void> Function()? onCheckIn;
 
   @override
   Widget build(BuildContext context) {
