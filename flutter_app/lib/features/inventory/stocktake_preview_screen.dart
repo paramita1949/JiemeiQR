@@ -382,14 +382,25 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   }
 
   Future<void> _createSession() async {
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _loading = true);
-    final bundle = await _stocktakeDao.createOrLoadSession(month: _selectedMonth);
-    if (!mounted) return;
-    setState(() {
-      _bundle = bundle;
-      _loading = false;
-    });
-    await _loadRecent();
+    try {
+      final bundle = await _stocktakeDao.createOrLoadSession(month: _selectedMonth);
+      if (!mounted) return;
+      setState(() {
+        _bundle = bundle;
+      });
+      await _loadRecent();
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('生成失败：$error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Future<void> _reloadBundle() async {
@@ -438,23 +449,34 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   }
 
   Future<void> _openSession(StocktakeSessionRecord session) async {
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _loading = true);
-    final bundle = await _stocktakeDao.loadSession(session.id);
-    if (!mounted) return;
-    final monthParts = session.monthKey.split('-');
-    DateTime nextMonth = _selectedMonth;
-    if (monthParts.length == 2) {
-      final year = int.tryParse(monthParts[0]);
-      final month = int.tryParse(monthParts[1]);
-      if (year != null && month != null && month >= 1 && month <= 12) {
-        nextMonth = DateTime(year, month);
+    try {
+      final bundle = await _stocktakeDao.loadSession(session.id);
+      if (!mounted) return;
+      final monthParts = session.monthKey.split('-');
+      DateTime nextMonth = _selectedMonth;
+      if (monthParts.length == 2) {
+        final year = int.tryParse(monthParts[0]);
+        final month = int.tryParse(monthParts[1]);
+        if (year != null && month != null && month >= 1 && month <= 12) {
+          nextMonth = DateTime(year, month);
+        }
+      }
+      setState(() {
+        _bundle = bundle;
+        _selectedMonth = nextMonth;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('加载失败：$error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
       }
     }
-    setState(() {
-      _bundle = bundle;
-      _selectedMonth = nextMonth;
-      _loading = false;
-    });
   }
 
   Future<void> _deleteSession(StocktakeSessionRecord session) async {
