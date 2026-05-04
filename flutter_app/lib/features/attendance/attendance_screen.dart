@@ -467,13 +467,16 @@ class _DetailCard extends StatelessWidget {
   String _status(AttendanceRecord r) {
     final now = DateTime.now();
     final isToday = r.day.year == now.year && r.day.month == now.month && r.day.day == now.day;
+    final hasCheckIn = r.checkInAt != null;
+    final hasCheckOut = r.checkOutAt != null;
     if (r.isLeave) return '请假';
     if (r.isAbsent) return '请假';
     if (r.isLate) return '迟到';
-    if (isToday && r.checkInAt != null && r.checkOutAt == null) return '待下班';
+    if (isToday && hasCheckIn && !hasCheckOut) return '待下班';
+    if (hasCheckIn ^ hasCheckOut) return '待补卡';
+    if (hasCheckIn && hasCheckOut && r.checkOutAt!.isBefore(r.checkInAt!)) return '异常';
+    if (hasCheckIn && hasCheckOut) return '正常';
     if (r.isException) return '异常';
-    if (r.checkInAt != null && r.checkOutAt != null) return '正常';
-    if ((r.checkInAt != null) ^ (r.checkOutAt != null)) return '待补卡';
     return '无记录';
   }
 

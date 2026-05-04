@@ -5,6 +5,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
+import 'package:qrscan_flutter/features/inventory/stocktake_preview_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
@@ -73,32 +74,78 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 42),
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: PageTitle(
-                    icon: Icons.inventory_2_outlined,
-                    title: '库存明细',
-                    subtitle: '批号库存、规格、备注',
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () async {
-                    await pushAndRefresh(
-                      context,
-                      route: MaterialPageRoute(
-                        builder: (_) => BaseInfoEditScreen(
-                          database: _database,
-                        ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compactActions = constraints.maxWidth < 560;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: PageTitle(
+                        icon: Icons.inventory_2_outlined,
+                        title: '库存明细',
+                        subtitle: '批号库存、规格、备注',
                       ),
-                      onRefresh: () => _refreshRows(refreshTotals: true),
-                    );
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('录入'),
-                ),
-              ],
+                    ),
+                    const SizedBox(width: 8),
+                    if (compactActions) ...[
+                      IconButton.filled(
+                        key: const Key('inventoryStocktakeButton'),
+                        tooltip: '盘库',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StocktakePreviewScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.fact_check_outlined),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        tooltip: '录入',
+                        onPressed: () async {
+                          await pushAndRefresh(
+                            context,
+                            route: MaterialPageRoute(
+                              builder: (_) => BaseInfoEditScreen(
+                                database: _database,
+                              ),
+                            ),
+                            onRefresh: () => _refreshRows(refreshTotals: true),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                      ),
+                    ] else ...[
+                      FilledButton.icon(
+                        key: const Key('inventoryStocktakeButton'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StocktakePreviewScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('盘库'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          await pushAndRefresh(
+                            context,
+                            route: MaterialPageRoute(
+                              builder: (_) => BaseInfoEditScreen(
+                                database: _database,
+                              ),
+                            ),
+                            onRefresh: () => _refreshRows(refreshTotals: true),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('录入'),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 14),
             _TotalCard(totalPieces: _totalPieces),
