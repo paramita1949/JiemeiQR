@@ -148,11 +148,59 @@ class AttendanceDao {
   Future<List<AttendanceRecord>> recordsByMonth(DateTime month) async {
     final from = DateTime(month.year, month.month, 1);
     final to = DateTime(month.year, month.month + 1, 1);
-    return (_db.select(_db.attendanceRecords)
+    final rows = await (_db.select(_db.attendanceRecords)
           ..where((t) => t.day.isBiggerOrEqualValue(from) & t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
+    return _applyWeekendOvertime(rows);
   }
+
+  List<AttendanceRecord> _applyWeekendOvertime(List<AttendanceRecord> rows) {
+    if (rows.isEmpty) return rows;
+    final byDay = <String, AttendanceRecord>{};
+    for (final row in rows) {
+      byDay[_dayKey(row.day)] = row;
+    }
+
+    final result = <AttendanceRecord>[];
+    for (final row in rows) {
+      final normalized = DateTime(row.day.year, row.day.month, row.day.day);
+      if (normalized.weekday != DateTime.sunday ||
+          row.checkInAt == null ||
+          row.checkOutAt == null) {
+        result.add(row);
+        continue;
+      }
+      final sat = normalized.subtract(const Duration(days: 1));
+      final satRow = byDay[_dayKey(sat)];
+      final bothWeekendWorked = satRow != null &&
+          satRow.checkInAt != null &&
+          satRow.checkOutAt != null;
+      if (!bothWeekendWorked) {
+        result.add(row);
+        continue;
+      }
+
+      final workedMinutes = row.checkOutAt!.isAfter(row.checkInAt!)
+          ? row.checkOutAt!.difference(row.checkInAt!).inMinutes
+          : 0;
+      final weekendOvertimeHours = (workedMinutes ~/ 30) * 0.5;
+      if (weekendOvertimeHours <= row.overtimeHoursRounded) {
+        result.add(row);
+        continue;
+      }
+
+      result.add(
+        row.copyWith(
+          overtimeMinutesRaw: workedMinutes,
+          overtimeHoursRounded: weekendOvertimeHours,
+        ),
+      );
+    }
+    return result;
+  }
+
+  String _dayKey(DateTime day) => '${day.year}-${day.month}-${day.day}';
 
   Future<List<DateTime>> recordedMonths() async {
     final rows = await _db.select(_db.attendanceRecords).get();

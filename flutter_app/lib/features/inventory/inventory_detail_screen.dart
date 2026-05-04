@@ -97,14 +97,16 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                         compact: true,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const StocktakePreviewScreen(),
+                            builder: (_) => StocktakePreviewScreen(
+                              database: _database,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       _HeaderActionButton(
-                        label: '录',
-                        icon: Icons.add,
+                        label: '录入',
+                        icon: Icons.playlist_add_rounded,
                         primary: false,
                         compact: true,
                         onPressed: () async {
@@ -128,14 +130,16 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                         compact: false,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const StocktakePreviewScreen(),
+                            builder: (_) => StocktakePreviewScreen(
+                              database: _database,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       _HeaderActionButton(
-                        label: '录',
-                        icon: Icons.add,
+                        label: '录入',
+                        icon: Icons.playlist_add_rounded,
                         primary: false,
                         compact: false,
                         onPressed: () async {

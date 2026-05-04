@@ -379,7 +379,12 @@ class _TableCard extends StatelessWidget {
 }
 
 String _md(DateTime day) =>
-    '${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    '${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')} ${_weekLabel(day)}';
+
+String _weekLabel(DateTime day) {
+  const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  return names[day.weekday - 1];
+}
 
 String _hhmm(DateTime ts) =>
     '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';

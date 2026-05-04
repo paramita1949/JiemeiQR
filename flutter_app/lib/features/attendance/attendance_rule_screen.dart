@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 class AttendanceRuleScreen extends StatefulWidget {
@@ -186,6 +187,24 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             child: Column(
               children: [
                 _switchTile('启用围栏提醒', _geofenceEnabled, (v) => setState(() => _geofenceEnabled = v)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+                        requestIfNeeded: true,
+                      );
+                      if (!mounted) return;
+                      final msg = state.ready
+                          ? '权限已就绪（定位/通知）'
+                          : '权限未完全开启：请检查定位服务、定位权限、通知权限（VIVO 还需自启动与后台高耗电白名单）';
+                      messenger.showSnackBar(SnackBar(content: Text(msg)));
+                    },
+                    icon: const Icon(Icons.verified_user_outlined, size: 18),
+                    label: const Text('检测并开启系统权限'),
+                  ),
+                ),
                 _rowField('纬度', _latController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 _rowField('经度', _lngController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 _rowField('范围半径(m)', _radiusController, keyboardType: TextInputType.number),

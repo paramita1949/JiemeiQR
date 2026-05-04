@@ -1,335 +1,188 @@
 import 'package:flutter/material.dart';
+import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/stocktake_dao.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
-class StocktakePreviewScreen extends StatelessWidget {
-  const StocktakePreviewScreen({super.key});
+class StocktakePreviewScreen extends StatefulWidget {
+  const StocktakePreviewScreen({
+    super.key,
+    this.database,
+  });
+
+  final AppDatabase? database;
+
+  @override
+  State<StocktakePreviewScreen> createState() => _StocktakePreviewScreenState();
+}
+
+class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
+  late final AppDatabase _database;
+  late final bool _ownsDatabase;
+  late final StocktakeDao _stocktakeDao;
+
+  DateTime _selectedMonth = _defaultMonth();
+  StocktakeSessionBundle? _bundle;
+  List<StocktakeSessionRecord> _recentSessions = const [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsDatabase = widget.database == null;
+    _database = widget.database ?? AppDatabase();
+    _stocktakeDao = StocktakeDao(_database);
+    _loadRecent();
+  }
+
+  @override
+  void dispose() {
+    if (_ownsDatabase) {
+      _database.close();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final bundle = _bundle;
+    final items = bundle?.items ?? const <StocktakeItemRecord>[];
+    final isCompleted =
+        bundle?.session.status == StocktakeSessionStatus.completed.index;
+    final pending = items.where((e) => e.status == StocktakeItemStatus.pending.index).length;
+    final checked = items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
+    final issue = items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
+
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 42),
-          children: const [
-            PageTitle(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
+          children: [
+            const PageTitle(
               icon: Icons.fact_check_outlined,
-              title: '盘库任务',
-              subtitle: '仅记录盘点笔记，不修改真实库存',
+              title: '盘库',
+              subtitle: '简单记录，不改库存',
             ),
-            SizedBox(height: 14),
-            _MonthCard(),
-            SizedBox(height: 10),
-            _RuleCard(),
-            SizedBox(height: 10),
-            _ProgressCard(),
-            SizedBox(height: 10),
-            _ProductChecklistCard(),
-            SizedBox(height: 10),
-            _ConfirmCard(),
+            const SizedBox(height: 12),
+            _monthBar(),
+            const SizedBox(height: 10),
+            _statsCard(total: items.length, pending: pending, checked: checked, issue: issue),
+            const SizedBox(height: 10),
+            if (bundle == null)
+              _emptyCard()
+            else if (items.isEmpty)
+              _emptyResultCard()
+            else
+              ...items.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _itemCard(item, readOnly: isCompleted),
+                ),
+              ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: bundle == null || _loading || isCompleted
+                  ? null
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await _stocktakeDao.completeSession(
+                        sessionId: bundle.session.id,
+                      );
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('盘库已确认')),
+                      );
+                      setState(() => _bundle = null);
+                      await _loadRecent();
+                    },
+              icon: const Icon(Icons.task_alt),
+              label: const Text('确认完成'),
+            ),
+            const SizedBox(height: 12),
+            _recentCard(),
           ],
         ),
       ),
     );
   }
-}
 
-class _MonthCard extends StatelessWidget {
-  const _MonthCard();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _monthBar() {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '盘库月份',
-            style: TextStyle(
-              color: Color(0xFFDBEAFE),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  '2026 年 4 月',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.calendar_month_outlined),
-                label: const Text('切换月份'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFFBFDBFE)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '建议：每月 1-5 日盘点上月库存',
-            style: TextStyle(
-              color: Color(0xFFEFF6FF),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RuleCard extends StatelessWidget {
-  const _RuleCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _CardShell(
-      title: '自动提炼规则',
-      child: Column(
-        children: [
-          _RuleRow(label: '发过货', value: '是'),
-          _RuleRow(label: '当前库存', value: '不为 0'),
-          _RuleRow(label: '库存有变化', value: '当前 ≠ 初始'),
-          _RuleRow(label: '预计待盘条目', value: '14 条'),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProgressCard extends StatelessWidget {
-  const _ProgressCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _CardShell(
-      title: '盘点进度',
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: const Text(
-          '5 / 14',
-          style: TextStyle(
-            color: AppTheme.primary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: const LinearProgressIndicator(
-              value: 0.36,
-              minHeight: 10,
-              backgroundColor: Color(0xFFE5E7EB),
-              color: Color(0xFF2563EB),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '已核对 4 条 · 异常 1 条 · 待复核 9 条',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductChecklistCard extends StatelessWidget {
-  const _ProductChecklistCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _CardShell(
-      title: '产品盘点清单（预览）',
-      child: Column(
-        children: [
-          _ProductRow(
-            productCode: '72067',
-            batchCode: 'FCHBMHEZ',
-            delta: '-20 箱',
-            status: '已核对',
-            color: Color(0xFF166534),
-            background: Color(0xFFDCFCE7),
-          ),
-          SizedBox(height: 8),
-          _ProductRow(
-            productCode: '20380',
-            batchCode: 'ELMAXEZ',
-            delta: '-50 箱',
-            status: '异常',
-            color: Color(0xFFB91C1C),
-            background: Color(0xFFFEE2E2),
-          ),
-          SizedBox(height: 8),
-          _ProductRow(
-            productCode: '20148',
-            batchCode: 'FBAADEZ',
-            delta: '-10 箱',
-            status: '待复核',
-            color: Color(0xFF92400E),
-            background: Color(0xFFFFF7ED),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConfirmCard extends StatelessWidget {
-  const _ConfirmCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _CardShell(
-      title: '盘后确认',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: const Text(
-              '本页为 UI 预览：确认后只生成盘库笔记，不修改库存。',
-              style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.save_alt_outlined),
-                  label: const Text('保存草稿'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.task_alt),
-                  label: const Text('确认完成'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CardShell extends StatelessWidget {
-  const _CardShell({
-    required this.title,
-    required this.child,
-    this.trailing,
-  });
-
-  final String title;
-  final Widget child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _RuleRow extends StatelessWidget {
-  const _RuleRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              label,
+              _formatMonth(_selectedMonth),
               style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
               ),
             ),
           ),
+          IconButton(
+            tooltip: '选择月份',
+            onPressed: _loading ? null : _pickMonth,
+            icon: const Icon(Icons.calendar_month_outlined),
+          ),
+          const SizedBox(width: 4),
+          FilledButton.icon(
+            onPressed: _loading ? null : _createSession,
+            icon: const Icon(Icons.auto_awesome),
+            label: Text(_loading ? '生成中' : '生成清单'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statsCard({
+    required int total,
+    required int pending,
+    required int checked,
+    required int issue,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          _metric('总数', '$total'),
+          _metric('待盘', '$pending'),
+          _metric('已盘', '$checked'),
+          _metric('异常', '$issue'),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
           Text(
             value,
             style: const TextStyle(
               color: AppTheme.textPrimary,
+              fontSize: 18,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -337,61 +190,265 @@ class _RuleRow extends StatelessWidget {
       ),
     );
   }
-}
 
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({
-    required this.productCode,
-    required this.batchCode,
-    required this.delta,
-    required this.status,
-    required this.color,
-    required this.background,
-  });
-
-  final String productCode;
-  final String batchCode;
-  final String delta;
-  final String status;
-  final Color color;
-  final Color background;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _itemCard(StocktakeItemRecord item, {required bool readOnly}) {
+    final status = StocktakeItemStatus.values[item.status];
+    final delta = item.currentBoxes - item.initialBoxes;
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              '$productCode · $batchCode · 变化 $delta',
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w800,
-              ),
+          Text(
+            '${item.productCode} · ${item.batchCode} · ${item.dateBatch}',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(999),
+          const SizedBox(height: 6),
+          Text(
+            '初始 ${item.initialBoxes}箱  当前 ${item.currentBoxes}箱  变化 ${delta > 0 ? '+' : ''}$delta箱',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w700,
             ),
-            child: Text(
-              status,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w900,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _statusChip(item, StocktakeItemStatus.pending, '待盘', status == StocktakeItemStatus.pending),
+              _statusChip(item, StocktakeItemStatus.checked, '已盘', status == StocktakeItemStatus.checked),
+              _statusChip(item, StocktakeItemStatus.issue, '异常', status == StocktakeItemStatus.issue),
+              ActionChip(
+                label: const Text('备注'),
+                onPressed: readOnly ? null : () => _editNote(item),
+              ),
+            ],
+          ),
+          if ((item.note ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              item.note!,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statusChip(
+    StocktakeItemRecord item,
+    StocktakeItemStatus target,
+    String text,
+    bool selected,
+  ) {
+    return ChoiceChip(
+      selected: selected,
+      label: Text(text),
+      onSelected: (_) async {
+        await _stocktakeDao.updateItem(itemId: item.id, status: target, note: item.note);
+        await _reloadBundle();
+      },
+    );
+  }
+
+  Widget _emptyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Text(
+        '先选择月份，再点“生成清单”。',
+        style: TextStyle(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyResultCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Text(
+        '本月无需要盘点的条目。',
+        style: TextStyle(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _recentCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '最近盘库',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_recentSessions.isEmpty)
+            const Text(
+              '暂无记录',
+              style: TextStyle(color: AppTheme.textSecondary),
+            )
+          else
+            ..._recentSessions.map(
+              (session) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '${session.monthKey} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _recentSessions
+                .map(
+                  (session) => ActionChip(
+                    label: Text(
+                      '${session.monthKey} ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                    ),
+                    onPressed: () => _openSession(session),
+                  ),
+                )
+                .toList(),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _pickMonth() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: '选择盘库月份',
+    );
+    if (selected == null) return;
+    setState(() => _selectedMonth = DateTime(selected.year, selected.month));
+  }
+
+  Future<void> _createSession() async {
+    setState(() => _loading = true);
+    final bundle = await _stocktakeDao.createOrLoadSession(month: _selectedMonth);
+    if (!mounted) return;
+    setState(() {
+      _bundle = bundle;
+      _loading = false;
+    });
+    await _loadRecent();
+  }
+
+  Future<void> _reloadBundle() async {
+    final current = _bundle;
+    if (current == null) return;
+    final next = await _stocktakeDao.loadSession(current.session.id);
+    if (!mounted) return;
+    setState(() => _bundle = next);
+  }
+
+  Future<void> _editNote(StocktakeItemRecord item) async {
+    final controller = TextEditingController(text: item.note ?? '');
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('备注'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: '写点记录',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (value == null) return;
+    final status = StocktakeItemStatus.values[item.status];
+    await _stocktakeDao.updateItem(itemId: item.id, status: status, note: value);
+    await _reloadBundle();
+  }
+
+  Future<void> _loadRecent() async {
+    final recent = await _stocktakeDao.listRecentSessions();
+    if (!mounted) return;
+    setState(() => _recentSessions = recent);
+  }
+
+  Future<void> _openSession(StocktakeSessionRecord session) async {
+    setState(() => _loading = true);
+    final bundle = await _stocktakeDao.loadSession(session.id);
+    if (!mounted) return;
+    final monthParts = session.monthKey.split('-');
+    DateTime nextMonth = _selectedMonth;
+    if (monthParts.length == 2) {
+      final year = int.tryParse(monthParts[0]);
+      final month = int.tryParse(monthParts[1]);
+      if (year != null && month != null && month >= 1 && month <= 12) {
+        nextMonth = DateTime(year, month);
+      }
+    }
+    setState(() {
+      _bundle = bundle;
+      _selectedMonth = nextMonth;
+      _loading = false;
+    });
+  }
+}
+
+String _formatMonth(DateTime month) {
+  return '${month.year}年${month.month}月';
+}
+
+DateTime _defaultMonth() {
+  final now = DateTime.now();
+  final current = DateTime(now.year, now.month);
+  return DateTime(current.year, current.month - 1);
 }

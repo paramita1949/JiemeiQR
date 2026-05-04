@@ -4791,6 +4791,946 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   }
 }
 
+class $StocktakeSessionsTable extends StocktakeSessions
+    with TableInfo<$StocktakeSessionsTable, StocktakeSessionRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StocktakeSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _monthKeyMeta =
+      const VerificationMeta('monthKey');
+  @override
+  late final GeneratedColumn<String> monthKey = GeneratedColumn<String>(
+      'month_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<int> status = GeneratedColumn<int>(
+      'status', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _completedAtMeta =
+      const VerificationMeta('completedAt');
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+      'completed_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, monthKey, status, note, createdAt, completedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'stocktake_sessions';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<StocktakeSessionRecord> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('month_key')) {
+      context.handle(_monthKeyMeta,
+          monthKey.isAcceptableOrUnknown(data['month_key']!, _monthKeyMeta));
+    } else if (isInserting) {
+      context.missing(_monthKeyMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+          _completedAtMeta,
+          completedAt.isAcceptableOrUnknown(
+              data['completed_at']!, _completedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StocktakeSessionRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StocktakeSessionRecord(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      monthKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}month_key'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}status'])!,
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      completedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}completed_at']),
+    );
+  }
+
+  @override
+  $StocktakeSessionsTable createAlias(String alias) {
+    return $StocktakeSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StocktakeSessionRecord extends DataClass
+    implements Insertable<StocktakeSessionRecord> {
+  final int id;
+  final String monthKey;
+  final int status;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime? completedAt;
+  const StocktakeSessionRecord(
+      {required this.id,
+      required this.monthKey,
+      required this.status,
+      this.note,
+      required this.createdAt,
+      this.completedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['month_key'] = Variable<String>(monthKey);
+    map['status'] = Variable<int>(status);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    return map;
+  }
+
+  StocktakeSessionsCompanion toCompanion(bool nullToAbsent) {
+    return StocktakeSessionsCompanion(
+      id: Value(id),
+      monthKey: Value(monthKey),
+      status: Value(status),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+    );
+  }
+
+  factory StocktakeSessionRecord.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StocktakeSessionRecord(
+      id: serializer.fromJson<int>(json['id']),
+      monthKey: serializer.fromJson<String>(json['monthKey']),
+      status: serializer.fromJson<int>(json['status']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'monthKey': serializer.toJson<String>(monthKey),
+      'status': serializer.toJson<int>(status),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+    };
+  }
+
+  StocktakeSessionRecord copyWith(
+          {int? id,
+          String? monthKey,
+          int? status,
+          Value<String?> note = const Value.absent(),
+          DateTime? createdAt,
+          Value<DateTime?> completedAt = const Value.absent()}) =>
+      StocktakeSessionRecord(
+        id: id ?? this.id,
+        monthKey: monthKey ?? this.monthKey,
+        status: status ?? this.status,
+        note: note.present ? note.value : this.note,
+        createdAt: createdAt ?? this.createdAt,
+        completedAt: completedAt.present ? completedAt.value : this.completedAt,
+      );
+  StocktakeSessionRecord copyWithCompanion(StocktakeSessionsCompanion data) {
+    return StocktakeSessionRecord(
+      id: data.id.present ? data.id.value : this.id,
+      monthKey: data.monthKey.present ? data.monthKey.value : this.monthKey,
+      status: data.status.present ? data.status.value : this.status,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      completedAt:
+          data.completedAt.present ? data.completedAt.value : this.completedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StocktakeSessionRecord(')
+          ..write('id: $id, ')
+          ..write('monthKey: $monthKey, ')
+          ..write('status: $status, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, monthKey, status, note, createdAt, completedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StocktakeSessionRecord &&
+          other.id == this.id &&
+          other.monthKey == this.monthKey &&
+          other.status == this.status &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.completedAt == this.completedAt);
+}
+
+class StocktakeSessionsCompanion
+    extends UpdateCompanion<StocktakeSessionRecord> {
+  final Value<int> id;
+  final Value<String> monthKey;
+  final Value<int> status;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> completedAt;
+  const StocktakeSessionsCompanion({
+    this.id = const Value.absent(),
+    this.monthKey = const Value.absent(),
+    this.status = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+  });
+  StocktakeSessionsCompanion.insert({
+    this.id = const Value.absent(),
+    required String monthKey,
+    this.status = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+  }) : monthKey = Value(monthKey);
+  static Insertable<StocktakeSessionRecord> custom({
+    Expression<int>? id,
+    Expression<String>? monthKey,
+    Expression<int>? status,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? completedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (monthKey != null) 'month_key': monthKey,
+      if (status != null) 'status': status,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (completedAt != null) 'completed_at': completedAt,
+    });
+  }
+
+  StocktakeSessionsCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? monthKey,
+      Value<int>? status,
+      Value<String?>? note,
+      Value<DateTime>? createdAt,
+      Value<DateTime?>? completedAt}) {
+    return StocktakeSessionsCompanion(
+      id: id ?? this.id,
+      monthKey: monthKey ?? this.monthKey,
+      status: status ?? this.status,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (monthKey.present) {
+      map['month_key'] = Variable<String>(monthKey.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<int>(status.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StocktakeSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('monthKey: $monthKey, ')
+          ..write('status: $status, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StocktakeItemsTable extends StocktakeItems
+    with TableInfo<$StocktakeItemsTable, StocktakeItemRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StocktakeItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _sessionIdMeta =
+      const VerificationMeta('sessionId');
+  @override
+  late final GeneratedColumn<int> sessionId = GeneratedColumn<int>(
+      'session_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES stocktake_sessions (id)'));
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<int> productId = GeneratedColumn<int>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES products (id)'));
+  static const VerificationMeta _batchIdMeta =
+      const VerificationMeta('batchId');
+  @override
+  late final GeneratedColumn<int> batchId = GeneratedColumn<int>(
+      'batch_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES batches (id)'));
+  static const VerificationMeta _productCodeMeta =
+      const VerificationMeta('productCode');
+  @override
+  late final GeneratedColumn<String> productCode = GeneratedColumn<String>(
+      'product_code', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _batchCodeMeta =
+      const VerificationMeta('batchCode');
+  @override
+  late final GeneratedColumn<String> batchCode = GeneratedColumn<String>(
+      'batch_code', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dateBatchMeta =
+      const VerificationMeta('dateBatch');
+  @override
+  late final GeneratedColumn<String> dateBatch = GeneratedColumn<String>(
+      'date_batch', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _initialBoxesMeta =
+      const VerificationMeta('initialBoxes');
+  @override
+  late final GeneratedColumn<int> initialBoxes = GeneratedColumn<int>(
+      'initial_boxes', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _currentBoxesMeta =
+      const VerificationMeta('currentBoxes');
+  @override
+  late final GeneratedColumn<int> currentBoxes = GeneratedColumn<int>(
+      'current_boxes', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<int> status = GeneratedColumn<int>(
+      'status', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _checkedAtMeta =
+      const VerificationMeta('checkedAt');
+  @override
+  late final GeneratedColumn<DateTime> checkedAt = GeneratedColumn<DateTime>(
+      'checked_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        sessionId,
+        productId,
+        batchId,
+        productCode,
+        batchCode,
+        dateBatch,
+        initialBoxes,
+        currentBoxes,
+        status,
+        note,
+        checkedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'stocktake_items';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<StocktakeItemRecord> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(_sessionIdMeta,
+          sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta));
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('batch_id')) {
+      context.handle(_batchIdMeta,
+          batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta));
+    } else if (isInserting) {
+      context.missing(_batchIdMeta);
+    }
+    if (data.containsKey('product_code')) {
+      context.handle(
+          _productCodeMeta,
+          productCode.isAcceptableOrUnknown(
+              data['product_code']!, _productCodeMeta));
+    } else if (isInserting) {
+      context.missing(_productCodeMeta);
+    }
+    if (data.containsKey('batch_code')) {
+      context.handle(_batchCodeMeta,
+          batchCode.isAcceptableOrUnknown(data['batch_code']!, _batchCodeMeta));
+    } else if (isInserting) {
+      context.missing(_batchCodeMeta);
+    }
+    if (data.containsKey('date_batch')) {
+      context.handle(_dateBatchMeta,
+          dateBatch.isAcceptableOrUnknown(data['date_batch']!, _dateBatchMeta));
+    } else if (isInserting) {
+      context.missing(_dateBatchMeta);
+    }
+    if (data.containsKey('initial_boxes')) {
+      context.handle(
+          _initialBoxesMeta,
+          initialBoxes.isAcceptableOrUnknown(
+              data['initial_boxes']!, _initialBoxesMeta));
+    } else if (isInserting) {
+      context.missing(_initialBoxesMeta);
+    }
+    if (data.containsKey('current_boxes')) {
+      context.handle(
+          _currentBoxesMeta,
+          currentBoxes.isAcceptableOrUnknown(
+              data['current_boxes']!, _currentBoxesMeta));
+    } else if (isInserting) {
+      context.missing(_currentBoxesMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    }
+    if (data.containsKey('checked_at')) {
+      context.handle(_checkedAtMeta,
+          checkedAt.isAcceptableOrUnknown(data['checked_at']!, _checkedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StocktakeItemRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StocktakeItemRecord(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      sessionId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}session_id'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}product_id'])!,
+      batchId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}batch_id'])!,
+      productCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_code'])!,
+      batchCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}batch_code'])!,
+      dateBatch: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}date_batch'])!,
+      initialBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}initial_boxes'])!,
+      currentBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}current_boxes'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}status'])!,
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note']),
+      checkedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}checked_at']),
+    );
+  }
+
+  @override
+  $StocktakeItemsTable createAlias(String alias) {
+    return $StocktakeItemsTable(attachedDatabase, alias);
+  }
+}
+
+class StocktakeItemRecord extends DataClass
+    implements Insertable<StocktakeItemRecord> {
+  final int id;
+  final int sessionId;
+  final int productId;
+  final int batchId;
+  final String productCode;
+  final String batchCode;
+  final String dateBatch;
+  final int initialBoxes;
+  final int currentBoxes;
+  final int status;
+  final String? note;
+  final DateTime? checkedAt;
+  const StocktakeItemRecord(
+      {required this.id,
+      required this.sessionId,
+      required this.productId,
+      required this.batchId,
+      required this.productCode,
+      required this.batchCode,
+      required this.dateBatch,
+      required this.initialBoxes,
+      required this.currentBoxes,
+      required this.status,
+      this.note,
+      this.checkedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['session_id'] = Variable<int>(sessionId);
+    map['product_id'] = Variable<int>(productId);
+    map['batch_id'] = Variable<int>(batchId);
+    map['product_code'] = Variable<String>(productCode);
+    map['batch_code'] = Variable<String>(batchCode);
+    map['date_batch'] = Variable<String>(dateBatch);
+    map['initial_boxes'] = Variable<int>(initialBoxes);
+    map['current_boxes'] = Variable<int>(currentBoxes);
+    map['status'] = Variable<int>(status);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || checkedAt != null) {
+      map['checked_at'] = Variable<DateTime>(checkedAt);
+    }
+    return map;
+  }
+
+  StocktakeItemsCompanion toCompanion(bool nullToAbsent) {
+    return StocktakeItemsCompanion(
+      id: Value(id),
+      sessionId: Value(sessionId),
+      productId: Value(productId),
+      batchId: Value(batchId),
+      productCode: Value(productCode),
+      batchCode: Value(batchCode),
+      dateBatch: Value(dateBatch),
+      initialBoxes: Value(initialBoxes),
+      currentBoxes: Value(currentBoxes),
+      status: Value(status),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      checkedAt: checkedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checkedAt),
+    );
+  }
+
+  factory StocktakeItemRecord.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StocktakeItemRecord(
+      id: serializer.fromJson<int>(json['id']),
+      sessionId: serializer.fromJson<int>(json['sessionId']),
+      productId: serializer.fromJson<int>(json['productId']),
+      batchId: serializer.fromJson<int>(json['batchId']),
+      productCode: serializer.fromJson<String>(json['productCode']),
+      batchCode: serializer.fromJson<String>(json['batchCode']),
+      dateBatch: serializer.fromJson<String>(json['dateBatch']),
+      initialBoxes: serializer.fromJson<int>(json['initialBoxes']),
+      currentBoxes: serializer.fromJson<int>(json['currentBoxes']),
+      status: serializer.fromJson<int>(json['status']),
+      note: serializer.fromJson<String?>(json['note']),
+      checkedAt: serializer.fromJson<DateTime?>(json['checkedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sessionId': serializer.toJson<int>(sessionId),
+      'productId': serializer.toJson<int>(productId),
+      'batchId': serializer.toJson<int>(batchId),
+      'productCode': serializer.toJson<String>(productCode),
+      'batchCode': serializer.toJson<String>(batchCode),
+      'dateBatch': serializer.toJson<String>(dateBatch),
+      'initialBoxes': serializer.toJson<int>(initialBoxes),
+      'currentBoxes': serializer.toJson<int>(currentBoxes),
+      'status': serializer.toJson<int>(status),
+      'note': serializer.toJson<String?>(note),
+      'checkedAt': serializer.toJson<DateTime?>(checkedAt),
+    };
+  }
+
+  StocktakeItemRecord copyWith(
+          {int? id,
+          int? sessionId,
+          int? productId,
+          int? batchId,
+          String? productCode,
+          String? batchCode,
+          String? dateBatch,
+          int? initialBoxes,
+          int? currentBoxes,
+          int? status,
+          Value<String?> note = const Value.absent(),
+          Value<DateTime?> checkedAt = const Value.absent()}) =>
+      StocktakeItemRecord(
+        id: id ?? this.id,
+        sessionId: sessionId ?? this.sessionId,
+        productId: productId ?? this.productId,
+        batchId: batchId ?? this.batchId,
+        productCode: productCode ?? this.productCode,
+        batchCode: batchCode ?? this.batchCode,
+        dateBatch: dateBatch ?? this.dateBatch,
+        initialBoxes: initialBoxes ?? this.initialBoxes,
+        currentBoxes: currentBoxes ?? this.currentBoxes,
+        status: status ?? this.status,
+        note: note.present ? note.value : this.note,
+        checkedAt: checkedAt.present ? checkedAt.value : this.checkedAt,
+      );
+  StocktakeItemRecord copyWithCompanion(StocktakeItemsCompanion data) {
+    return StocktakeItemRecord(
+      id: data.id.present ? data.id.value : this.id,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      batchId: data.batchId.present ? data.batchId.value : this.batchId,
+      productCode:
+          data.productCode.present ? data.productCode.value : this.productCode,
+      batchCode: data.batchCode.present ? data.batchCode.value : this.batchCode,
+      dateBatch: data.dateBatch.present ? data.dateBatch.value : this.dateBatch,
+      initialBoxes: data.initialBoxes.present
+          ? data.initialBoxes.value
+          : this.initialBoxes,
+      currentBoxes: data.currentBoxes.present
+          ? data.currentBoxes.value
+          : this.currentBoxes,
+      status: data.status.present ? data.status.value : this.status,
+      note: data.note.present ? data.note.value : this.note,
+      checkedAt: data.checkedAt.present ? data.checkedAt.value : this.checkedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StocktakeItemRecord(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('productId: $productId, ')
+          ..write('batchId: $batchId, ')
+          ..write('productCode: $productCode, ')
+          ..write('batchCode: $batchCode, ')
+          ..write('dateBatch: $dateBatch, ')
+          ..write('initialBoxes: $initialBoxes, ')
+          ..write('currentBoxes: $currentBoxes, ')
+          ..write('status: $status, ')
+          ..write('note: $note, ')
+          ..write('checkedAt: $checkedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      sessionId,
+      productId,
+      batchId,
+      productCode,
+      batchCode,
+      dateBatch,
+      initialBoxes,
+      currentBoxes,
+      status,
+      note,
+      checkedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StocktakeItemRecord &&
+          other.id == this.id &&
+          other.sessionId == this.sessionId &&
+          other.productId == this.productId &&
+          other.batchId == this.batchId &&
+          other.productCode == this.productCode &&
+          other.batchCode == this.batchCode &&
+          other.dateBatch == this.dateBatch &&
+          other.initialBoxes == this.initialBoxes &&
+          other.currentBoxes == this.currentBoxes &&
+          other.status == this.status &&
+          other.note == this.note &&
+          other.checkedAt == this.checkedAt);
+}
+
+class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
+  final Value<int> id;
+  final Value<int> sessionId;
+  final Value<int> productId;
+  final Value<int> batchId;
+  final Value<String> productCode;
+  final Value<String> batchCode;
+  final Value<String> dateBatch;
+  final Value<int> initialBoxes;
+  final Value<int> currentBoxes;
+  final Value<int> status;
+  final Value<String?> note;
+  final Value<DateTime?> checkedAt;
+  const StocktakeItemsCompanion({
+    this.id = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.batchId = const Value.absent(),
+    this.productCode = const Value.absent(),
+    this.batchCode = const Value.absent(),
+    this.dateBatch = const Value.absent(),
+    this.initialBoxes = const Value.absent(),
+    this.currentBoxes = const Value.absent(),
+    this.status = const Value.absent(),
+    this.note = const Value.absent(),
+    this.checkedAt = const Value.absent(),
+  });
+  StocktakeItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required int sessionId,
+    required int productId,
+    required int batchId,
+    required String productCode,
+    required String batchCode,
+    required String dateBatch,
+    required int initialBoxes,
+    required int currentBoxes,
+    this.status = const Value.absent(),
+    this.note = const Value.absent(),
+    this.checkedAt = const Value.absent(),
+  })  : sessionId = Value(sessionId),
+        productId = Value(productId),
+        batchId = Value(batchId),
+        productCode = Value(productCode),
+        batchCode = Value(batchCode),
+        dateBatch = Value(dateBatch),
+        initialBoxes = Value(initialBoxes),
+        currentBoxes = Value(currentBoxes);
+  static Insertable<StocktakeItemRecord> custom({
+    Expression<int>? id,
+    Expression<int>? sessionId,
+    Expression<int>? productId,
+    Expression<int>? batchId,
+    Expression<String>? productCode,
+    Expression<String>? batchCode,
+    Expression<String>? dateBatch,
+    Expression<int>? initialBoxes,
+    Expression<int>? currentBoxes,
+    Expression<int>? status,
+    Expression<String>? note,
+    Expression<DateTime>? checkedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sessionId != null) 'session_id': sessionId,
+      if (productId != null) 'product_id': productId,
+      if (batchId != null) 'batch_id': batchId,
+      if (productCode != null) 'product_code': productCode,
+      if (batchCode != null) 'batch_code': batchCode,
+      if (dateBatch != null) 'date_batch': dateBatch,
+      if (initialBoxes != null) 'initial_boxes': initialBoxes,
+      if (currentBoxes != null) 'current_boxes': currentBoxes,
+      if (status != null) 'status': status,
+      if (note != null) 'note': note,
+      if (checkedAt != null) 'checked_at': checkedAt,
+    });
+  }
+
+  StocktakeItemsCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? sessionId,
+      Value<int>? productId,
+      Value<int>? batchId,
+      Value<String>? productCode,
+      Value<String>? batchCode,
+      Value<String>? dateBatch,
+      Value<int>? initialBoxes,
+      Value<int>? currentBoxes,
+      Value<int>? status,
+      Value<String?>? note,
+      Value<DateTime?>? checkedAt}) {
+    return StocktakeItemsCompanion(
+      id: id ?? this.id,
+      sessionId: sessionId ?? this.sessionId,
+      productId: productId ?? this.productId,
+      batchId: batchId ?? this.batchId,
+      productCode: productCode ?? this.productCode,
+      batchCode: batchCode ?? this.batchCode,
+      dateBatch: dateBatch ?? this.dateBatch,
+      initialBoxes: initialBoxes ?? this.initialBoxes,
+      currentBoxes: currentBoxes ?? this.currentBoxes,
+      status: status ?? this.status,
+      note: note ?? this.note,
+      checkedAt: checkedAt ?? this.checkedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<int>(sessionId.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<int>(productId.value);
+    }
+    if (batchId.present) {
+      map['batch_id'] = Variable<int>(batchId.value);
+    }
+    if (productCode.present) {
+      map['product_code'] = Variable<String>(productCode.value);
+    }
+    if (batchCode.present) {
+      map['batch_code'] = Variable<String>(batchCode.value);
+    }
+    if (dateBatch.present) {
+      map['date_batch'] = Variable<String>(dateBatch.value);
+    }
+    if (initialBoxes.present) {
+      map['initial_boxes'] = Variable<int>(initialBoxes.value);
+    }
+    if (currentBoxes.present) {
+      map['current_boxes'] = Variable<int>(currentBoxes.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<int>(status.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (checkedAt.present) {
+      map['checked_at'] = Variable<DateTime>(checkedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StocktakeItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('productId: $productId, ')
+          ..write('batchId: $batchId, ')
+          ..write('productCode: $productCode, ')
+          ..write('batchCode: $batchCode, ')
+          ..write('dateBatch: $dateBatch, ')
+          ..write('initialBoxes: $initialBoxes, ')
+          ..write('currentBoxes: $currentBoxes, ')
+          ..write('status: $status, ')
+          ..write('note: $note, ')
+          ..write('checkedAt: $checkedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4806,6 +5746,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PatchRequestsTable patchRequests = $PatchRequestsTable(this);
   late final $GeofenceDailyStatesTable geofenceDailyStates =
       $GeofenceDailyStatesTable(this);
+  late final $StocktakeSessionsTable stocktakeSessions =
+      $StocktakeSessionsTable(this);
+  late final $StocktakeItemsTable stocktakeItems = $StocktakeItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4819,7 +5762,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         attendanceRules,
         attendanceRecords,
         patchRequests,
-        geofenceDailyStates
+        geofenceDailyStates,
+        stocktakeSessions,
+        stocktakeItems
       ];
 }
 
@@ -4872,6 +5817,21 @@ final class $$ProductsTableReferences
         .filter((f) => f.productId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_orderItemsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$StocktakeItemsTable, List<StocktakeItemRecord>>
+      _stocktakeItemsRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.stocktakeItems,
+              aliasName: $_aliasNameGenerator(
+                  db.products.id, db.stocktakeItems.productId));
+
+  $$StocktakeItemsTableProcessedTableManager get stocktakeItemsRefs {
+    final manager = $$StocktakeItemsTableTableManager($_db, $_db.stocktakeItems)
+        .filter((f) => f.productId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_stocktakeItemsRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -4941,6 +5901,27 @@ class $$ProductsTableFilterComposer
             $$OrderItemsTableFilterComposer(
               $db: $db,
               $table: $db.orderItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> stocktakeItemsRefs(
+      Expression<bool> Function($$StocktakeItemsTableFilterComposer f) f) {
+    final $$StocktakeItemsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.productId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableFilterComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5054,6 +6035,27 @@ class $$ProductsTableAnnotationComposer
             ));
     return f(composer);
   }
+
+  Expression<T> stocktakeItemsRefs<T extends Object>(
+      Expression<T> Function($$StocktakeItemsTableAnnotationComposer a) f) {
+    final $$StocktakeItemsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.productId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$ProductsTableTableManager extends RootTableManager<
@@ -5067,7 +6069,8 @@ class $$ProductsTableTableManager extends RootTableManager<
     $$ProductsTableUpdateCompanionBuilder,
     (Product, $$ProductsTableReferences),
     Product,
-    PrefetchHooks Function({bool batchesRefs, bool orderItemsRefs})> {
+    PrefetchHooks Function(
+        {bool batchesRefs, bool orderItemsRefs, bool stocktakeItemsRefs})> {
   $$ProductsTableTableManager(_$AppDatabase db, $ProductsTable table)
       : super(TableManagerState(
           db: db,
@@ -5119,12 +6122,15 @@ class $$ProductsTableTableManager extends RootTableManager<
                   (e.readTable(table), $$ProductsTableReferences(db, table, e)))
               .toList(),
           prefetchHooksCallback: (
-              {batchesRefs = false, orderItemsRefs = false}) {
+              {batchesRefs = false,
+              orderItemsRefs = false,
+              stocktakeItemsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (batchesRefs) db.batches,
-                if (orderItemsRefs) db.orderItems
+                if (orderItemsRefs) db.orderItems,
+                if (stocktakeItemsRefs) db.stocktakeItems
               ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
@@ -5154,6 +6160,19 @@ class $$ProductsTableTableManager extends RootTableManager<
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.productId == item.id),
+                        typedResults: items),
+                  if (stocktakeItemsRefs)
+                    await $_getPrefetchedData<Product, $ProductsTable,
+                            StocktakeItemRecord>(
+                        currentTable: table,
+                        referencedTable: $$ProductsTableReferences
+                            ._stocktakeItemsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$ProductsTableReferences(db, table, p0)
+                                .stocktakeItemsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.productId == item.id),
                         typedResults: items)
                 ];
               },
@@ -5173,7 +6192,8 @@ typedef $$ProductsTableProcessedTableManager = ProcessedTableManager<
     $$ProductsTableUpdateCompanionBuilder,
     (Product, $$ProductsTableReferences),
     Product,
-    PrefetchHooks Function({bool batchesRefs, bool orderItemsRefs})>;
+    PrefetchHooks Function(
+        {bool batchesRefs, bool orderItemsRefs, bool stocktakeItemsRefs})>;
 typedef $$BatchesTableCreateCompanionBuilder = BatchesCompanion Function({
   Value<int> id,
   required int productId,
@@ -5249,6 +6269,21 @@ final class $$BatchesTableReferences
         .filter((f) => f.batchId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_stockMovementsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$StocktakeItemsTable, List<StocktakeItemRecord>>
+      _stocktakeItemsRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.stocktakeItems,
+              aliasName: $_aliasNameGenerator(
+                  db.batches.id, db.stocktakeItems.batchId));
+
+  $$StocktakeItemsTableProcessedTableManager get stocktakeItemsRefs {
+    final manager = $$StocktakeItemsTableTableManager($_db, $_db.stocktakeItems)
+        .filter((f) => f.batchId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_stocktakeItemsRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -5354,6 +6389,27 @@ class $$BatchesTableFilterComposer
             $$StockMovementsTableFilterComposer(
               $db: $db,
               $table: $db.stockMovements,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> stocktakeItemsRefs(
+      Expression<bool> Function($$StocktakeItemsTableFilterComposer f) f) {
+    final $$StocktakeItemsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.batchId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableFilterComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5538,6 +6594,27 @@ class $$BatchesTableAnnotationComposer
             ));
     return f(composer);
   }
+
+  Expression<T> stocktakeItemsRefs<T extends Object>(
+      Expression<T> Function($$StocktakeItemsTableAnnotationComposer a) f) {
+    final $$StocktakeItemsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.batchId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$BatchesTableTableManager extends RootTableManager<
@@ -5552,7 +6629,10 @@ class $$BatchesTableTableManager extends RootTableManager<
     (BatchRecord, $$BatchesTableReferences),
     BatchRecord,
     PrefetchHooks Function(
-        {bool productId, bool orderItemsRefs, bool stockMovementsRefs})> {
+        {bool productId,
+        bool orderItemsRefs,
+        bool stockMovementsRefs,
+        bool stocktakeItemsRefs})> {
   $$BatchesTableTableManager(_$AppDatabase db, $BatchesTable table)
       : super(TableManagerState(
           db: db,
@@ -5630,12 +6710,14 @@ class $$BatchesTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {productId = false,
               orderItemsRefs = false,
-              stockMovementsRefs = false}) {
+              stockMovementsRefs = false,
+              stocktakeItemsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (orderItemsRefs) db.orderItems,
-                if (stockMovementsRefs) db.stockMovements
+                if (stockMovementsRefs) db.stockMovements,
+                if (stocktakeItemsRefs) db.stocktakeItems
               ],
               addJoins: <
                   T extends TableManagerState<
@@ -5690,6 +6772,18 @@ class $$BatchesTableTableManager extends RootTableManager<
                         referencedItemsForCurrentItem: (item,
                                 referencedItems) =>
                             referencedItems.where((e) => e.batchId == item.id),
+                        typedResults: items),
+                  if (stocktakeItemsRefs)
+                    await $_getPrefetchedData<BatchRecord, $BatchesTable, StocktakeItemRecord>(
+                        currentTable: table,
+                        referencedTable: $$BatchesTableReferences
+                            ._stocktakeItemsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$BatchesTableReferences(db, table, p0)
+                                .stocktakeItemsRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.batchId == item.id),
                         typedResults: items)
                 ];
               },
@@ -5710,7 +6804,10 @@ typedef $$BatchesTableProcessedTableManager = ProcessedTableManager<
     (BatchRecord, $$BatchesTableReferences),
     BatchRecord,
     PrefetchHooks Function(
-        {bool productId, bool orderItemsRefs, bool stockMovementsRefs})>;
+        {bool productId,
+        bool orderItemsRefs,
+        bool stockMovementsRefs,
+        bool stocktakeItemsRefs})>;
 typedef $$OrdersTableCreateCompanionBuilder = OrdersCompanion Function({
   Value<int> id,
   required String waybillNo,
@@ -8073,6 +9170,808 @@ typedef $$GeofenceDailyStatesTableProcessedTableManager = ProcessedTableManager<
     ),
     GeofenceDailyState,
     PrefetchHooks Function()>;
+typedef $$StocktakeSessionsTableCreateCompanionBuilder
+    = StocktakeSessionsCompanion Function({
+  Value<int> id,
+  required String monthKey,
+  Value<int> status,
+  Value<String?> note,
+  Value<DateTime> createdAt,
+  Value<DateTime?> completedAt,
+});
+typedef $$StocktakeSessionsTableUpdateCompanionBuilder
+    = StocktakeSessionsCompanion Function({
+  Value<int> id,
+  Value<String> monthKey,
+  Value<int> status,
+  Value<String?> note,
+  Value<DateTime> createdAt,
+  Value<DateTime?> completedAt,
+});
+
+final class $$StocktakeSessionsTableReferences extends BaseReferences<
+    _$AppDatabase, $StocktakeSessionsTable, StocktakeSessionRecord> {
+  $$StocktakeSessionsTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$StocktakeItemsTable, List<StocktakeItemRecord>>
+      _stocktakeItemsRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.stocktakeItems,
+              aliasName: $_aliasNameGenerator(
+                  db.stocktakeSessions.id, db.stocktakeItems.sessionId));
+
+  $$StocktakeItemsTableProcessedTableManager get stocktakeItemsRefs {
+    final manager = $$StocktakeItemsTableTableManager($_db, $_db.stocktakeItems)
+        .filter((f) => f.sessionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_stocktakeItemsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
+
+class $$StocktakeSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $StocktakeSessionsTable> {
+  $$StocktakeSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get monthKey => $composableBuilder(
+      column: $table.monthKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> stocktakeItemsRefs(
+      Expression<bool> Function($$StocktakeItemsTableFilterComposer f) f) {
+    final $$StocktakeItemsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.sessionId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableFilterComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+}
+
+class $$StocktakeSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StocktakeSessionsTable> {
+  $$StocktakeSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get monthKey => $composableBuilder(
+      column: $table.monthKey, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$StocktakeSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StocktakeSessionsTable> {
+  $$StocktakeSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get monthKey =>
+      $composableBuilder(column: $table.monthKey, builder: (column) => column);
+
+  GeneratedColumn<int> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => column);
+
+  Expression<T> stocktakeItemsRefs<T extends Object>(
+      Expression<T> Function($$StocktakeItemsTableAnnotationComposer a) f) {
+    final $$StocktakeItemsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.stocktakeItems,
+        getReferencedColumn: (t) => t.sessionId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeItemsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.stocktakeItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+}
+
+class $$StocktakeSessionsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $StocktakeSessionsTable,
+    StocktakeSessionRecord,
+    $$StocktakeSessionsTableFilterComposer,
+    $$StocktakeSessionsTableOrderingComposer,
+    $$StocktakeSessionsTableAnnotationComposer,
+    $$StocktakeSessionsTableCreateCompanionBuilder,
+    $$StocktakeSessionsTableUpdateCompanionBuilder,
+    (StocktakeSessionRecord, $$StocktakeSessionsTableReferences),
+    StocktakeSessionRecord,
+    PrefetchHooks Function({bool stocktakeItemsRefs})> {
+  $$StocktakeSessionsTableTableManager(
+      _$AppDatabase db, $StocktakeSessionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StocktakeSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StocktakeSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StocktakeSessionsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> monthKey = const Value.absent(),
+            Value<int> status = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> completedAt = const Value.absent(),
+          }) =>
+              StocktakeSessionsCompanion(
+            id: id,
+            monthKey: monthKey,
+            status: status,
+            note: note,
+            createdAt: createdAt,
+            completedAt: completedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String monthKey,
+            Value<int> status = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> completedAt = const Value.absent(),
+          }) =>
+              StocktakeSessionsCompanion.insert(
+            id: id,
+            monthKey: monthKey,
+            status: status,
+            note: note,
+            createdAt: createdAt,
+            completedAt: completedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$StocktakeSessionsTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({stocktakeItemsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (stocktakeItemsRefs) db.stocktakeItems
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (stocktakeItemsRefs)
+                    await $_getPrefetchedData<StocktakeSessionRecord,
+                            $StocktakeSessionsTable, StocktakeItemRecord>(
+                        currentTable: table,
+                        referencedTable: $$StocktakeSessionsTableReferences
+                            ._stocktakeItemsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$StocktakeSessionsTableReferences(db, table, p0)
+                                .stocktakeItemsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.sessionId == item.id),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$StocktakeSessionsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $StocktakeSessionsTable,
+    StocktakeSessionRecord,
+    $$StocktakeSessionsTableFilterComposer,
+    $$StocktakeSessionsTableOrderingComposer,
+    $$StocktakeSessionsTableAnnotationComposer,
+    $$StocktakeSessionsTableCreateCompanionBuilder,
+    $$StocktakeSessionsTableUpdateCompanionBuilder,
+    (StocktakeSessionRecord, $$StocktakeSessionsTableReferences),
+    StocktakeSessionRecord,
+    PrefetchHooks Function({bool stocktakeItemsRefs})>;
+typedef $$StocktakeItemsTableCreateCompanionBuilder = StocktakeItemsCompanion
+    Function({
+  Value<int> id,
+  required int sessionId,
+  required int productId,
+  required int batchId,
+  required String productCode,
+  required String batchCode,
+  required String dateBatch,
+  required int initialBoxes,
+  required int currentBoxes,
+  Value<int> status,
+  Value<String?> note,
+  Value<DateTime?> checkedAt,
+});
+typedef $$StocktakeItemsTableUpdateCompanionBuilder = StocktakeItemsCompanion
+    Function({
+  Value<int> id,
+  Value<int> sessionId,
+  Value<int> productId,
+  Value<int> batchId,
+  Value<String> productCode,
+  Value<String> batchCode,
+  Value<String> dateBatch,
+  Value<int> initialBoxes,
+  Value<int> currentBoxes,
+  Value<int> status,
+  Value<String?> note,
+  Value<DateTime?> checkedAt,
+});
+
+final class $$StocktakeItemsTableReferences extends BaseReferences<
+    _$AppDatabase, $StocktakeItemsTable, StocktakeItemRecord> {
+  $$StocktakeItemsTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static $StocktakeSessionsTable _sessionIdTable(_$AppDatabase db) =>
+      db.stocktakeSessions.createAlias($_aliasNameGenerator(
+          db.stocktakeItems.sessionId, db.stocktakeSessions.id));
+
+  $$StocktakeSessionsTableProcessedTableManager get sessionId {
+    final $_column = $_itemColumn<int>('session_id')!;
+
+    final manager =
+        $$StocktakeSessionsTableTableManager($_db, $_db.stocktakeSessions)
+            .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sessionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $ProductsTable _productIdTable(_$AppDatabase db) =>
+      db.products.createAlias(
+          $_aliasNameGenerator(db.stocktakeItems.productId, db.products.id));
+
+  $$ProductsTableProcessedTableManager get productId {
+    final $_column = $_itemColumn<int>('product_id')!;
+
+    final manager = $$ProductsTableTableManager($_db, $_db.products)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_productIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $BatchesTable _batchIdTable(_$AppDatabase db) =>
+      db.batches.createAlias(
+          $_aliasNameGenerator(db.stocktakeItems.batchId, db.batches.id));
+
+  $$BatchesTableProcessedTableManager get batchId {
+    final $_column = $_itemColumn<int>('batch_id')!;
+
+    final manager = $$BatchesTableTableManager($_db, $_db.batches)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_batchIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$StocktakeItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $StocktakeItemsTable> {
+  $$StocktakeItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get batchCode => $composableBuilder(
+      column: $table.batchCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get dateBatch => $composableBuilder(
+      column: $table.dateBatch, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get currentBoxes => $composableBuilder(
+      column: $table.currentBoxes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get checkedAt => $composableBuilder(
+      column: $table.checkedAt, builder: (column) => ColumnFilters(column));
+
+  $$StocktakeSessionsTableFilterComposer get sessionId {
+    final $$StocktakeSessionsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.sessionId,
+        referencedTable: $db.stocktakeSessions,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeSessionsTableFilterComposer(
+              $db: $db,
+              $table: $db.stocktakeSessions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$ProductsTableFilterComposer get productId {
+    final $$ProductsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.productId,
+        referencedTable: $db.products,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ProductsTableFilterComposer(
+              $db: $db,
+              $table: $db.products,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$BatchesTableFilterComposer get batchId {
+    final $$BatchesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.batchId,
+        referencedTable: $db.batches,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BatchesTableFilterComposer(
+              $db: $db,
+              $table: $db.batches,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$StocktakeItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StocktakeItemsTable> {
+  $$StocktakeItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get batchCode => $composableBuilder(
+      column: $table.batchCode, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get dateBatch => $composableBuilder(
+      column: $table.dateBatch, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get currentBoxes => $composableBuilder(
+      column: $table.currentBoxes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get checkedAt => $composableBuilder(
+      column: $table.checkedAt, builder: (column) => ColumnOrderings(column));
+
+  $$StocktakeSessionsTableOrderingComposer get sessionId {
+    final $$StocktakeSessionsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.sessionId,
+        referencedTable: $db.stocktakeSessions,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$StocktakeSessionsTableOrderingComposer(
+              $db: $db,
+              $table: $db.stocktakeSessions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$ProductsTableOrderingComposer get productId {
+    final $$ProductsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.productId,
+        referencedTable: $db.products,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ProductsTableOrderingComposer(
+              $db: $db,
+              $table: $db.products,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$BatchesTableOrderingComposer get batchId {
+    final $$BatchesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.batchId,
+        referencedTable: $db.batches,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BatchesTableOrderingComposer(
+              $db: $db,
+              $table: $db.batches,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$StocktakeItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StocktakeItemsTable> {
+  $$StocktakeItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => column);
+
+  GeneratedColumn<String> get batchCode =>
+      $composableBuilder(column: $table.batchCode, builder: (column) => column);
+
+  GeneratedColumn<String> get dateBatch =>
+      $composableBuilder(column: $table.dateBatch, builder: (column) => column);
+
+  GeneratedColumn<int> get initialBoxes => $composableBuilder(
+      column: $table.initialBoxes, builder: (column) => column);
+
+  GeneratedColumn<int> get currentBoxes => $composableBuilder(
+      column: $table.currentBoxes, builder: (column) => column);
+
+  GeneratedColumn<int> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get checkedAt =>
+      $composableBuilder(column: $table.checkedAt, builder: (column) => column);
+
+  $$StocktakeSessionsTableAnnotationComposer get sessionId {
+    final $$StocktakeSessionsTableAnnotationComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.sessionId,
+            referencedTable: $db.stocktakeSessions,
+            getReferencedColumn: (t) => t.id,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$StocktakeSessionsTableAnnotationComposer(
+                  $db: $db,
+                  $table: $db.stocktakeSessions,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return composer;
+  }
+
+  $$ProductsTableAnnotationComposer get productId {
+    final $$ProductsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.productId,
+        referencedTable: $db.products,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ProductsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.products,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$BatchesTableAnnotationComposer get batchId {
+    final $$BatchesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.batchId,
+        referencedTable: $db.batches,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BatchesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.batches,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$StocktakeItemsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $StocktakeItemsTable,
+    StocktakeItemRecord,
+    $$StocktakeItemsTableFilterComposer,
+    $$StocktakeItemsTableOrderingComposer,
+    $$StocktakeItemsTableAnnotationComposer,
+    $$StocktakeItemsTableCreateCompanionBuilder,
+    $$StocktakeItemsTableUpdateCompanionBuilder,
+    (StocktakeItemRecord, $$StocktakeItemsTableReferences),
+    StocktakeItemRecord,
+    PrefetchHooks Function({bool sessionId, bool productId, bool batchId})> {
+  $$StocktakeItemsTableTableManager(
+      _$AppDatabase db, $StocktakeItemsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StocktakeItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StocktakeItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StocktakeItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> sessionId = const Value.absent(),
+            Value<int> productId = const Value.absent(),
+            Value<int> batchId = const Value.absent(),
+            Value<String> productCode = const Value.absent(),
+            Value<String> batchCode = const Value.absent(),
+            Value<String> dateBatch = const Value.absent(),
+            Value<int> initialBoxes = const Value.absent(),
+            Value<int> currentBoxes = const Value.absent(),
+            Value<int> status = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime?> checkedAt = const Value.absent(),
+          }) =>
+              StocktakeItemsCompanion(
+            id: id,
+            sessionId: sessionId,
+            productId: productId,
+            batchId: batchId,
+            productCode: productCode,
+            batchCode: batchCode,
+            dateBatch: dateBatch,
+            initialBoxes: initialBoxes,
+            currentBoxes: currentBoxes,
+            status: status,
+            note: note,
+            checkedAt: checkedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int sessionId,
+            required int productId,
+            required int batchId,
+            required String productCode,
+            required String batchCode,
+            required String dateBatch,
+            required int initialBoxes,
+            required int currentBoxes,
+            Value<int> status = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime?> checkedAt = const Value.absent(),
+          }) =>
+              StocktakeItemsCompanion.insert(
+            id: id,
+            sessionId: sessionId,
+            productId: productId,
+            batchId: batchId,
+            productCode: productCode,
+            batchCode: batchCode,
+            dateBatch: dateBatch,
+            initialBoxes: initialBoxes,
+            currentBoxes: currentBoxes,
+            status: status,
+            note: note,
+            checkedAt: checkedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$StocktakeItemsTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: (
+              {sessionId = false, productId = false, batchId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (sessionId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.sessionId,
+                    referencedTable:
+                        $$StocktakeItemsTableReferences._sessionIdTable(db),
+                    referencedColumn:
+                        $$StocktakeItemsTableReferences._sessionIdTable(db).id,
+                  ) as T;
+                }
+                if (productId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.productId,
+                    referencedTable:
+                        $$StocktakeItemsTableReferences._productIdTable(db),
+                    referencedColumn:
+                        $$StocktakeItemsTableReferences._productIdTable(db).id,
+                  ) as T;
+                }
+                if (batchId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.batchId,
+                    referencedTable:
+                        $$StocktakeItemsTableReferences._batchIdTable(db),
+                    referencedColumn:
+                        $$StocktakeItemsTableReferences._batchIdTable(db).id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$StocktakeItemsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $StocktakeItemsTable,
+    StocktakeItemRecord,
+    $$StocktakeItemsTableFilterComposer,
+    $$StocktakeItemsTableOrderingComposer,
+    $$StocktakeItemsTableAnnotationComposer,
+    $$StocktakeItemsTableCreateCompanionBuilder,
+    $$StocktakeItemsTableUpdateCompanionBuilder,
+    (StocktakeItemRecord, $$StocktakeItemsTableReferences),
+    StocktakeItemRecord,
+    PrefetchHooks Function({bool sessionId, bool productId, bool batchId})>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8095,4 +9994,8 @@ class $AppDatabaseManager {
       $$PatchRequestsTableTableManager(_db, _db.patchRequests);
   $$GeofenceDailyStatesTableTableManager get geofenceDailyStates =>
       $$GeofenceDailyStatesTableTableManager(_db, _db.geofenceDailyStates);
+  $$StocktakeSessionsTableTableManager get stocktakeSessions =>
+      $$StocktakeSessionsTableTableManager(_db, _db.stocktakeSessions);
+  $$StocktakeItemsTableTableManager get stocktakeItems =>
+      $$StocktakeItemsTableTableManager(_db, _db.stocktakeItems);
 }

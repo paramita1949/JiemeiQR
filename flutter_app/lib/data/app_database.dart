@@ -16,6 +16,8 @@ import 'tables/orders.dart';
 import 'tables/patch_requests.dart';
 import 'tables/products.dart';
 import 'tables/stock_movements.dart';
+import 'tables/stocktake_items.dart';
+import 'tables/stocktake_sessions.dart';
 
 export 'database_enums.dart';
 
@@ -32,6 +34,8 @@ part 'app_database.g.dart';
     AttendanceRecords,
     PatchRequests,
     GeofenceDailyStates,
+    StocktakeSessions,
+    StocktakeItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -40,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,6 +52,7 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
           await _createPerformanceIndexes(m);
           await _createAttendanceIndexes(m);
+          await _createStocktakeIndexes(m);
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
@@ -76,6 +81,11 @@ class AppDatabase extends _$AppDatabase {
             if (!exists) {
               await m.addColumn(attendanceRecords, attendanceRecords.leaveMinutes);
             }
+          }
+          if (from < 9) {
+            await m.createTable(stocktakeSessions);
+            await m.createTable(stocktakeItems);
+            await _createStocktakeIndexes(m);
           }
         },
       );
@@ -128,6 +138,15 @@ class AppDatabase extends _$AppDatabase {
     );
     await m.database.customStatement(
       'CREATE INDEX IF NOT EXISTS idx_patch_day_status ON patch_requests(day, status);',
+    );
+  }
+
+  Future<void> _createStocktakeIndexes(Migrator m) async {
+    await m.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_stocktake_sessions_month ON stocktake_sessions(month_key, created_at);',
+    );
+    await m.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id, status);',
     );
   }
 }

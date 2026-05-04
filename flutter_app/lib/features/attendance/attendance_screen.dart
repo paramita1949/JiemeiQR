@@ -236,7 +236,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     else if (_filteredRows.isEmpty)
                       const _EmptyState(text: '暂无记录')
                     else
-                      ..._filteredRows.take(12).map((r) => _DetailCard(row: r, onTap: () => _openEdit(r))),
+                      ..._filteredRows.take(12).map(
+                        (r) => _DetailCard(
+                          row: r,
+                          isWeekendOvertimeDay: _isWeekendOvertimeDay(r),
+                          onTap: () => _openEdit(r),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -311,6 +317,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
     return null;
+  }
+
+  bool _isWeekendOvertimeDay(AttendanceRecord row) {
+    if (row.day.weekday != DateTime.sunday ||
+        row.checkInAt == null ||
+        row.checkOutAt == null) {
+      return false;
+    }
+    final sat = row.day.subtract(const Duration(days: 1));
+    AttendanceRecord? satRow;
+    for (final r in _rows) {
+      if (r.day.year == sat.year && r.day.month == sat.month && r.day.day == sat.day) {
+        satRow = r;
+        break;
+      }
+    }
+    return satRow != null && satRow.checkInAt != null && satRow.checkOutAt != null;
   }
 }
 
@@ -401,9 +424,14 @@ class _MonthSummaryCard extends StatelessWidget {
 }
 
 class _DetailCard extends StatelessWidget {
-  const _DetailCard({required this.row, required this.onTap});
+  const _DetailCard({
+    required this.row,
+    required this.isWeekendOvertimeDay,
+    required this.onTap,
+  });
 
   final AttendanceRecord row;
+  final bool isWeekendOvertimeDay;
   final VoidCallback onTap;
 
   @override
@@ -437,7 +465,7 @@ class _DetailCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${_md(row.day)}  ${_timeRange(row)}',
+                '${_md(row.day)}${isWeekendOvertimeDay ? ' 加班日' : ''}  ${_timeRange(row)}',
                 style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -500,7 +528,12 @@ class _EmptyState extends StatelessWidget {
 }
 
 String _md(DateTime day) =>
-    '${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    '${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')} ${_weekLabel(day)}';
+
+String _weekLabel(DateTime day) {
+  const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  return names[day.weekday - 1];
+}
 
 String _hhmm(DateTime ts) =>
     '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';

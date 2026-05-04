@@ -21,13 +21,11 @@ class AttendanceGeofenceReminderService {
 
     await _initNotification();
 
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final permissionState = await ensureSystemPermissions(requestIfNeeded: true);
+    final serviceEnabled = permissionState.locationServiceEnabled;
     if (!serviceEnabled) return;
 
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+    final permission = permissionState.locationPermission;
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return;
@@ -50,8 +48,10 @@ class AttendanceGeofenceReminderService {
       'attendance_checkin_channel',
       '考勤签到提醒',
       channelDescription: '进入公司围栏后的签到提醒',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.reminder,
     );
     const details = NotificationDetails(android: android);
     await _notifications.show(
@@ -69,4 +69,49 @@ class AttendanceGeofenceReminderService {
     await _notifications.initialize(settings);
     _initialized = true;
   }
+
+  static Future<AttendancePermissionState> ensureSystemPermissions({
+    bool requestIfNeeded = true,
+  }) async {
+    await _initNotification();
+    final locationServiceEnabled = await Geolocator.isLocationServiceEnabled();
+    var locationPermission = await Geolocator.checkPermission();
+    if (requestIfNeeded && locationPermission == LocationPermission.denied) {
+      locationPermission = await Geolocator.requestPermission();
+    }
+
+    bool? notificationGranted;
+    final androidPlugin =
+        _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin != null) {
+      notificationGranted = await androidPlugin.areNotificationsEnabled();
+      if (requestIfNeeded && notificationGranted != true) {
+        notificationGranted = await androidPlugin.requestNotificationsPermission();
+      }
+    }
+
+    return AttendancePermissionState(
+      locationServiceEnabled: locationServiceEnabled,
+      locationPermission: locationPermission,
+      notificationGranted: notificationGranted ?? true,
+    );
+  }
+}
+
+class AttendancePermissionState {
+  const AttendancePermissionState({
+    required this.locationServiceEnabled,
+    required this.locationPermission,
+    required this.notificationGranted,
+  });
+
+  final bool locationServiceEnabled;
+  final LocationPermission locationPermission;
+  final bool notificationGranted;
+
+  bool get ready =>
+      locationServiceEnabled &&
+      notificationGranted &&
+      locationPermission != LocationPermission.denied &&
+      locationPermission != LocationPermission.deniedForever;
 }
