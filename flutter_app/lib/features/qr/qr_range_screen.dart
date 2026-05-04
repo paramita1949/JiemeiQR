@@ -105,10 +105,6 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       }
       _recomputeEstimate();
     }
-    await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (mounted && _scanStageActive) {
-      _startContinuousScan();
-    }
   }
 
   bool _accepts(ParsedQr parsed) {
@@ -190,31 +186,9 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     if (_predicting) {
       return;
     }
-    if (_scanStageActive) {
-      setState(() => _scanStageActive = false);
-      return;
-    }
-
-    if (_latestBuildResult != null) {
-      _openPreview();
-      return;
-    }
-
-    if (_scans.isEmpty || _scans.length < 2) {
+    if (!_scanStageActive) {
       setState(() => _scanStageActive = true);
-      _startContinuousScan();
-      return;
     }
-
-    setState(() {
-      _scans.clear();
-      _lastEstimate = null;
-      _lastSerialTail3Range = null;
-      _lastSerialTail4Range = null;
-      _matchedBoxesPerBoard = null;
-      _latestBuildResult = null;
-      _scanStageActive = true;
-    });
     _startContinuousScan();
   }
 
@@ -222,16 +196,23 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     if (_predicting) {
       return '推测中...';
     }
+    if (_scanningNow) {
+      return '扫码中...';
+    }
+    if (_scans.isEmpty) {
+      return '开始扫描';
+    }
     if (_scanStageActive) {
-      return '结束扫描';
-    }
-    if (_latestBuildResult != null) {
-      return '生成预览';
-    }
-    if (_scans.isEmpty || _scans.length < 2) {
       return '继续扫描';
     }
-    return '重新扫描';
+    return '继续补扫';
+  }
+
+  void _finishScanStage() {
+    if (!_scanStageActive) {
+      return;
+    }
+    setState(() => _scanStageActive = false);
   }
 
   void _recomputeEstimate() {
@@ -309,22 +290,36 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               const PageTitle(
                 icon: Icons.qr_code_scanner_outlined,
                 title: '箱码范围',
-                subtitle: '连续扫码自动推测，结束后自动进入预览',
+                subtitle: '单次扫码后确认结果，手动继续；范围自动更新',
               ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
                   key: const Key('rangePrimaryActionButton'),
-                  onPressed: canPrimaryAction ? _handlePrimaryAction : null,
+                  onPressed: canPrimaryAction && !_scanningNow
+                      ? _handlePrimaryAction
+                      : null,
                   icon: Icon(
                     _scanStageActive
-                        ? Icons.stop_circle_outlined
-                        : Icons.auto_fix_high_outlined,
+                        ? Icons.qr_code_scanner_outlined
+                        : Icons.refresh_outlined,
                   ),
                   label: Text(_primaryActionLabel()),
                 ),
               ),
+              if (_scanStageActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _finishScanStage,
+                      icon: const Icon(Icons.stop_circle_outlined),
+                      label: const Text('结束扫描'),
+                    ),
+                  ),
+                ),
               if (_scanStageActive) ...[
                 const SizedBox(height: 8),
                 SizedBox(
@@ -337,6 +332,16 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  key: const Key('rangePreviewButton'),
+                  onPressed: _latestBuildResult == null ? null : _openPreview,
+                  icon: const Icon(Icons.grid_view_rounded),
+                  label: const Text('生成预览'),
+                ),
+              ),
               const SizedBox(height: 12),
               if (_matchedBoxesPerBoard != null)
                 Container(
@@ -363,7 +368,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               Text(
                 '已扫 ${_scans.length} 箱'
                 '${first == null ? '' : ' | 批号 ${first.batch}'}'
-                '${_scanStageActive ? ' | 连续扫描中' : ' | 扫描已结束'}',
+                '${_scanningNow ? ' | 扫码中' : (_scanStageActive ? ' | 待继续扫描' : ' | 扫描已结束')}',
                 style: const TextStyle(
                   color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -372,7 +377,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
               if (_lastEstimate != null) ...[
                 const SizedBox(height: 8),
                 const Text(
-                  '范围已自动更新，点击“生成预览”进入二维码预览',
+                  '范围已自动更新，可随时点击“生成预览”进入二维码预览',
                   style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontWeight: FontWeight.w700,
