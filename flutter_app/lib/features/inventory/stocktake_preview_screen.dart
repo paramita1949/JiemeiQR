@@ -103,10 +103,10 @@ class _RuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _CardShell(
+    return const _CardShell(
       title: '自动提炼规则',
       child: Column(
-        children: const [
+        children: [
           _RuleRow(label: '发过货', value: '是'),
           _RuleRow(label: '当前库存', value: '不为 0'),
           _RuleRow(label: '库存有变化', value: '当前 ≠ 初始'),
@@ -169,10 +169,10 @@ class _ProductChecklistCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _CardShell(
+    return const _CardShell(
       title: '产品盘点清单（预览）',
       child: Column(
-        children: const [
+        children: [
           _ProductRow(
             productCode: '72067',
             batchCode: 'FCHBMHEZ',
