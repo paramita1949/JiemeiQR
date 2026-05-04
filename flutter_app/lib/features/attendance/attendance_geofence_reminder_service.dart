@@ -90,6 +90,27 @@ class AttendanceGeofenceReminderService {
     );
   }
 
+  static Future<void> showPrecheckinNotification() async {
+    await _initNotification();
+    const android = AndroidNotificationDetails(
+      'attendance_precheckin_channel',
+      '上班临近提醒',
+      channelDescription: '上班前3分钟未签到提醒',
+      importance: Importance.max,
+      priority: Priority.max,
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.alarm,
+      fullScreenIntent: true,
+    );
+    const details = NotificationDetails(android: android);
+    await _notifications.show(
+      202605041,
+      '上班临近提醒',
+      '距离上班时间不足3分钟，且你还未签到',
+      details,
+    );
+  }
+
   static Future<AttendancePermissionState> ensureSystemPermissions({
     bool requestIfNeeded = true,
   }) async {
