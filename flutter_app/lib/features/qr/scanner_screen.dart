@@ -13,6 +13,8 @@ class ScannerScreen extends StatefulWidget {
     this.showBottomGalleryButton = true,
     this.showEndScanAction = false,
     this.endScanResult,
+    this.minContinuousDetections = 1,
+    this.validateResult,
   });
 
   final bool startFromGallery;
@@ -21,6 +23,8 @@ class ScannerScreen extends StatefulWidget {
   final bool showBottomGalleryButton;
   final bool showEndScanAction;
   final String? endScanResult;
+  final int minContinuousDetections;
+  final bool Function(String value)? validateResult;
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -30,11 +34,16 @@ class _ScannerScreenState extends State<ScannerScreen>
     with SingleTickerProviderStateMixin {
   static const double _scanBoxSize = 280;
 
-  final MobileScannerController _controller = MobileScannerController();
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.normal,
+  );
   final ImagePicker _picker = ImagePicker();
 
   late final AnimationController _lineController;
   bool _handled = false;
+  String? _lastRawValue;
+  int _continuousHitCount = 0;
 
   @override
   void initState() {
@@ -65,8 +74,33 @@ class _ScannerScreenState extends State<ScannerScreen>
       return;
     }
 
-    final value = capture.barcodes.first.rawValue;
-    if (value == null || value.isEmpty) {
+    final values = capture.barcodes
+        .map((e) => e.rawValue?.trim())
+        .whereType<String>()
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (values.isEmpty) {
+      return;
+    }
+
+    final validator = widget.validateResult;
+    final value = validator == null
+        ? values.first
+        : values.firstWhere(
+            validator,
+            orElse: () => '',
+          );
+    if (value.isEmpty) {
+      return;
+    }
+
+    if (_lastRawValue == value) {
+      _continuousHitCount += 1;
+    } else {
+      _lastRawValue = value;
+      _continuousHitCount = 1;
+    }
+    if (_continuousHitCount < widget.minContinuousDetections) {
       return;
     }
 

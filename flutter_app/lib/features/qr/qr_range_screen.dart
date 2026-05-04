@@ -73,12 +73,14 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     _scanningNow = true;
     final content = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => const ScannerScreen(
+        builder: (_) => ScannerScreen(
           title: '箱码范围扫码',
           allowGalleryImport: true,
           showBottomGalleryButton: false,
           showEndScanAction: true,
           endScanResult: _endScanSignal,
+          minContinuousDetections: 1,
+          validateResult: _acceptsDuringScan,
         ),
       ),
     );
@@ -105,6 +107,17 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       }
       _recomputeEstimate();
     }
+  }
+
+  bool _acceptsDuringScan(String value) {
+    final parsed = QrParser.parse(value.trim());
+    if (parsed == null) {
+      return false;
+    }
+    if (_scans.isEmpty) {
+      return true;
+    }
+    return _accepts(parsed);
   }
 
   bool _accepts(ParsedQr parsed) {
