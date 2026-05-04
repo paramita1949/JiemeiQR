@@ -206,7 +206,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         );
         return;
       }
-      final currentPos = pos!;
+      final currentPos = pos;
       DebugEventLog.add(
         'GEOFENCE_LOCATE',
         'position lat=${currentPos.latitude} lng=${currentPos.longitude} accuracy=${currentPos.accuracy}',
