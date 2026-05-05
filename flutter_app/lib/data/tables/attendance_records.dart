@@ -12,6 +12,7 @@ class AttendanceRecords extends Table {
   BoolColumn get isEarlyLeave => boolean().withDefault(const Constant(false))();
   BoolColumn get isAbsent => boolean().withDefault(const Constant(false))();
   BoolColumn get isLeave => boolean().withDefault(const Constant(false))();
+  BoolColumn get isHoliday => boolean().withDefault(const Constant(false))();
   BoolColumn get isException => boolean().withDefault(const Constant(false))();
   BoolColumn get needsPatch => boolean().withDefault(const Constant(false))();
   BoolColumn get patched => boolean().withDefault(const Constant(false))();

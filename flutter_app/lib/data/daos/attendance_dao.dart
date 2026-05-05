@@ -258,7 +258,8 @@ class AttendanceDao {
     final requests = await _db.select(_db.patchRequests).get();
     return jsonEncode({
       'type': 'attendance-backup',
-      'version': 1,
+      'version': 2,
+      'schemaVersion': _db.schemaVersion,
       'exportedAt': DateTime.now().toIso8601String(),
       'rules': rules.map((e) => e.toJson()).toList(),
       'records': records.map((e) => e.toJson()).toList(),
@@ -324,7 +325,7 @@ class AttendanceDao {
     DateTime? checkOutAt,
     bool? isAbsent,
     bool? isLeave,
-    bool? patched,
+    bool? isHoliday,
     String? note,
   }) async {
     final row = await (_db.select(_db.attendanceRecords)
@@ -334,9 +335,9 @@ class AttendanceDao {
     final updated = row.copyWith(
       checkInAt: Value(checkInAt),
       checkOutAt: Value(checkOutAt),
-      isAbsent: isAbsent ?? row.isAbsent,
-      isLeave: isLeave ?? row.isLeave,
-      patched: patched ?? row.patched,
+      isAbsent: isHoliday == true ? false : (isAbsent ?? row.isAbsent),
+      isLeave: isHoliday == true ? false : (isLeave ?? row.isLeave),
+      isHoliday: isHoliday ?? row.isHoliday,
       note: Value(note ?? row.note),
       updatedAt: DateTime.now(),
     );
@@ -424,7 +425,9 @@ class AttendanceDao {
       }
 
       for (final raw in records) {
-        final row = AttendanceRecord.fromJson(raw as Map<String, dynamic>);
+        final rawMap = Map<String, dynamic>.from(raw as Map<String, dynamic>);
+        rawMap.putIfAbsent('isHoliday', () => false);
+        final row = AttendanceRecord.fromJson(rawMap);
         final sameDay = await (_db.select(_db.attendanceRecords)
               ..where((t) => t.day.equals(row.day)))
             .getSingleOrNull();
@@ -439,6 +442,7 @@ class AttendanceDao {
                   isEarlyLeave: Value(row.isEarlyLeave),
                   isAbsent: Value(row.isAbsent),
                   isLeave: Value(row.isLeave),
+                  isHoliday: Value(row.isHoliday),
                   isException: Value(row.isException),
                   needsPatch: Value(row.needsPatch),
                   patched: Value(row.patched),
@@ -532,15 +536,22 @@ class AttendanceDao {
     final hasCheckOut = checkOut != null;
     final exception = (hasCheckIn ^ hasCheckOut) ||
         (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
-    final needsPatch = exception || (row.isAbsent && !row.isLeave);
-    final late = row.isLeave ? false : (checkIn != null ? checkIn.isAfter(workStart) : false);
-    final early = checkOut != null ? checkOut.isBefore(workEnd) : false;
-    final leaveMinutes = row.isLeave && checkIn != null && checkIn.isAfter(workStartBase)
+    final needsPatch = exception || (row.isAbsent && !row.isLeave && !row.isHoliday);
+    final patched = row.patched || (row.needsPatch && !needsPatch);
+    final late = row.isLeave || row.isHoliday
+        ? false
+        : (checkIn != null ? checkIn.isAfter(workStart) : false);
+    final early = row.isHoliday ? false : (checkOut != null ? checkOut.isBefore(workEnd) : false);
+    final leaveMinutes = row.isLeave && !row.isHoliday && checkIn != null && checkIn.isAfter(workStartBase)
         ? checkIn.difference(workStartBase).inMinutes
         : 0;
-    final rawMinutes = checkOut != null && checkOut.isAfter(workEnd)
-        ? checkOut.difference(workEnd).inMinutes
-        : 0;
+    final rawMinutes = row.isHoliday
+        ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
+            ? checkOut.difference(checkIn).inMinutes
+            : 0
+        : checkOut != null && checkOut.isAfter(workEnd)
+            ? checkOut.difference(workEnd).inMinutes
+            : 0;
     final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
 
     await (_db.update(_db.attendanceRecords)..where((t) => t.id.equals(row.id))).write(
@@ -554,9 +565,10 @@ class AttendanceDao {
         overtimeMinutesRaw: Value(rawMinutes),
         leaveMinutes: Value(leaveMinutes),
         overtimeHoursRounded: Value(roundedHours),
-        isAbsent: Value(row.isAbsent),
-        isLeave: Value(row.isLeave),
-        patched: Value(row.patched),
+        isAbsent: Value(row.isHoliday ? false : row.isAbsent),
+        isLeave: Value(row.isHoliday ? false : row.isLeave),
+        isHoliday: Value(row.isHoliday),
+        patched: Value(patched),
         note: Value(row.note),
         updatedAt: Value(DateTime.now()),
       ),

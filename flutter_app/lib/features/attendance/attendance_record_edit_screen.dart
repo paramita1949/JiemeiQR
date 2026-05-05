@@ -19,7 +19,7 @@ class AttendanceRecordEditScreen extends StatefulWidget {
 class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen> {
   late bool _absent;
   late bool _leave;
-  late bool _patched;
+  late bool _holiday;
   DateTime? _checkIn;
   DateTime? _checkOut;
   final _noteController = TextEditingController();
@@ -30,7 +30,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
     final r = widget.record;
     _absent = r.isAbsent;
     _leave = r.isLeave;
-    _patched = r.patched;
+    _holiday = r.isHoliday;
     _checkIn = r.checkInAt;
     _checkOut = r.checkOutAt;
     _noteController.text = r.note ?? '';
@@ -74,7 +74,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
       checkOutAt: _checkOut,
       isAbsent: _absent,
       isLeave: _leave,
-      patched: _patched,
+      isHoliday: _holiday,
       note: _noteController.text.trim(),
     );
     if (!mounted) return;
@@ -123,15 +123,35 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
             onTap: () => _pickTime(isCheckIn: false),
           ),
           SwitchListTile(
+            title: const Text('假期'),
+            subtitle: const Text('标记后按假期加班日计算'),
+            value: _holiday,
+            onChanged: (v) => setState(() {
+              _holiday = v;
+              if (v) {
+                _leave = false;
+                _absent = false;
+              }
+            }),
+          ),
+          SwitchListTile(
             title: const Text('请假'),
             value: _leave,
-            onChanged: (v) => setState(() => _leave = v),
+            onChanged: _holiday ? null : (v) => setState(() => _leave = v),
           ),
           SwitchListTile(
             title: const Text('旷工'),
             value: _absent,
-            onChanged: (v) => setState(() => _absent = v),
+            onChanged: _holiday ? null : (v) => setState(() => _absent = v),
           ),
+          if (_holiday)
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 12),
+              child: Text(
+                '保存后将按上班到下班的实际时长计算加班。',
+                style: TextStyle(color: Color(0xFF475569)),
+              ),
+            ),
           if (_leave)
             const Padding(
               padding: EdgeInsets.only(top: 4, bottom: 12),
@@ -140,11 +160,6 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
                 style: TextStyle(color: Color(0xFF475569)),
               ),
             ),
-          SwitchListTile(
-            title: const Text('已补打'),
-            value: _patched,
-            onChanged: (v) => setState(() => _patched = v),
-          ),
           TextField(
             controller: _noteController,
             decoration: const InputDecoration(
@@ -156,7 +171,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
           ),
           const SizedBox(height: 16),
           const Text(
-            '待补卡触发：仅有上班或仅有下班，或上下班时间顺序错误。',
+            '单独缺少上班或下班时间时，状态显示为未完成。',
             style: TextStyle(color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 16),

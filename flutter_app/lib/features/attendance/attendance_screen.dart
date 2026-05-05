@@ -463,14 +463,19 @@ class _DetailCard extends StatelessWidget {
     final status = _status(row);
     final isLate = status == '迟到';
     final isAbsent = status == '请假';
-    final isPending = status == '待补卡' || status == '待下班';
+    final isHoliday = status == '假期';
+    final isPending = status == '未完成' || status == '待下班';
     final bg = isAbsent
         ? const Color(0xFFFEF2F2)
+        : isHoliday
+            ? const Color(0xFFEFF6FF)
         : isLate
             ? const Color(0xFFFFF7ED)
             : const Color(0xFFF8FAFC);
     final fg = isAbsent
         ? const Color(0xFF991B1B)
+        : isHoliday
+            ? const Color(0xFF1D4ED8)
         : isLate
             ? const Color(0xFF9A3412)
             : const Color(0xFF334155);
@@ -489,7 +494,7 @@ class _DetailCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${_md(row.day)}${isWeekendOvertimeDay ? ' 加班日' : ''}  ${_timeRange(row)}',
+                '${_md(row.day)}${row.isHoliday ? ' 假期' : (isWeekendOvertimeDay ? ' 加班日' : '')}  ${_timeRange(row)}',
                 style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -521,11 +526,12 @@ class _DetailCard extends StatelessWidget {
     final isToday = r.day.year == now.year && r.day.month == now.month && r.day.day == now.day;
     final hasCheckIn = r.checkInAt != null;
     final hasCheckOut = r.checkOutAt != null;
+    if (r.isHoliday) return '假期';
     if (r.isLeave) return '请假';
     if (r.isAbsent) return '请假';
     if (r.isLate) return '迟到';
     if (isToday && hasCheckIn && !hasCheckOut) return '待下班';
-    if (hasCheckIn ^ hasCheckOut) return '待补卡';
+    if (hasCheckIn ^ hasCheckOut) return '未完成';
     if (hasCheckIn && hasCheckOut && r.checkOutAt!.isBefore(r.checkInAt!)) return '异常';
     if (hasCheckIn && hasCheckOut) return '正常';
     if (r.isException) return '异常';

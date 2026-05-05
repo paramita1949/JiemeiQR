@@ -54,11 +54,11 @@ class _AttendancePatchListScreenState extends State<AttendancePatchListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('待补打')),
+      appBar: AppBar(title: const Text('未完成记录')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _rows.isEmpty
-              ? const Center(child: Text('暂无待补打记录'))
+              ? const Center(child: Text('暂无未完成记录'))
               : ListView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: _rows.length,
@@ -68,7 +68,7 @@ class _AttendancePatchListScreenState extends State<AttendancePatchListScreen> {
                       child: ListTile(
                         title: Text(_md(row.day)),
                         subtitle: Text('${row.checkInAt == null ? '--:--' : _hhmm(row.checkInAt!)} / ${row.checkOutAt == null ? '--:--' : _hhmm(row.checkOutAt!)}'),
-                        trailing: const Text('去补打'),
+                        trailing: const Text('编辑'),
                         onTap: () => _openEdit(row),
                       ),
                     );

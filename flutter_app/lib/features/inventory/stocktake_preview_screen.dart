@@ -73,9 +73,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
               subtitle: '简单记录，不改库存',
             ),
             const SizedBox(height: 12),
-            _monthBar(),
             if (showEditingArea) ...[
-              const SizedBox(height: 10),
               _statsCard(total: items.length, pending: pending, checked: checked, issue: issue),
               const SizedBox(height: 10),
               if (items.isEmpty)
@@ -125,6 +123,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 ],
               ),
             ] else ...[
+              _monthBar(),
               const SizedBox(height: 10),
               _latestSummaryCard(),
             ],
@@ -713,6 +712,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           issueItems: _latestIssueItems(bundle.items, statsMap),
         );
       }
+      history.sort((a, b) => b.date.compareTo(a.date));
     }
     if (!mounted) return;
     setState(() {
@@ -1540,7 +1540,7 @@ String _formatMonth(DateTime month) {
 }
 
 String _formatShortDate(DateTime date) {
-  return '${date.month}月${date.day}日';
+  return '${date.year}年${date.month}月${date.day}日';
 }
 
 DateTime _defaultMonth() => DateTime.now();

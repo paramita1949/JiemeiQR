@@ -140,14 +140,16 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                 title: '上下班明细',
                 headers: const ['日期', '上班/下班', '状态'],
                 rows: _rows.take(6).map((r) {
-                  final status = r.isLeave
+                  final status = r.isHoliday
+                      ? '假期'
+                      : r.isLeave
                       ? '请假'
                       : r.isAbsent
                       ? '请假'
-                      : r.isLate
+                          : r.isLate
                           ? '迟到'
                           : ((r.checkInAt != null) ^ (r.checkOutAt != null))
-                              ? '待补卡'
+                              ? '未完成'
                               : (r.checkInAt != null && r.checkOutAt != null ? '正常' : '无记录');
                   return [
                     _md(r.day),
@@ -166,7 +168,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                     .take(6)
                     .map((r) => [
                           _md(r.day),
-                          '17:00-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
+                          r.isHoliday
+                              ? '${r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!)}-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}'
+                              : '17:00-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
                           r.overtimeHoursRounded.toStringAsFixed(1),
                         ])
                     .toList(),
@@ -354,7 +358,7 @@ class _TableCard extends StatelessWidget {
                           child: Text(
                             c,
                             style: TextStyle(
-                              fontWeight: c == '正常' || c == '迟到' || c == '请假'
+                              fontWeight: c == '正常' || c == '迟到' || c == '请假' || c == '假期'
                                   ? FontWeight.w800
                                   : FontWeight.w600,
                               color: c == '正常'
@@ -363,6 +367,8 @@ class _TableCard extends StatelessWidget {
                                       ? const Color(0xFFD97706)
                                       : c == '请假'
                                           ? const Color(0xFFDC2626)
+                                          : c == '假期'
+                                              ? const Color(0xFF1D4ED8)
                                           : const Color(0xFF334155),
                             ),
                           ),

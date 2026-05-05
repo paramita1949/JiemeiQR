@@ -3114,6 +3114,16 @@ class $AttendanceRecordsTable extends AttendanceRecords
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_leave" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _isHolidayMeta =
+      const VerificationMeta('isHoliday');
+  @override
+  late final GeneratedColumn<bool> isHoliday = GeneratedColumn<bool>(
+      'is_holiday', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_holiday" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _isExceptionMeta =
       const VerificationMeta('isException');
   @override
@@ -3207,6 +3217,7 @@ class $AttendanceRecordsTable extends AttendanceRecords
         isEarlyLeave,
         isAbsent,
         isLeave,
+        isHoliday,
         isException,
         needsPatch,
         patched,
@@ -3270,6 +3281,10 @@ class $AttendanceRecordsTable extends AttendanceRecords
     if (data.containsKey('is_leave')) {
       context.handle(_isLeaveMeta,
           isLeave.isAcceptableOrUnknown(data['is_leave']!, _isLeaveMeta));
+    }
+    if (data.containsKey('is_holiday')) {
+      context.handle(_isHolidayMeta,
+          isHoliday.isAcceptableOrUnknown(data['is_holiday']!, _isHolidayMeta));
     }
     if (data.containsKey('is_exception')) {
       context.handle(
@@ -3348,6 +3363,8 @@ class $AttendanceRecordsTable extends AttendanceRecords
           .read(DriftSqlType.bool, data['${effectivePrefix}is_absent'])!,
       isLeave: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_leave'])!,
+      isHoliday: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_holiday'])!,
       isException: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_exception'])!,
       needsPatch: attachedDatabase.typeMapping
@@ -3389,6 +3406,7 @@ class AttendanceRecord extends DataClass
   final bool isEarlyLeave;
   final bool isAbsent;
   final bool isLeave;
+  final bool isHoliday;
   final bool isException;
   final bool needsPatch;
   final bool patched;
@@ -3409,6 +3427,7 @@ class AttendanceRecord extends DataClass
       required this.isEarlyLeave,
       required this.isAbsent,
       required this.isLeave,
+      required this.isHoliday,
       required this.isException,
       required this.needsPatch,
       required this.patched,
@@ -3435,6 +3454,7 @@ class AttendanceRecord extends DataClass
     map['is_early_leave'] = Variable<bool>(isEarlyLeave);
     map['is_absent'] = Variable<bool>(isAbsent);
     map['is_leave'] = Variable<bool>(isLeave);
+    map['is_holiday'] = Variable<bool>(isHoliday);
     map['is_exception'] = Variable<bool>(isException);
     map['needs_patch'] = Variable<bool>(needsPatch);
     map['patched'] = Variable<bool>(patched);
@@ -3465,6 +3485,7 @@ class AttendanceRecord extends DataClass
       isEarlyLeave: Value(isEarlyLeave),
       isAbsent: Value(isAbsent),
       isLeave: Value(isLeave),
+      isHoliday: Value(isHoliday),
       isException: Value(isException),
       needsPatch: Value(needsPatch),
       patched: Value(patched),
@@ -3491,6 +3512,7 @@ class AttendanceRecord extends DataClass
       isEarlyLeave: serializer.fromJson<bool>(json['isEarlyLeave']),
       isAbsent: serializer.fromJson<bool>(json['isAbsent']),
       isLeave: serializer.fromJson<bool>(json['isLeave']),
+      isHoliday: serializer.fromJson<bool>(json['isHoliday']),
       isException: serializer.fromJson<bool>(json['isException']),
       needsPatch: serializer.fromJson<bool>(json['needsPatch']),
       patched: serializer.fromJson<bool>(json['patched']),
@@ -3517,6 +3539,7 @@ class AttendanceRecord extends DataClass
       'isEarlyLeave': serializer.toJson<bool>(isEarlyLeave),
       'isAbsent': serializer.toJson<bool>(isAbsent),
       'isLeave': serializer.toJson<bool>(isLeave),
+      'isHoliday': serializer.toJson<bool>(isHoliday),
       'isException': serializer.toJson<bool>(isException),
       'needsPatch': serializer.toJson<bool>(needsPatch),
       'patched': serializer.toJson<bool>(patched),
@@ -3540,6 +3563,7 @@ class AttendanceRecord extends DataClass
           bool? isEarlyLeave,
           bool? isAbsent,
           bool? isLeave,
+          bool? isHoliday,
           bool? isException,
           bool? needsPatch,
           bool? patched,
@@ -3560,6 +3584,7 @@ class AttendanceRecord extends DataClass
         isEarlyLeave: isEarlyLeave ?? this.isEarlyLeave,
         isAbsent: isAbsent ?? this.isAbsent,
         isLeave: isLeave ?? this.isLeave,
+        isHoliday: isHoliday ?? this.isHoliday,
         isException: isException ?? this.isException,
         needsPatch: needsPatch ?? this.needsPatch,
         patched: patched ?? this.patched,
@@ -3585,6 +3610,7 @@ class AttendanceRecord extends DataClass
           : this.isEarlyLeave,
       isAbsent: data.isAbsent.present ? data.isAbsent.value : this.isAbsent,
       isLeave: data.isLeave.present ? data.isLeave.value : this.isLeave,
+      isHoliday: data.isHoliday.present ? data.isHoliday.value : this.isHoliday,
       isException:
           data.isException.present ? data.isException.value : this.isException,
       needsPatch:
@@ -3618,6 +3644,7 @@ class AttendanceRecord extends DataClass
           ..write('isEarlyLeave: $isEarlyLeave, ')
           ..write('isAbsent: $isAbsent, ')
           ..write('isLeave: $isLeave, ')
+          ..write('isHoliday: $isHoliday, ')
           ..write('isException: $isException, ')
           ..write('needsPatch: $needsPatch, ')
           ..write('patched: $patched, ')
@@ -3643,6 +3670,7 @@ class AttendanceRecord extends DataClass
       isEarlyLeave,
       isAbsent,
       isLeave,
+      isHoliday,
       isException,
       needsPatch,
       patched,
@@ -3666,6 +3694,7 @@ class AttendanceRecord extends DataClass
           other.isEarlyLeave == this.isEarlyLeave &&
           other.isAbsent == this.isAbsent &&
           other.isLeave == this.isLeave &&
+          other.isHoliday == this.isHoliday &&
           other.isException == this.isException &&
           other.needsPatch == this.needsPatch &&
           other.patched == this.patched &&
@@ -3688,6 +3717,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   final Value<bool> isEarlyLeave;
   final Value<bool> isAbsent;
   final Value<bool> isLeave;
+  final Value<bool> isHoliday;
   final Value<bool> isException;
   final Value<bool> needsPatch;
   final Value<bool> patched;
@@ -3708,6 +3738,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     this.isEarlyLeave = const Value.absent(),
     this.isAbsent = const Value.absent(),
     this.isLeave = const Value.absent(),
+    this.isHoliday = const Value.absent(),
     this.isException = const Value.absent(),
     this.needsPatch = const Value.absent(),
     this.patched = const Value.absent(),
@@ -3729,6 +3760,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     this.isEarlyLeave = const Value.absent(),
     this.isAbsent = const Value.absent(),
     this.isLeave = const Value.absent(),
+    this.isHoliday = const Value.absent(),
     this.isException = const Value.absent(),
     this.needsPatch = const Value.absent(),
     this.patched = const Value.absent(),
@@ -3750,6 +3782,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     Expression<bool>? isEarlyLeave,
     Expression<bool>? isAbsent,
     Expression<bool>? isLeave,
+    Expression<bool>? isHoliday,
     Expression<bool>? isException,
     Expression<bool>? needsPatch,
     Expression<bool>? patched,
@@ -3771,6 +3804,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       if (isEarlyLeave != null) 'is_early_leave': isEarlyLeave,
       if (isAbsent != null) 'is_absent': isAbsent,
       if (isLeave != null) 'is_leave': isLeave,
+      if (isHoliday != null) 'is_holiday': isHoliday,
       if (isException != null) 'is_exception': isException,
       if (needsPatch != null) 'needs_patch': needsPatch,
       if (patched != null) 'patched': patched,
@@ -3796,6 +3830,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       Value<bool>? isEarlyLeave,
       Value<bool>? isAbsent,
       Value<bool>? isLeave,
+      Value<bool>? isHoliday,
       Value<bool>? isException,
       Value<bool>? needsPatch,
       Value<bool>? patched,
@@ -3816,6 +3851,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       isEarlyLeave: isEarlyLeave ?? this.isEarlyLeave,
       isAbsent: isAbsent ?? this.isAbsent,
       isLeave: isLeave ?? this.isLeave,
+      isHoliday: isHoliday ?? this.isHoliday,
       isException: isException ?? this.isException,
       needsPatch: needsPatch ?? this.needsPatch,
       patched: patched ?? this.patched,
@@ -3858,6 +3894,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     }
     if (isLeave.present) {
       map['is_leave'] = Variable<bool>(isLeave.value);
+    }
+    if (isHoliday.present) {
+      map['is_holiday'] = Variable<bool>(isHoliday.value);
     }
     if (isException.present) {
       map['is_exception'] = Variable<bool>(isException.value);
@@ -3905,6 +3944,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
           ..write('isEarlyLeave: $isEarlyLeave, ')
           ..write('isAbsent: $isAbsent, ')
           ..write('isLeave: $isLeave, ')
+          ..write('isHoliday: $isHoliday, ')
           ..write('isException: $isException, ')
           ..write('needsPatch: $needsPatch, ')
           ..write('patched: $patched, ')
@@ -8400,6 +8440,7 @@ typedef $$AttendanceRecordsTableCreateCompanionBuilder
   Value<bool> isEarlyLeave,
   Value<bool> isAbsent,
   Value<bool> isLeave,
+  Value<bool> isHoliday,
   Value<bool> isException,
   Value<bool> needsPatch,
   Value<bool> patched,
@@ -8422,6 +8463,7 @@ typedef $$AttendanceRecordsTableUpdateCompanionBuilder
   Value<bool> isEarlyLeave,
   Value<bool> isAbsent,
   Value<bool> isLeave,
+  Value<bool> isHoliday,
   Value<bool> isException,
   Value<bool> needsPatch,
   Value<bool> patched,
@@ -8469,6 +8511,9 @@ class $$AttendanceRecordsTableFilterComposer
 
   ColumnFilters<bool> get isLeave => $composableBuilder(
       column: $table.isLeave, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isHoliday => $composableBuilder(
+      column: $table.isHoliday, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => ColumnFilters(column));
@@ -8540,6 +8585,9 @@ class $$AttendanceRecordsTableOrderingComposer
   ColumnOrderings<bool> get isLeave => $composableBuilder(
       column: $table.isLeave, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isHoliday => $composableBuilder(
+      column: $table.isHoliday, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => ColumnOrderings(column));
 
@@ -8610,6 +8658,9 @@ class $$AttendanceRecordsTableAnnotationComposer
   GeneratedColumn<bool> get isLeave =>
       $composableBuilder(column: $table.isLeave, builder: (column) => column);
 
+  GeneratedColumn<bool> get isHoliday =>
+      $composableBuilder(column: $table.isHoliday, builder: (column) => column);
+
   GeneratedColumn<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => column);
 
@@ -8678,6 +8729,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             Value<bool> isEarlyLeave = const Value.absent(),
             Value<bool> isAbsent = const Value.absent(),
             Value<bool> isLeave = const Value.absent(),
+            Value<bool> isHoliday = const Value.absent(),
             Value<bool> isException = const Value.absent(),
             Value<bool> needsPatch = const Value.absent(),
             Value<bool> patched = const Value.absent(),
@@ -8699,6 +8751,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             isEarlyLeave: isEarlyLeave,
             isAbsent: isAbsent,
             isLeave: isLeave,
+            isHoliday: isHoliday,
             isException: isException,
             needsPatch: needsPatch,
             patched: patched,
@@ -8720,6 +8773,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             Value<bool> isEarlyLeave = const Value.absent(),
             Value<bool> isAbsent = const Value.absent(),
             Value<bool> isLeave = const Value.absent(),
+            Value<bool> isHoliday = const Value.absent(),
             Value<bool> isException = const Value.absent(),
             Value<bool> needsPatch = const Value.absent(),
             Value<bool> patched = const Value.absent(),
@@ -8741,6 +8795,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             isEarlyLeave: isEarlyLeave,
             isAbsent: isAbsent,
             isLeave: isLeave,
+            isHoliday: isHoliday,
             isException: isException,
             needsPatch: needsPatch,
             patched: patched,
