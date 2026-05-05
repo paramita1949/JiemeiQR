@@ -30,6 +30,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   bool _loading = false;
   final Map<int, bool> _statsExpanded = <int, bool>{};
   final Map<int, List<_FloorCountEntry>> _floorEntries = <int, List<_FloorCountEntry>>{};
+  final Map<int, int> _issueShortageBoxes = <int, int>{};
 
   @override
   void initState() {
@@ -311,6 +312,16 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          if (status == StocktakeItemStatus.issue && (_issueShortageBoxes[item.id] ?? 0) > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              '异常缺 ${_issueShortageBoxes[item.id]}箱',
+              style: const TextStyle(
+                color: Color(0xFFB91C1C),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -473,10 +484,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     return ChoiceChip(
       selected: selected,
       label: Text(text),
-      onSelected: (_) async {
-        await _stocktakeDao.updateItem(itemId: item.id, status: target, note: item.note);
-        await _reloadBundle();
-      },
+      onSelected: (_) => _onStatusSelected(item, target),
     );
   }
 
@@ -607,6 +615,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         _bundle = bundle;
         _statsExpanded.clear();
       });
+      _issueShortageBoxes.clear();
       await _hydrateFloorEntries(bundle);
       await _loadRecent();
     } catch (error) {
@@ -687,6 +696,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         _selectedMonth = nextMonth;
         _statsExpanded.clear();
       });
+      _issueShortageBoxes.clear();
       await _hydrateFloorEntries(bundle);
     } catch (error) {
       if (!mounted) return;
@@ -1024,6 +1034,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     await _stocktakeDao.deleteItem(item.id);
     _floorEntries.remove(item.id);
     _statsExpanded.remove(item.id);
+    _issueShortageBoxes.remove(item.id);
     await _reloadBundle();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1035,47 +1046,69 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     final statsMap = await _stocktakeDao.loadFloorStatsForSession(bundle.session.id);
     if (!mounted) return;
     final next = <int, List<_FloorCountEntry>>{};
+    final shortage = <int, int>{};
     for (final item in bundle.items) {
       final json = statsMap[item.id];
       if (json == null || json.trim().isEmpty) {
         continue;
       }
-      final parsed = _decodeFloorEntries(json);
-      if (parsed.isNotEmpty) {
-        next[item.id] = parsed;
+      final parsed = _decodePersistedStats(json);
+      if (parsed.entries.isNotEmpty) {
+        next[item.id] = parsed.entries;
+        if (parsed.issueShortageBoxes > 0) {
+          shortage[item.id] = parsed.issueShortageBoxes;
+        }
       }
     }
     setState(() {
       _floorEntries
         ..clear()
         ..addAll(next);
+      _issueShortageBoxes
+        ..clear()
+        ..addAll(shortage);
     });
   }
 
-  List<_FloorCountEntry> _decodeFloorEntries(String jsonText) {
+  _PersistedStats _decodePersistedStats(String jsonText) {
     try {
       final decoded = jsonDecode(jsonText);
-      if (decoded is! List) return const <_FloorCountEntry>[];
-      final result = <_FloorCountEntry>[];
-      for (final row in decoded) {
-        if (row is! Map) continue;
-        final floor = _toInt(row['floor']) ?? 1;
-        final boards = (_toInt(row['boards']) ?? 0).clamp(0, 1000000000);
-        final boxes = (_toInt(row['boxes']) ?? 0).clamp(0, 1000000000);
-        result.add(
-          _FloorCountEntry(
-            floor: floor < 1 || floor > 4 ? 1 : floor,
-            boards: boards,
-            boxes: boxes,
-          ),
-        );
+      if (decoded is List) {
+        final entries = _decodeEntriesFromList(decoded);
+        return _PersistedStats(entries: entries, issueShortageBoxes: 0);
       }
-      return result;
+      if (decoded is! Map) {
+        return const _PersistedStats(entries: <_FloorCountEntry>[], issueShortageBoxes: 0);
+      }
+      final entriesRaw = decoded['entries'];
+      final entries = entriesRaw is List ? _decodeEntriesFromList(entriesRaw) : const <_FloorCountEntry>[];
+      final shortage = _toInt(decoded['issueShortageBoxes']) ?? 0;
+      return _PersistedStats(
+        entries: entries,
+        issueShortageBoxes: shortage < 0 ? 0 : shortage,
+      );
     } catch (_) {
-      return const <_FloorCountEntry>[];
+      return const _PersistedStats(entries: <_FloorCountEntry>[], issueShortageBoxes: 0);
     }
   }
 
+  List<_FloorCountEntry> _decodeEntriesFromList(List<dynamic> list) {
+    final result = <_FloorCountEntry>[];
+    for (final row in list) {
+      if (row is! Map) continue;
+      final floor = _toInt(row['floor']) ?? 1;
+      final boards = (_toInt(row['boards']) ?? 0).clamp(0, 1000000000);
+      final boxes = (_toInt(row['boxes']) ?? 0).clamp(0, 1000000000);
+      result.add(
+        _FloorCountEntry(
+          floor: floor < 1 || floor > 4 ? 1 : floor,
+          boards: boards,
+          boxes: boxes,
+        ),
+      );
+    }
+    return result;
+  }
   int? _toInt(Object? value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -1083,7 +1116,15 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     return null;
   }
 
-  String _encodeFloorEntries(List<_FloorCountEntry> entries) {
+  void _persistFloorEntries(int itemId) {
+    final entries = _floorEntries[itemId] ?? const <_FloorCountEntry>[];
+    final payload = _encodeItemStats(itemId, entries);
+    unawaited(
+      _stocktakeDao.saveFloorStats(itemId: itemId, statsJson: payload),
+    );
+  }
+
+  String _encodeItemStats(int itemId, List<_FloorCountEntry> entries) {
     final rows = entries
         .map(
           (entry) => <String, int>{
@@ -1093,15 +1134,62 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           },
         )
         .toList();
-    return jsonEncode(rows);
+    return jsonEncode(
+      <String, Object>{
+        'entries': rows,
+        'issueShortageBoxes': _issueShortageBoxes[itemId] ?? 0,
+      },
+    );
   }
 
-  void _persistFloorEntries(int itemId) {
-    final entries = _floorEntries[itemId] ?? const <_FloorCountEntry>[];
-    final payload = _encodeFloorEntries(entries);
-    unawaited(
-      _stocktakeDao.saveFloorStats(itemId: itemId, statsJson: payload),
+  Future<void> _onStatusSelected(StocktakeItemRecord item, StocktakeItemStatus target) async {
+    if (target == StocktakeItemStatus.issue) {
+      final shortage = await _askIssueShortage(item.id);
+      if (shortage == null) return;
+      _issueShortageBoxes[item.id] = shortage;
+      _persistFloorEntries(item.id);
+    }
+    await _stocktakeDao.updateItem(itemId: item.id, status: target, note: item.note);
+    await _reloadBundle();
+  }
+
+  Future<int?> _askIssueShortage(int itemId) async {
+    final controller = TextEditingController(
+      text: (_issueShortageBoxes[itemId] ?? 0) > 0 ? '${_issueShortageBoxes[itemId]}' : '',
     );
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('异常数量'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            hintText: '缺几箱',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final parsed = int.tryParse(controller.text.trim());
+              if (parsed == null || parsed <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('请输入大于0的箱数')),
+                );
+                return;
+              }
+              Navigator.of(context).pop(parsed);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    return value;
   }
 }
 
@@ -1142,6 +1230,16 @@ class _ProductOption {
 
   final int productId;
   final String label;
+}
+
+class _PersistedStats {
+  const _PersistedStats({
+    required this.entries,
+    required this.issueShortageBoxes,
+  });
+
+  final List<_FloorCountEntry> entries;
+  final int issueShortageBoxes;
 }
 
 int _compareDateBatch(String left, String right) {
