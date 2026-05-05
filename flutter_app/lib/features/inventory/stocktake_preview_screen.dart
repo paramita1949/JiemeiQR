@@ -270,6 +270,11 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 label: Text(isExpanded ? '收起统计' : '统计'),
                 onPressed: readOnly ? null : () => _toggleStats(item.id),
               ),
+              ActionChip(
+                avatar: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('删除条目'),
+                onPressed: readOnly ? null : () => _deleteItem(item),
+              ),
             ],
           ),
           if (isExpanded) ...[
@@ -713,7 +718,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     }
     byProduct.forEach((productId, rows) {
       rows.sort((a, b) {
-        final byDate = a.dateBatch.compareTo(b.dateBatch);
+        final byDate = _compareDateBatch(a.dateBatch, b.dateBatch);
         if (byDate != 0) return byDate;
         return a.batchCode.compareTo(b.batchCode);
       });
@@ -871,6 +876,35 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       (sum, entry) => sum + _toBoxes(entry, item.boxesPerBoard),
     );
   }
+
+  Future<void> _deleteItem(StocktakeItemRecord item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除条目'),
+        content: Text('确认删除 ${item.productCode} · ${item.batchCode} 吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _stocktakeDao.deleteItem(item.id);
+    _floorEntries.remove(item.id);
+    _statsExpanded.remove(item.id);
+    await _reloadBundle();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已删除条目')),
+    );
+  }
 }
 
 int _toBoxes(_FloorCountEntry entry, int boxesPerBoard) {
@@ -910,6 +944,28 @@ class _ProductOption {
 
   final int productId;
   final String label;
+}
+
+int _compareDateBatch(String left, String right) {
+  final l = _parseDateBatch(left);
+  final r = _parseDateBatch(right);
+  if (l != null && r != null) {
+    return l.compareTo(r);
+  }
+  if (l != null) return -1;
+  if (r != null) return 1;
+  return left.compareTo(right);
+}
+
+DateTime? _parseDateBatch(String value) {
+  final parts = value.split('.');
+  if (parts.length != 3) return null;
+  final year = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final day = int.tryParse(parts[2]);
+  if (year == null || month == null || day == null) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return DateTime(year, month, day);
 }
 
 String _formatMonth(DateTime month) {

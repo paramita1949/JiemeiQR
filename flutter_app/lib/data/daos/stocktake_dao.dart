@@ -122,6 +122,12 @@ class StocktakeDao {
     });
   }
 
+  Future<void> deleteItem(int itemId) async {
+    await (_database.delete(_database.stocktakeItems)
+          ..where((t) => t.id.equals(itemId)))
+        .go();
+  }
+
   Future<List<StocktakeCandidateBatch>> listCandidateBatches() async {
     final stockDao = StockDao(_database);
     final rows = await stockDao.inventoryDetailRows();
@@ -147,7 +153,7 @@ class StocktakeDao {
     result.sort((a, b) {
       final byProduct = a.productCode.compareTo(b.productCode);
       if (byProduct != 0) return byProduct;
-      final byDate = a.dateBatch.compareTo(b.dateBatch);
+      final byDate = _compareDateBatch(a.dateBatch, b.dateBatch);
       if (byDate != 0) return byDate;
       return a.batchCode.compareTo(b.batchCode);
     });
@@ -198,6 +204,28 @@ class StocktakeDao {
     final y = month.year.toString().padLeft(4, '0');
     final m = month.month.toString().padLeft(2, '0');
     return '$y-$m';
+  }
+
+  int _compareDateBatch(String left, String right) {
+    final l = _parseDateBatch(left);
+    final r = _parseDateBatch(right);
+    if (l != null && r != null) {
+      return l.compareTo(r);
+    }
+    if (l != null) return -1;
+    if (r != null) return 1;
+    return left.compareTo(right);
+  }
+
+  DateTime? _parseDateBatch(String value) {
+    final parts = value.split('.');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return DateTime(year, month, day);
   }
 }
 
