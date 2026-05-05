@@ -39,6 +39,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   AttendancePermissionState? _permissionState;
   List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
+  bool _geofenceTesting = false;
 
   @override
   void initState() {
@@ -231,6 +232,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   }
 
   Future<void> _runGeofenceTest() async {
+    if (_geofenceTesting) return;
+    setState(() => _geofenceTesting = true);
     final messenger = ScaffoldMessenger.of(context);
     DebugEventLog.add('GEOFENCE_TEST', 'tap 围栏测试');
     final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
@@ -244,6 +247,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       messenger.showSnackBar(
         const SnackBar(content: Text('定位服务或定位权限未就绪，无法执行围栏测试')),
       );
+      setState(() => _geofenceTesting = false);
       return;
     }
 
@@ -256,29 +260,40 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       messenger.showSnackBar(
         const SnackBar(content: Text('请先设置围栏经纬度')),
       );
+      setState(() => _geofenceTesting = false);
       return;
     }
 
-    Position? pos;
-    try {
-      pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 5),
+    Position? pos = await Geolocator.getLastKnownPosition();
+    if (pos != null) {
+      DebugEventLog.add(
+        'GEOFENCE_TEST',
+        'use lastKnown first lat=${pos.latitude} lng=${pos.longitude} accuracy=${pos.accuracy}',
       );
-    } catch (_) {}
+    }
+    try {
+      pos ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 3),
+      );
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_TEST', 'medium failed: $e');
+    }
     try {
       pos ??= await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 8),
+        timeLimit: const Duration(seconds: 4),
       );
-    } catch (_) {}
-    pos ??= await Geolocator.getLastKnownPosition();
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_TEST', 'high failed: $e');
+    }
     if (pos == null) {
       DebugEventLog.add('GEOFENCE_TEST', 'position_null');
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('定位失败，请稍后重试')),
       );
+      setState(() => _geofenceTesting = false);
       return;
     }
     final currentPos = pos;
@@ -303,21 +318,31 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     await showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('围栏测试结果'),
+        title: const Text(
+          '围栏测试结果',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        ),
         content: Text(
           '当前定位：${currentPos.latitude.toStringAsFixed(6)}, ${currentPos.longitude.toStringAsFixed(6)}\n'
           '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
           '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
           '${inside ? '判定：已进入围栏（已触发正式签到提醒）' : '判定：未进入围栏（未触发提醒）'}',
+          style: const TextStyle(fontSize: 18, height: 1.35, fontWeight: FontWeight.w600),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
+            child: const Text(
+              '知道了',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
+    if (mounted) {
+      setState(() => _geofenceTesting = false);
+    }
   }
 
   Future<void> _exportAttendanceBackup() async {
@@ -626,11 +651,9 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    await _runGeofenceTest();
-                  },
+                  onPressed: _geofenceTesting ? null : _runGeofenceTest,
                   icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: const Text('围栏测试'),
+                  label: Text(_geofenceTesting ? '测试中...' : '围栏测试'),
                 ),
               ),
             ],

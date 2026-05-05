@@ -229,9 +229,9 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            '已统计 $countedText  ·  还需盘 $remainText',
-            style: TextStyle(
-              color: remainingBoxes < 0 ? const Color(0xFFB91C1C) : AppTheme.textSecondary,
+            '已统计 $countedText  ·  ${_remainingLabel(remainingBoxes)} $remainText',
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -776,4 +776,14 @@ String _formatBoardSigned(int boxes, int boxesPerBoard) {
   final isNegative = boxes < 0;
   final content = _formatBoard(boxes.abs(), boxesPerBoard);
   return isNegative ? '-$content' : content;
+}
+
+String _remainingLabel(int remainingBoxes) {
+  if (remainingBoxes > 0) {
+    return '还需盘';
+  }
+  if (remainingBoxes < 0) {
+    return '超盘';
+  }
+  return '盘平';
 }
