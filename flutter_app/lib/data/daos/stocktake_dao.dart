@@ -122,11 +122,107 @@ class StocktakeDao {
     });
   }
 
+  Future<List<StocktakeCandidateBatch>> listCandidateBatches() async {
+    final stockDao = StockDao(_database);
+    final rows = await stockDao.inventoryDetailRows();
+    final result = <StocktakeCandidateBatch>[];
+    for (final row in rows) {
+      if (row.currentBoxes <= 0) {
+        continue;
+      }
+      result.add(
+        StocktakeCandidateBatch(
+          productId: row.product.id,
+          batchId: row.batch.id,
+          productCode: row.product.code,
+          productName: row.product.name,
+          batchCode: row.batch.actualBatch,
+          dateBatch: row.batch.dateBatch,
+          boxesPerBoard: row.batch.boxesPerBoard,
+          initialBoxes: row.batch.initialBoxes,
+          currentBoxes: row.currentBoxes,
+        ),
+      );
+    }
+    result.sort((a, b) {
+      final byProduct = a.productCode.compareTo(b.productCode);
+      if (byProduct != 0) return byProduct;
+      final byDate = a.dateBatch.compareTo(b.dateBatch);
+      if (byDate != 0) return byDate;
+      return a.batchCode.compareTo(b.batchCode);
+    });
+    return result;
+  }
+
+  Future<bool> addItemToSession({
+    required int sessionId,
+    required int batchId,
+  }) async {
+    final existing = await (_database.select(_database.stocktakeItems)
+          ..where((t) => t.sessionId.equals(sessionId) & t.batchId.equals(batchId))
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing != null) {
+      return false;
+    }
+
+    final all = await listCandidateBatches();
+    StocktakeCandidateBatch? candidate;
+    for (final row in all) {
+      if (row.batchId == batchId) {
+        candidate = row;
+        break;
+      }
+    }
+    if (candidate == null) {
+      throw StateError('未找到可加入的批号');
+    }
+    await _database.into(_database.stocktakeItems).insert(
+          StocktakeItemsCompanion.insert(
+            sessionId: sessionId,
+            productId: candidate.productId,
+            batchId: candidate.batchId,
+            productCode: candidate.productCode,
+            batchCode: candidate.batchCode,
+            dateBatch: candidate.dateBatch,
+            initialBoxes: Value(candidate.initialBoxes),
+            boxesPerBoard: Value(candidate.boxesPerBoard),
+            currentBoxes: candidate.currentBoxes,
+            status: Value(StocktakeItemStatus.pending.index),
+          ),
+        );
+    return true;
+  }
+
   String _monthKey(DateTime month) {
     final y = month.year.toString().padLeft(4, '0');
     final m = month.month.toString().padLeft(2, '0');
     return '$y-$m';
   }
+}
+
+class StocktakeCandidateBatch {
+  const StocktakeCandidateBatch({
+    required this.productId,
+    required this.batchId,
+    required this.productCode,
+    required this.productName,
+    required this.batchCode,
+    required this.dateBatch,
+    required this.boxesPerBoard,
+    required this.initialBoxes,
+    required this.currentBoxes,
+  });
+
+  final int productId;
+  final int batchId;
+  final String productCode;
+  final String productName;
+  final String batchCode;
+  final String dateBatch;
+  final int boxesPerBoard;
+  final int initialBoxes;
+  final int currentBoxes;
 }
 
 class StocktakeSessionBundle {

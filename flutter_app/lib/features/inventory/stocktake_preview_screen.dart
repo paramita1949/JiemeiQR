@@ -672,9 +672,143 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     );
   }
 
-  void _onAddProductPressed() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('增加产品功能开发中')),
+  Future<void> _onAddProductPressed() async {
+    final current = _bundle;
+    if (current == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final candidates = await _stocktakeDao.listCandidateBatches();
+      if (!mounted) return;
+      if (candidates.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('基础资料中没有可加入的在库批号')),
+        );
+        return;
+      }
+      final selectedBatchId = await _showAddProductDialog(candidates);
+      if (selectedBatchId == null) return;
+      final inserted = await _stocktakeDao.addItemToSession(
+        sessionId: current.session.id,
+        batchId: selectedBatchId,
+      );
+      if (!mounted) return;
+      await _reloadBundle();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(inserted ? '已新增产品到盘库清单' : '该批号已在盘库清单中')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('新增失败：$error')),
+      );
+    }
+  }
+
+  Future<int?> _showAddProductDialog(List<StocktakeCandidateBatch> candidates) {
+    final products = <_ProductOption>[];
+    final byProduct = <int, List<StocktakeCandidateBatch>>{};
+    for (final row in candidates) {
+      byProduct.putIfAbsent(row.productId, () => <StocktakeCandidateBatch>[]).add(row);
+    }
+    byProduct.forEach((productId, rows) {
+      rows.sort((a, b) {
+        final byDate = a.dateBatch.compareTo(b.dateBatch);
+        if (byDate != 0) return byDate;
+        return a.batchCode.compareTo(b.batchCode);
+      });
+      final first = rows.first;
+      products.add(
+        _ProductOption(
+          productId: productId,
+          label: '${first.productCode} · ${first.productName}',
+        ),
+      );
+    });
+    products.sort((a, b) => a.label.compareTo(b.label));
+    int selectedProductId = products.first.productId;
+    int selectedBatchId = byProduct[selectedProductId]!.first.batchId;
+
+    return showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          final batchOptions = byProduct[selectedProductId] ?? const <StocktakeCandidateBatch>[];
+          if (batchOptions.where((e) => e.batchId == selectedBatchId).isEmpty && batchOptions.isNotEmpty) {
+            selectedBatchId = batchOptions.first.batchId;
+          }
+          return AlertDialog(
+            title: const Text('新增产品'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: selectedProductId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: '选择产品',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: products
+                      .map(
+                        (item) => DropdownMenuItem<int>(
+                          value: item.productId,
+                          child: Text(item.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocalState(() {
+                      selectedProductId = value;
+                      final nextBatches = byProduct[selectedProductId] ?? const <StocktakeCandidateBatch>[];
+                      if (nextBatches.isNotEmpty) {
+                        selectedBatchId = nextBatches.first.batchId;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  initialValue: selectedBatchId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: '选择批号（随产品自动切换）',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: batchOptions
+                      .map(
+                        (item) => DropdownMenuItem<int>(
+                          value: item.batchId,
+                          child: Text(
+                            '${item.batchCode} · ${item.dateBatch} · 当前${item.currentBoxes}箱',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocalState(() => selectedBatchId = value);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(selectedBatchId),
+                child: const Text('加入清单'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -766,6 +900,16 @@ class _FloorCountEntry {
       boxes: boxes ?? this.boxes,
     );
   }
+}
+
+class _ProductOption {
+  const _ProductOption({
+    required this.productId,
+    required this.label,
+  });
+
+  final int productId;
+  final String label;
 }
 
 String _formatMonth(DateTime month) {
