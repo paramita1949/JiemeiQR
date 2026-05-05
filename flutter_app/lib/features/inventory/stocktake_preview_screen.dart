@@ -25,6 +25,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   StocktakeSessionBundle? _bundle;
   List<StocktakeSessionRecord> _recentSessions = const [];
   bool _loading = false;
+  final Map<int, bool> _statsExpanded = <int, bool>{};
+  final Map<int, List<_FloorCountEntry>> _floorEntries = <int, List<_FloorCountEntry>>{};
 
   @override
   void initState() {
@@ -194,6 +196,12 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   Widget _itemCard(StocktakeItemRecord item, {required bool readOnly}) {
     final status = StocktakeItemStatus.values[item.status];
     final boardText = _formatBoard(item.currentBoxes, item.boxesPerBoard);
+    final countedBoxes = _countedBoxes(item);
+    final remainingBoxes = item.currentBoxes - countedBoxes;
+    final entries = _floorEntries[item.id] ?? const <_FloorCountEntry>[];
+    final countedText = _formatBoard(countedBoxes, item.boxesPerBoard);
+    final remainText = _formatBoardSigned(remainingBoxes, item.boxesPerBoard);
+    final isExpanded = _statsExpanded[item.id] ?? false;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -219,6 +227,14 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 2),
+          Text(
+            '已统计 $countedText  ·  还需盘 $remainText',
+            style: TextStyle(
+              color: remainingBoxes < 0 ? const Color(0xFFB91C1C) : AppTheme.textSecondary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -231,8 +247,21 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 label: const Text('备注'),
                 onPressed: readOnly ? null : () => _editNote(item),
               ),
+              ActionChip(
+                avatar: const Icon(Icons.calculate_outlined, size: 16),
+                label: Text(isExpanded ? '收起统计' : '统计'),
+                onPressed: readOnly ? null : () => _toggleStats(item.id),
+              ),
             ],
           ),
+          if (isExpanded) ...[
+            const SizedBox(height: 10),
+            _statsEditor(
+              item: item,
+              entries: entries,
+              readOnly: readOnly,
+            ),
+          ],
           if ((item.note ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -245,6 +274,117 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _statsEditor({
+    required StocktakeItemRecord item,
+    required List<_FloorCountEntry> entries,
+    required bool readOnly,
+  }) {
+    final localEntries = entries.isEmpty ? <_FloorCountEntry>[const _FloorCountEntry()] : entries;
+    if (entries.isEmpty) {
+      _floorEntries[item.id] = localEntries;
+    }
+    final totalBoxes = _countedBoxes(item);
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          ...localEntries.asMap().entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _statsRow(item: item, index: entry.key, entry: entry.value, readOnly: readOnly),
+            ),
+          ),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: readOnly ? null : () => _addStatsEntry(item.id),
+                icon: const Icon(Icons.add),
+                label: const Text('增加条目'),
+              ),
+              const Spacer(),
+              Text(
+                '累计 ${_formatBoard(totalBoxes, item.boxesPerBoard)}',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statsRow({
+    required StocktakeItemRecord item,
+    required int index,
+    required _FloorCountEntry entry,
+    required bool readOnly,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 76,
+          child: DropdownButtonFormField<int>(
+            initialValue: entry.floor,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            items: const [1, 2, 3, 4]
+                .map(
+                  (floor) => DropdownMenuItem<int>(
+                    value: floor,
+                    child: Text('$floor楼'),
+                  ),
+                )
+                .toList(),
+            onChanged: readOnly ? null : (value) => _updateFloor(item.id, index, value ?? 1),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextFormField(
+            initialValue: entry.boards == 0 ? '' : '${entry.boards}',
+            keyboardType: TextInputType.number,
+            enabled: !readOnly,
+            decoration: const InputDecoration(
+              labelText: '板数',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) => _updateBoards(item.id, index, int.tryParse(value) ?? 0),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextFormField(
+            initialValue: entry.boxes == 0 ? '' : '${entry.boxes}',
+            keyboardType: TextInputType.number,
+            enabled: !readOnly,
+            decoration: const InputDecoration(
+              labelText: '箱数',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) => _updateBoxes(item.id, index, int.tryParse(value) ?? 0),
+          ),
+        ),
+        IconButton(
+          tooltip: '删除',
+          onPressed: readOnly ? null : () => _removeStatsEntry(item.id, index),
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
     );
   }
 
@@ -389,6 +529,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       if (!mounted) return;
       setState(() {
         _bundle = bundle;
+        _statsExpanded.clear();
+        _floorEntries.clear();
       });
       await _loadRecent();
     } catch (error) {
@@ -466,6 +608,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       setState(() {
         _bundle = bundle;
         _selectedMonth = nextMonth;
+        _statsExpanded.clear();
+        _floorEntries.clear();
       });
     } catch (error) {
       if (!mounted) return;
@@ -509,6 +653,95 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       const SnackBar(content: Text('已删除盘库记录')),
     );
   }
+
+  void _toggleStats(int itemId) {
+    setState(() {
+      _statsExpanded[itemId] = !(_statsExpanded[itemId] ?? false);
+      _floorEntries.putIfAbsent(itemId, () => <_FloorCountEntry>[const _FloorCountEntry()]);
+    });
+  }
+
+  void _addStatsEntry(int itemId) {
+    setState(() {
+      final current = List<_FloorCountEntry>.from(_floorEntries[itemId] ?? const <_FloorCountEntry>[]);
+      current.add(const _FloorCountEntry());
+      _floorEntries[itemId] = current;
+    });
+  }
+
+  void _removeStatsEntry(int itemId, int index) {
+    setState(() {
+      final current = List<_FloorCountEntry>.from(_floorEntries[itemId] ?? const <_FloorCountEntry>[]);
+      if (index < 0 || index >= current.length) return;
+      current.removeAt(index);
+      if (current.isEmpty) {
+        current.add(const _FloorCountEntry());
+      }
+      _floorEntries[itemId] = current;
+    });
+  }
+
+  void _updateFloor(int itemId, int index, int floor) {
+    setState(() {
+      _updateEntry(itemId, index, (old) => old.copyWith(floor: floor));
+    });
+  }
+
+  void _updateBoards(int itemId, int index, int boards) {
+    setState(() {
+      _updateEntry(itemId, index, (old) => old.copyWith(boards: boards < 0 ? 0 : boards));
+    });
+  }
+
+  void _updateBoxes(int itemId, int index, int boxes) {
+    setState(() {
+      _updateEntry(itemId, index, (old) => old.copyWith(boxes: boxes < 0 ? 0 : boxes));
+    });
+  }
+
+  void _updateEntry(int itemId, int index, _FloorCountEntry Function(_FloorCountEntry) updater) {
+    final current = List<_FloorCountEntry>.from(_floorEntries[itemId] ?? const <_FloorCountEntry>[]);
+    if (index < 0 || index >= current.length) return;
+    current[index] = updater(current[index]);
+    _floorEntries[itemId] = current;
+  }
+
+  int _countedBoxes(StocktakeItemRecord item) {
+    final entries = _floorEntries[item.id] ?? const <_FloorCountEntry>[];
+    return entries.fold<int>(
+      0,
+      (sum, entry) => sum + _toBoxes(entry, item.boxesPerBoard),
+    );
+  }
+}
+
+int _toBoxes(_FloorCountEntry entry, int boxesPerBoard) {
+  final boardUnit = boxesPerBoard <= 0 ? 1 : boxesPerBoard;
+  return (entry.boards * boardUnit) + entry.boxes;
+}
+
+class _FloorCountEntry {
+  const _FloorCountEntry({
+    this.floor = 1,
+    this.boards = 0,
+    this.boxes = 0,
+  });
+
+  final int floor;
+  final int boards;
+  final int boxes;
+
+  _FloorCountEntry copyWith({
+    int? floor,
+    int? boards,
+    int? boxes,
+  }) {
+    return _FloorCountEntry(
+      floor: floor ?? this.floor,
+      boards: boards ?? this.boards,
+      boxes: boxes ?? this.boxes,
+    );
+  }
 }
 
 String _formatMonth(DateTime month) {
@@ -534,4 +767,13 @@ String _formatBoard(int boxes, int boxesPerBoard) {
     return '$board板';
   }
   return '$board板+$remain箱';
+}
+
+String _formatBoardSigned(int boxes, int boxesPerBoard) {
+  if (boxes == 0) {
+    return '0箱';
+  }
+  final isNegative = boxes < 0;
+  final content = _formatBoard(boxes.abs(), boxesPerBoard);
+  return isNegative ? '-$content' : content;
 }
