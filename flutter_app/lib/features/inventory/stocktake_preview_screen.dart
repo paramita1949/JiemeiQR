@@ -82,23 +82,37 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 ),
               ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: bundle == null || _loading || isCompleted
-                  ? null
-                  : () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      await _stocktakeDao.completeSession(
-                        sessionId: bundle.session.id,
-                      );
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('盘库已确认')),
-                      );
-                      setState(() => _bundle = null);
-                      await _loadRecent();
-                    },
-              icon: const Icon(Icons.task_alt),
-              label: const Text('确认完成'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: bundle == null || _loading || isCompleted ? null : _onAddProductPressed,
+                    icon: const Icon(Icons.add_box_outlined),
+                    label: const Text('新增产品'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: bundle == null || _loading || isCompleted
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await _stocktakeDao.completeSession(
+                              sessionId: bundle.session.id,
+                            );
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('盘库已确认')),
+                            );
+                            setState(() => _bundle = null);
+                            await _loadRecent();
+                          },
+                    icon: const Icon(Icons.task_alt),
+                    label: const Text('确认完成'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _recentCard(),
@@ -115,28 +129,32 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Text(
-              _formatMonth(_selectedMonth),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.textPrimary,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatMonth(_selectedMonth),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
               ),
-            ),
-          ),
-          IconButton(
-            tooltip: '选择月份',
-            onPressed: _loading ? null : _pickMonth,
-            icon: const Icon(Icons.calendar_month_outlined),
-          ),
-          const SizedBox(width: 4),
-          FilledButton.icon(
-            onPressed: _loading ? null : _createSession,
-            icon: const Icon(Icons.auto_awesome),
-            label: Text(_loading ? '生成中' : '生成清单'),
+              IconButton(
+                tooltip: '选择月份',
+                onPressed: _loading ? null : _pickMonth,
+                icon: const Icon(Icons.calendar_month_outlined),
+              ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: _loading ? null : _createSession,
+                icon: const Icon(Icons.auto_awesome),
+                label: Text(_loading ? '生成中' : '生成清单'),
+              ),
+            ],
           ),
         ],
       ),
@@ -651,6 +669,12 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已删除盘库记录')),
+    );
+  }
+
+  void _onAddProductPressed() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('增加产品功能开发中')),
     );
   }
 
