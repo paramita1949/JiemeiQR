@@ -110,6 +110,19 @@ class StocktakeDao {
     );
   }
 
+  Future<void> reopenSession({
+    required int sessionId,
+  }) async {
+    await (_database.update(_database.stocktakeSessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .write(
+      StocktakeSessionsCompanion(
+        status: Value(StocktakeSessionStatus.draft.index),
+        completedAt: const Value(null),
+      ),
+    );
+  }
+
   Future<void> updateSessionDate({
     required int sessionId,
     required DateTime date,

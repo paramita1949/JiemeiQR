@@ -67,10 +67,39 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
           children: [
-            const PageTitle(
-              icon: Icons.fact_check_outlined,
-              title: '盘库',
-              subtitle: '简单记录，不改库存',
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: PageTitle(
+                    icon: Icons.fact_check_outlined,
+                    title: showEditingArea ? '盘库记录' : '盘库',
+                    subtitle: showEditingArea ? null : '简单记录，不改库存',
+                  ),
+                ),
+                if (showEditingArea && isCompleted)
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      tooltip: '继续修改',
+                      onPressed: _loading ? null : () => _reopenSession(bundle.session.id),
+                      icon: const Icon(Icons.edit_outlined),
+                      color: AppTheme.primary,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             if (showEditingArea) ...[
@@ -90,38 +119,39 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                   ),
                 ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _loading || isCompleted ? null : _onAddProductPressed,
-                      icon: const Icon(Icons.add_box_outlined),
-                      label: const Text('新增产品'),
+              if (!isCompleted)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _loading ? null : _onAddProductPressed,
+                        icon: const Icon(Icons.add_box_outlined),
+                        label: const Text('新增产品'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _loading || isCompleted
-                          ? null
-                          : () async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              await _stocktakeDao.completeSession(
-                                sessionId: bundle.session.id,
-                              );
-                              if (!mounted) return;
-                              messenger.showSnackBar(
-                                const SnackBar(content: Text('盘库已确认')),
-                              );
-                              setState(() => _bundle = null);
-                              await _loadRecent();
-                            },
-                      icon: const Icon(Icons.task_alt),
-                      label: const Text('确认完成'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _loading
+                            ? null
+                            : () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                await _stocktakeDao.completeSession(
+                                  sessionId: bundle.session.id,
+                                );
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  const SnackBar(content: Text('盘库已确认')),
+                                );
+                                setState(() => _bundle = null);
+                                await _loadRecent();
+                              },
+                        icon: const Icon(Icons.task_alt),
+                        label: const Text('确认完成'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ] else ...[
               _monthBar(),
               const SizedBox(height: 10),
@@ -336,9 +366,27 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _statusChip(item, StocktakeItemStatus.pending, '待盘', status == StocktakeItemStatus.pending),
-              _statusChip(item, StocktakeItemStatus.checked, '已盘', status == StocktakeItemStatus.checked),
-              _statusChip(item, StocktakeItemStatus.issue, '异常', status == StocktakeItemStatus.issue),
+              _statusChip(
+                item,
+                StocktakeItemStatus.pending,
+                '待盘',
+                status == StocktakeItemStatus.pending,
+                readOnly: readOnly,
+              ),
+              _statusChip(
+                item,
+                StocktakeItemStatus.checked,
+                '已盘',
+                status == StocktakeItemStatus.checked,
+                readOnly: readOnly,
+              ),
+              _statusChip(
+                item,
+                StocktakeItemStatus.issue,
+                '异常',
+                status == StocktakeItemStatus.issue,
+                readOnly: readOnly,
+              ),
               ActionChip(
                 label: const Text('备注'),
                 onPressed: readOnly ? null : () => _editNote(item),
@@ -488,12 +536,13 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     StocktakeItemRecord item,
     StocktakeItemStatus target,
     String text,
-    bool selected,
-  ) {
+    bool selected, {
+    required bool readOnly,
+  }) {
     return ChoiceChip(
       selected: selected,
       label: Text(text),
-      onSelected: (_) => _onStatusSelected(item, target),
+      onSelected: readOnly ? null : (_) => _onStatusSelected(item, target),
     );
   }
 
@@ -650,6 +699,27 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     if (!mounted) return;
     setState(() => _bundle = next);
     await _hydrateFloorEntries(next);
+  }
+
+  Future<void> _reopenSession(int sessionId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _loading = true);
+    try {
+      await _stocktakeDao.reopenSession(sessionId: sessionId);
+      final next = await _stocktakeDao.loadSession(sessionId);
+      if (!mounted) return;
+      setState(() => _bundle = next);
+      await _hydrateFloorEntries(next);
+      await _loadRecent();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('已恢复编辑，修改后请重新确认完成')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Future<void> _editNote(StocktakeItemRecord item) async {
