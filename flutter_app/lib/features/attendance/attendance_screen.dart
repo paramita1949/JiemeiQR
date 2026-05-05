@@ -7,7 +7,7 @@ import 'package:qrscan_flutter/features/attendance/attendance_record_edit_screen
 import 'package:qrscan_flutter/features/attendance/attendance_rule_screen.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_stats_screen.dart';
 
-enum _StatusFilter { all, late, absent }
+enum _StatusFilter { all, late, absent, holiday }
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({
@@ -138,6 +138,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         return _rows.where((r) => r.isLate).toList();
       case _StatusFilter.absent:
         return _rows.where((r) => r.isAbsent).toList();
+      case _StatusFilter.holiday:
+        return _rows.where((r) => r.isHoliday).toList();
     }
   }
 
@@ -247,6 +249,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         _filterChip('全部', _StatusFilter.all),
                         _filterChip('迟到', _StatusFilter.late),
                         _filterChip('请假', _StatusFilter.absent),
+                        _filterChip('假期', _StatusFilter.holiday),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -295,6 +298,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         case _StatusFilter.absent:
           bg = const Color(0xFFFEF3C7);
           fg = const Color(0xFF92400E);
+          break;
+        case _StatusFilter.holiday:
+          bg = const Color(0xFFE0ECFF);
+          fg = const Color(0xFF1D4ED8);
           break;
         case _StatusFilter.all:
           bg = const Color(0xFFE2E8F0);
@@ -463,7 +470,7 @@ class _DetailCard extends StatelessWidget {
     final status = _status(row);
     final isLate = status == '迟到';
     final isAbsent = status == '请假';
-    final isHoliday = status == '假期';
+    final isHoliday = row.isHoliday;
     final isPending = status == '未完成' || status == '待下班';
     final bg = isAbsent
         ? const Color(0xFFFEF2F2)
@@ -476,7 +483,7 @@ class _DetailCard extends StatelessWidget {
         ? const Color(0xFF991B1B)
         : isHoliday
             ? const Color(0xFF1D4ED8)
-        : isLate
+            : isLate
             ? const Color(0xFF9A3412)
             : const Color(0xFF334155);
     final overtimeText = row.overtimeHoursRounded > 0 ? '+${row.overtimeHoursRounded.toStringAsFixed(1)}h' : '';
@@ -494,7 +501,7 @@ class _DetailCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${_md(row.day)}${row.isHoliday ? ' 假期' : (isWeekendOvertimeDay ? ' 加班日' : '')}  ${_timeRange(row)}',
+                '${_md(row.day)}${isWeekendOvertimeDay ? ' 加班日' : ''}  ${_timeRange(row)}',
                 style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -526,7 +533,6 @@ class _DetailCard extends StatelessWidget {
     final isToday = r.day.year == now.year && r.day.month == now.month && r.day.day == now.day;
     final hasCheckIn = r.checkInAt != null;
     final hasCheckOut = r.checkOutAt != null;
-    if (r.isHoliday) return '假期';
     if (r.isLeave) return '请假';
     if (r.isAbsent) return '请假';
     if (r.isLate) return '迟到';
