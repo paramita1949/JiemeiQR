@@ -36,30 +36,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(_lifecycleObserver);
     _dao = AttendanceDao(widget.database);
     unawaited(_reload());
     unawaited(_consumeInitialImport());
   }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
-    super.dispose();
-  }
-
-  late final WidgetsBindingObserver _lifecycleObserver = _AttendanceLifecycleObserver(
-    onResumed: () async {
-      final now = DateTime.now();
-      final dayChanged = now.year != _lastRefreshDay.year ||
-          now.month != _lastRefreshDay.month ||
-          now.day != _lastRefreshDay.day;
-      final monthChanged = now.year != _month.year || now.month != _month.month;
-      if (dayChanged || monthChanged) {
-        await _reload();
-      }
-    },
-  );
 
   Future<void> _consumeInitialImport() async {
     final path = widget.initialImportPath;
@@ -378,19 +358,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
     return satRow != null && satRow.checkInAt != null && satRow.checkOutAt != null;
-  }
-}
-
-class _AttendanceLifecycleObserver extends WidgetsBindingObserver {
-  _AttendanceLifecycleObserver({required this.onResumed});
-
-  final Future<void> Function() onResumed;
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(onResumed());
-    }
   }
 }
 
