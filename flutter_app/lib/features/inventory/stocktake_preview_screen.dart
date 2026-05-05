@@ -27,6 +27,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   DateTime _selectedMonth = _defaultMonth();
   StocktakeSessionBundle? _bundle;
   List<StocktakeSessionRecord> _recentSessions = const [];
+  _LatestSessionSummary? _latestSummary;
   bool _loading = false;
   final Map<int, bool> _statsExpanded = <int, bool>{};
   final Map<int, List<_FloorCountEntry>> _floorEntries = <int, List<_FloorCountEntry>>{};
@@ -59,6 +60,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     final checked = items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
     final issue = items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
     final diffIndexMap = _buildBatchDiffIndexMap(items);
+    final showEditingArea = bundle != null;
 
     return Scaffold(
       body: SafeArea(
@@ -72,57 +74,60 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
             ),
             const SizedBox(height: 12),
             _monthBar(),
-            const SizedBox(height: 10),
-            _statsCard(total: items.length, pending: pending, checked: checked, issue: issue),
-            const SizedBox(height: 10),
-            if (bundle == null)
-              _emptyCard()
-            else if (items.isEmpty)
-              _emptyResultCard()
-            else
-              ...items.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _itemCard(
-                    item,
-                    readOnly: isCompleted,
-                    diffIndexes: diffIndexMap[item.id] ?? const <int>{},
+            if (showEditingArea) ...[
+              const SizedBox(height: 10),
+              _statsCard(total: items.length, pending: pending, checked: checked, issue: issue),
+              const SizedBox(height: 10),
+              if (items.isEmpty)
+                _emptyResultCard()
+              else
+                ...items.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _itemCard(
+                      item,
+                      readOnly: isCompleted,
+                      diffIndexes: diffIndexMap[item.id] ?? const <int>{},
+                    ),
                   ),
                 ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _loading || isCompleted ? null : _onAddProductPressed,
+                      icon: const Icon(Icons.add_box_outlined),
+                      label: const Text('新增产品'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _loading || isCompleted
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              await _stocktakeDao.completeSession(
+                                sessionId: bundle.session.id,
+                              );
+                              if (!mounted) return;
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('盘库已确认')),
+                              );
+                              setState(() => _bundle = null);
+                              await _loadRecent();
+                            },
+                      icon: const Icon(Icons.task_alt),
+                      label: const Text('确认完成'),
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: bundle == null || _loading || isCompleted ? null : _onAddProductPressed,
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: const Text('新增产品'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: bundle == null || _loading || isCompleted
-                        ? null
-                        : () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            await _stocktakeDao.completeSession(
-                              sessionId: bundle.session.id,
-                            );
-                            if (!mounted) return;
-                            messenger.showSnackBar(
-                              const SnackBar(content: Text('盘库已确认')),
-                            );
-                            setState(() => _bundle = null);
-                            await _loadRecent();
-                          },
-                    icon: const Icon(Icons.task_alt),
-                    label: const Text('确认完成'),
-                  ),
-                ),
-              ],
-            ),
+            ] else ...[
+              const SizedBox(height: 10),
+              _latestSummaryCard(),
+            ],
             const SizedBox(height: 12),
             _recentCard(),
           ],
@@ -488,23 +493,6 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     );
   }
 
-  Widget _emptyCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Text(
-        '先选择月份，再点“生成清单”。',
-        style: TextStyle(
-          color: AppTheme.textSecondary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
   Widget _emptyResultCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -553,11 +541,20 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${session.monthKey} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                        '${_formatMonth(session.completedAt ?? session.createdAt)} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '修改盘库日期',
+                      onPressed: () => _editSessionDate(session),
+                      icon: const Icon(
+                        Icons.edit_calendar_outlined,
+                        size: 18,
+                        color: AppTheme.primary,
                       ),
                     ),
                     IconButton(
@@ -581,7 +578,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 .map(
                   (session) => ActionChip(
                     label: Text(
-                      '${session.monthKey} ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                      '${_formatMonth(session.completedAt ?? session.createdAt)} ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
                     ),
                     onPressed: () => _openSession(session),
                   ),
@@ -672,8 +669,69 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
 
   Future<void> _loadRecent() async {
     final recent = await _stocktakeDao.listRecentSessions();
+    _LatestSessionSummary? latest;
+    if (recent.isNotEmpty) {
+      final session = recent.first;
+      final bundle = await _stocktakeDao.loadSession(session.id);
+      final total = bundle.items.length;
+      final pending = bundle.items.where((e) => e.status == StocktakeItemStatus.pending.index).length;
+      final checked = bundle.items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
+      final issue = bundle.items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
+      latest = _LatestSessionSummary(
+        monthKey: session.monthKey,
+        status: session.status,
+        date: session.completedAt ?? session.createdAt,
+        total: total,
+        pending: pending,
+        checked: checked,
+        issue: issue,
+      );
+    }
     if (!mounted) return;
-    setState(() => _recentSessions = recent);
+    setState(() {
+      _recentSessions = recent;
+      _latestSummary = latest;
+    });
+  }
+
+  Widget _latestSummaryCard() {
+    final summary = _latestSummary;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: summary == null
+          ? const Text(
+              '暂无盘库记录',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '最近盘库：${_formatMonth(summary.date)} ${summary.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _metric('总数', '${summary.total}'),
+                    _metric('待盘', '${summary.pending}'),
+                    _metric('已盘', '${summary.checked}'),
+                    _metric('异常', '${summary.issue}'),
+                  ],
+                ),
+              ],
+            ),
+    );
   }
 
   Future<void> _openSession(StocktakeSessionRecord session) async {
@@ -738,6 +796,32 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已删除盘库记录')),
+    );
+  }
+
+  Future<void> _editSessionDate(StocktakeSessionRecord session) async {
+    final initial = session.completedAt ?? session.createdAt;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: '修改盘库日期',
+    );
+    if (selected == null) return;
+    await _stocktakeDao.updateSessionDate(
+      sessionId: session.id,
+      date: selected,
+    );
+    if (!mounted) return;
+    await _loadRecent();
+    if (!mounted) return;
+    if (_bundle?.session.id == session.id) {
+      await _reloadBundle();
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('盘库日期已更新')),
     );
   }
 
@@ -1232,6 +1316,26 @@ class _ProductOption {
   final String label;
 }
 
+class _LatestSessionSummary {
+  const _LatestSessionSummary({
+    required this.monthKey,
+    required this.status,
+    required this.date,
+    required this.total,
+    required this.pending,
+    required this.checked,
+    required this.issue,
+  });
+
+  final String monthKey;
+  final int status;
+  final DateTime date;
+  final int total;
+  final int pending;
+  final int checked;
+  final int issue;
+}
+
 class _PersistedStats {
   const _PersistedStats({
     required this.entries,
@@ -1265,14 +1369,10 @@ DateTime? _parseDateBatch(String value) {
 }
 
 String _formatMonth(DateTime month) {
-  return '${month.year}年${month.month}月';
+  return '${month.year}年${month.month}月${month.day}日';
 }
 
-DateTime _defaultMonth() {
-  final now = DateTime.now();
-  final current = DateTime(now.year, now.month);
-  return DateTime(current.year, current.month - 1);
-}
+DateTime _defaultMonth() => DateTime.now();
 
 String _formatBoard(int boxes, int boxesPerBoard) {
   if (boxesPerBoard <= 0) {

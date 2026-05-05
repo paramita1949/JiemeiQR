@@ -110,6 +110,45 @@ class StocktakeDao {
     );
   }
 
+  Future<void> updateSessionDate({
+    required int sessionId,
+    required DateTime date,
+  }) async {
+    final session = await (_database.select(_database.stocktakeSessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .getSingle();
+    final nextCreatedAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      session.createdAt.hour,
+      session.createdAt.minute,
+      session.createdAt.second,
+      session.createdAt.millisecond,
+      session.createdAt.microsecond,
+    );
+    final nextCompletedAt = session.completedAt == null
+        ? null
+        : DateTime(
+            date.year,
+            date.month,
+            date.day,
+            session.completedAt!.hour,
+            session.completedAt!.minute,
+            session.completedAt!.second,
+            session.completedAt!.millisecond,
+            session.completedAt!.microsecond,
+          );
+    await (_database.update(_database.stocktakeSessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .write(
+      StocktakeSessionsCompanion(
+        createdAt: Value(nextCreatedAt),
+        completedAt: Value(nextCompletedAt),
+      ),
+    );
+  }
+
   Future<void> deleteSession(int sessionId) async {
     await _database.transaction(() async {
       await _database.customStatement(
