@@ -226,6 +226,10 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   }) {
     final status = StocktakeItemStatus.values[item.status];
     final isChecked = status == StocktakeItemStatus.checked;
+    final isIssue = status == StocktakeItemStatus.issue;
+    final accentColor = isIssue
+        ? const Color(0xFFB91C1C)
+        : (isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary);
     final boardText = _formatBoard(item.currentBoxes, item.boxesPerBoard);
     final countedBoxes = _countedBoxes(item);
     final remainingBoxes = item.currentBoxes - countedBoxes;
@@ -237,10 +241,14 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isChecked ? const Color(0xFFF0FDF4) : Colors.white,
+        color: isIssue
+            ? const Color(0xFFFEF2F2)
+            : (isChecked ? const Color(0xFFF0FDF4) : Colors.white),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isChecked ? const Color(0xFF22C55E) : Colors.transparent,
+          color: isIssue
+              ? const Color(0xFFFCA5A5)
+              : (isChecked ? const Color(0xFF22C55E) : Colors.transparent),
         ),
       ),
       child: Column(
@@ -261,20 +269,16 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                     children: [
                       TextSpan(
                         text: '${item.productCode} · ',
-                        style: TextStyle(
-                          color: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
-                        ),
+                        style: TextStyle(color: accentColor),
                       ),
                       ..._batchCodeSpans(
                         item.batchCode,
                         diffIndexes,
-                        baseColor: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
+                        baseColor: accentColor,
                       ),
                       TextSpan(
                         text: ' · ${item.dateBatch}',
-                        style: TextStyle(
-                          color: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
-                        ),
+                        style: TextStyle(color: accentColor),
                       ),
                     ],
                   ),
