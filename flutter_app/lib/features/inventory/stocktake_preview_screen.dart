@@ -710,7 +710,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         latest ??= _LatestSessionSummary(
           status: session.status,
           date: date,
-          issueItem: _latestIssueItem(bundle.items, statsMap),
+          issueItems: _latestIssueItems(bundle.items, statsMap),
         );
       }
     }
@@ -755,7 +755,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                if (summary.issueItem == null)
+                if (summary.issueItems.isEmpty)
                   Text(
                     '${_formatMonth(summary.date)} · 无异常记录',
                     style: const TextStyle(
@@ -764,7 +764,12 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                     ),
                   )
                 else
-                  _issueSummary(summary.issueItem!),
+                  ...summary.issueItems.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _issueSummary(item),
+                    ),
+                  ),
               ],
             ),
     );
@@ -848,23 +853,26 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     );
   }
 
-  _LatestIssueItem? _latestIssueItem(
+  List<_LatestIssueItem> _latestIssueItems(
     List<StocktakeItemRecord> items,
     Map<int, String> statsMap,
   ) {
+    final result = <_LatestIssueItem>[];
     for (final item in items) {
       if (item.status != StocktakeItemStatus.issue.index) {
         continue;
       }
       final stats = _decodePersistedStats(statsMap[item.id] ?? '');
-      return _LatestIssueItem(
-        productCode: item.productCode,
-        batchCode: item.batchCode,
-        dateBatch: item.dateBatch,
-        shortageBoxes: stats.issueShortageBoxes,
+      result.add(
+        _LatestIssueItem(
+          productCode: item.productCode,
+          batchCode: item.batchCode,
+          dateBatch: item.dateBatch,
+          shortageBoxes: stats.issueShortageBoxes,
+        ),
       );
     }
-    return null;
+    return result;
   }
 
   Future<void> _openSession(StocktakeSessionRecord session) async {
@@ -1453,12 +1461,12 @@ class _LatestSessionSummary {
   const _LatestSessionSummary({
     required this.status,
     required this.date,
-    required this.issueItem,
+    required this.issueItems,
   });
 
   final int status;
   final DateTime date;
-  final _LatestIssueItem? issueItem;
+  final List<_LatestIssueItem> issueItems;
 }
 
 class _StocktakeHistorySummary {
