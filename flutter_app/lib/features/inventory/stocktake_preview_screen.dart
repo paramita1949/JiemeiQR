@@ -57,6 +57,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     final pending = items.where((e) => e.status == StocktakeItemStatus.pending.index).length;
     final checked = items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
     final issue = items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
+    final diffIndexMap = _buildBatchDiffIndexMap(items);
 
     return Scaffold(
       body: SafeArea(
@@ -81,7 +82,11 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
               ...items.map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _itemCard(item, readOnly: isCompleted),
+                  child: _itemCard(
+                    item,
+                    readOnly: isCompleted,
+                    diffIndexes: diffIndexMap[item.id] ?? const <int>{},
+                  ),
                 ),
               ),
             const SizedBox(height: 12),
@@ -214,7 +219,11 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     );
   }
 
-  Widget _itemCard(StocktakeItemRecord item, {required bool readOnly}) {
+  Widget _itemCard(
+    StocktakeItemRecord item, {
+    required bool readOnly,
+    required Set<int> diffIndexes,
+  }) {
     final status = StocktakeItemStatus.values[item.status];
     final boardText = _formatBoard(item.currentBoxes, item.boxesPerBoard);
     final countedBoxes = _countedBoxes(item);
@@ -232,13 +241,36 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${item.productCode} · ${item.batchCode} · ${item.dateBatch}',
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                    children: [
+                      TextSpan(text: '${item.productCode} · '),
+                      ..._batchCodeSpans(item.batchCode, diffIndexes),
+                      TextSpan(text: ' · ${item.dateBatch}'),
+                    ],
+                  ),
+                ),
+              ),
+              if (!readOnly)
+                IconButton(
+                  tooltip: '删除条目',
+                  onPressed: () => _deleteItem(item),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
@@ -272,11 +304,6 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                 avatar: const Icon(Icons.calculate_outlined, size: 16),
                 label: Text(isExpanded ? '收起统计' : '统计'),
                 onPressed: readOnly ? null : () => _toggleStats(item.id),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('删除条目'),
-                onPressed: readOnly ? null : () => _deleteItem(item),
               ),
             ],
           ),
@@ -884,6 +911,68 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       0,
       (sum, entry) => sum + _toBoxes(entry, item.boxesPerBoard),
     );
+  }
+
+  Map<int, Set<int>> _buildBatchDiffIndexMap(List<StocktakeItemRecord> items) {
+    final grouped = <String, List<StocktakeItemRecord>>{};
+    for (final item in items) {
+      final key = '${item.productCode}@@${item.dateBatch}';
+      grouped.putIfAbsent(key, () => <StocktakeItemRecord>[]).add(item);
+    }
+    final result = <int, Set<int>>{};
+    for (final group in grouped.values) {
+      if (group.length <= 1) {
+        for (final item in group) {
+          result[item.id] = const <int>{};
+        }
+        continue;
+      }
+      final maxLen = group
+          .map((item) => item.batchCode.length)
+          .fold<int>(0, (a, b) => a > b ? a : b);
+      final diffIndexes = <int>{};
+      for (var i = 0; i < maxLen; i += 1) {
+        String? first;
+        var mismatch = false;
+        for (final item in group) {
+          final char = i < item.batchCode.length ? item.batchCode[i] : '';
+          if (first == null) {
+            first = char;
+            continue;
+          }
+          if (char != first) {
+            mismatch = true;
+            break;
+          }
+        }
+        if (mismatch) {
+          diffIndexes.add(i);
+        }
+      }
+      for (final item in group) {
+        result[item.id] = diffIndexes;
+      }
+    }
+    return result;
+  }
+
+  List<TextSpan> _batchCodeSpans(String batchCode, Set<int> diffIndexes) {
+    final spans = <TextSpan>[];
+    for (var i = 0; i < batchCode.length; i += 1) {
+      final highlight = diffIndexes.contains(i);
+      spans.add(
+        TextSpan(
+          text: batchCode[i],
+          style: highlight
+              ? const TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontWeight: FontWeight.w900,
+                )
+              : null,
+        ),
+      );
+    }
+    return spans;
   }
 
   Future<void> _deleteItem(StocktakeItemRecord item) async {
