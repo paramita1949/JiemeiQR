@@ -225,6 +225,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     required Set<int> diffIndexes,
   }) {
     final status = StocktakeItemStatus.values[item.status];
+    final isChecked = status == StocktakeItemStatus.checked;
     final boardText = _formatBoard(item.currentBoxes, item.boxesPerBoard);
     final countedBoxes = _countedBoxes(item);
     final remainingBoxes = item.currentBoxes - countedBoxes;
@@ -232,11 +233,15 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     final countedText = _formatBoard(countedBoxes, item.boxesPerBoard);
     final remainText = _formatBoardSigned(remainingBoxes, item.boxesPerBoard);
     final isExpanded = _statsExpanded[item.id] ?? false;
+    final showRedStat = countedBoxes > 0;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isChecked ? const Color(0xFFF0FDF4) : Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isChecked ? const Color(0xFF22C55E) : Colors.transparent,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,9 +259,23 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                       fontSize: 15,
                     ),
                     children: [
-                      TextSpan(text: '${item.productCode} · '),
-                      ..._batchCodeSpans(item.batchCode, diffIndexes),
-                      TextSpan(text: ' · ${item.dateBatch}'),
+                      TextSpan(
+                        text: '${item.productCode} · ',
+                        style: TextStyle(
+                          color: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
+                        ),
+                      ),
+                      ..._batchCodeSpans(
+                        item.batchCode,
+                        diffIndexes,
+                        baseColor: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
+                      ),
+                      TextSpan(
+                        text: ' · ${item.dateBatch}',
+                        style: TextStyle(
+                          color: isChecked ? const Color(0xFF15803D) : AppTheme.textPrimary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -283,8 +302,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           const SizedBox(height: 2),
           Text(
             '已统计 $countedText  ·  ${_remainingLabel(remainingBoxes)} $remainText',
-            style: const TextStyle(
-              color: Color(0xFFB91C1C),
+            style: TextStyle(
+              color: showRedStat ? const Color(0xFFB91C1C) : AppTheme.textSecondary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -956,7 +975,11 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     return result;
   }
 
-  List<TextSpan> _batchCodeSpans(String batchCode, Set<int> diffIndexes) {
+  List<TextSpan> _batchCodeSpans(
+    String batchCode,
+    Set<int> diffIndexes, {
+    required Color baseColor,
+  }) {
     final spans = <TextSpan>[];
     for (var i = 0; i < batchCode.length; i += 1) {
       final highlight = diffIndexes.contains(i);
@@ -968,7 +991,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                   color: Color(0xFFDC2626),
                   fontWeight: FontWeight.w900,
                 )
-              : null,
+              : TextStyle(color: baseColor),
         ),
       );
     }
