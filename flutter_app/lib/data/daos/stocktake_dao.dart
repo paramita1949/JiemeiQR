@@ -34,8 +34,7 @@ class StocktakeDao {
       final candidates = rows
           .where((row) =>
               row.batch.hasShipped &&
-              row.availableBoxes > 0 &&
-              row.currentBoxes != row.batch.initialBoxes)
+              row.currentBoxes > 0)
           .toList();
 
       for (final row in candidates) {
