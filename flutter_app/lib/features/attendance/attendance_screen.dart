@@ -25,19 +25,41 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   late final AttendanceDao _dao;
-  final DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
   MonthAttendanceStats? _stats;
   List<AttendanceRecord> _rows = const [];
   bool _loading = true;
   _StatusFilter _filter = _StatusFilter.all;
+  DateTime _lastRefreshDay = DateTime.now();
+  bool _crossDayRefreshQueued = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
     _dao = AttendanceDao(widget.database);
     unawaited(_reload());
     unawaited(_consumeInitialImport());
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    super.dispose();
+  }
+
+  late final WidgetsBindingObserver _lifecycleObserver = _AttendanceLifecycleObserver(
+    onResumed: () async {
+      final now = DateTime.now();
+      final dayChanged = now.year != _lastRefreshDay.year ||
+          now.month != _lastRefreshDay.month ||
+          now.day != _lastRefreshDay.day;
+      final monthChanged = now.year != _month.year || now.month != _month.month;
+      if (dayChanged || monthChanged) {
+        await _reload();
+      }
+    },
+  );
 
   Future<void> _consumeInitialImport() async {
     final path = widget.initialImportPath;
@@ -73,6 +95,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _reload() async {
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month, 1);
     setState(() => _loading = true);
     final stats = await _dao.monthStats(_month);
     final rows = await _dao.recordsByMonth(_month);
@@ -81,6 +105,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _stats = stats;
       _rows = rows;
       _loading = false;
+      _lastRefreshDay = now;
     });
   }
 
@@ -140,9 +165,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget build(BuildContext context) {
     final stats = _stats;
     final monthLabel = '${_month.month}月';
-    final today = DateTime.now();
+    final now = DateTime.now();
+    final today = now;
+    final crossDay = now.year != _lastRefreshDay.year ||
+        now.month != _lastRefreshDay.month ||
+        now.day != _lastRefreshDay.day;
+    if (crossDay && !_crossDayRefreshQueued) {
+      _crossDayRefreshQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _reload();
+        _crossDayRefreshQueued = false;
+      });
+    }
     final todayRow = _findTodayRow(_rows, today);
-    final todayCompleted = todayRow?.checkInAt != null && todayRow?.checkOutAt != null;
+    final todayCompleted = !crossDay &&
+        todayRow?.checkInAt != null &&
+        todayRow?.checkOutAt != null;
+    final heroStatus = crossDay ? '未签到' : _heroStatusText(_rows);
+    final heroAction = crossDay ? '上班签到' : _heroActionText(_rows);
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -189,8 +230,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               const SizedBox(height: 10),
               _HeroCheckInCard(
                 nowText: _hhmm(DateTime.now()),
-                statusText: _heroStatusText(_rows),
-                actionText: _heroActionText(_rows),
+                statusText: heroStatus,
+                actionText: heroAction,
                 onCheckIn: todayCompleted ? null : _checkIn,
               ),
               const SizedBox(height: 12),
@@ -337,6 +378,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
     return satRow != null && satRow.checkInAt != null && satRow.checkOutAt != null;
+  }
+}
+
+class _AttendanceLifecycleObserver extends WidgetsBindingObserver {
+  _AttendanceLifecycleObserver({required this.onResumed});
+
+  final Future<void> Function() onResumed;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(onResumed());
+    }
   }
 }
 
