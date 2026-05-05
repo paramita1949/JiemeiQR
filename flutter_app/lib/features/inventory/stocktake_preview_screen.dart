@@ -32,6 +32,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   final Map<int, bool> _statsExpanded = <int, bool>{};
   final Map<int, List<_FloorCountEntry>> _floorEntries = <int, List<_FloorCountEntry>>{};
   final Map<int, int> _issueShortageBoxes = <int, int>{};
+  final Map<int, String?> _itemLocations = <int, String?>{};
 
   @override
   void initState() {
@@ -115,6 +116,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
                       item,
                       readOnly: isCompleted,
                       diffIndexes: diffIndexMap[item.id] ?? const <int>{},
+                      location: _itemLocations[item.id],
                     ),
                   ),
                 ),
@@ -263,6 +265,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     StocktakeItemRecord item, {
     required bool readOnly,
     required Set<int> diffIndexes,
+    required String? location,
   }) {
     final status = StocktakeItemStatus.values[item.status];
     final isChecked = status == StocktakeItemStatus.checked;
@@ -338,6 +341,14 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           const SizedBox(height: 6),
           Text(
             '当前库存 ${item.currentBoxes}箱（$boardText）',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '库位 ${(location == null || location.trim().isEmpty) ? '--' : location.trim()}',
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w700,
@@ -679,6 +690,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       });
       _issueShortageBoxes.clear();
       await _hydrateFloorEntries(bundle);
+      await _hydrateItemLocations(bundle);
       await _loadRecent();
     } catch (error) {
       if (!mounted) return;
@@ -699,6 +711,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     if (!mounted) return;
     setState(() => _bundle = next);
     await _hydrateFloorEntries(next);
+    await _hydrateItemLocations(next);
   }
 
   Future<void> _reopenSession(int sessionId) async {
@@ -710,6 +723,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       if (!mounted) return;
       setState(() => _bundle = next);
       await _hydrateFloorEntries(next);
+      await _hydrateItemLocations(next);
       await _loadRecent();
       if (!mounted) return;
       messenger.showSnackBar(
@@ -967,6 +981,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       });
       _issueShortageBoxes.clear();
       await _hydrateFloorEntries(bundle);
+      await _hydrateItemLocations(bundle);
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -1330,6 +1345,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     _floorEntries.remove(item.id);
     _statsExpanded.remove(item.id);
     _issueShortageBoxes.remove(item.id);
+    _itemLocations.remove(item.id);
     await _reloadBundle();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1362,6 +1378,16 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       _issueShortageBoxes
         ..clear()
         ..addAll(shortage);
+    });
+  }
+
+  Future<void> _hydrateItemLocations(StocktakeSessionBundle bundle) async {
+    final locations = await _stocktakeDao.loadItemLocationsForSession(bundle.session.id);
+    if (!mounted) return;
+    setState(() {
+      _itemLocations
+        ..clear()
+        ..addAll(locations);
     });
   }
 

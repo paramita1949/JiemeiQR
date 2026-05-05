@@ -229,6 +229,26 @@ class StocktakeDao {
     return map;
   }
 
+  Future<Map<int, String?>> loadItemLocationsForSession(int sessionId) async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT si.id AS item_id, b.location AS location
+      FROM stocktake_items si
+      INNER JOIN batches b ON b.id = si.batch_id
+      WHERE si.session_id = ?;
+      ''',
+      variables: [Variable.withInt(sessionId)],
+      readsFrom: {_database.stocktakeItems, _database.batches},
+    ).get();
+    final map = <int, String?>{};
+    for (final row in rows) {
+      final itemId = row.data['item_id'] as int?;
+      if (itemId == null) continue;
+      map[itemId] = row.data['location'] as String?;
+    }
+    return map;
+  }
+
   Future<List<StocktakeCandidateBatch>> listCandidateBatches() async {
     final stockDao = StockDao(_database);
     final rows = await stockDao.inventoryDetailRows();
