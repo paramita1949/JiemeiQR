@@ -26,7 +26,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
 
   DateTime _selectedMonth = _defaultMonth();
   StocktakeSessionBundle? _bundle;
-  List<StocktakeSessionRecord> _recentSessions = const [];
+  List<_StocktakeHistorySummary> _recentHistory = const [];
   _LatestSessionSummary? _latestSummary;
   bool _loading = false;
   final Map<int, bool> _statsExpanded = <int, bool>{};
@@ -148,12 +148,17 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  _formatMonth(_selectedMonth),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.textPrimary,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _formatMonth(_selectedMonth),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -521,70 +526,82 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '最近盘库',
+            '盘库历史',
             style: TextStyle(
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
-          if (_recentSessions.isEmpty)
+          if (_recentHistory.isEmpty)
             const Text(
               '暂无记录',
               style: TextStyle(color: AppTheme.textSecondary),
             )
           else
-            ..._recentSessions.map(
-              (session) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_formatMonth(session.completedAt ?? session.createdAt)} · ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontWeight: FontWeight.w700,
+            ..._recentHistory.map(
+              (summary) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openSession(summary.session),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    _formatShortDate(summary.date),
+                                    style: const TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _statusPill(summary.status),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${summary.total}项 · ${summary.pending}待盘 · ${summary.checked}已盘 · ${summary.issue}异常',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        IconButton(
+                          tooltip: '修改盘库日期',
+                          onPressed: () => _editSessionDate(summary.session),
+                          icon: const Icon(
+                            Icons.edit_calendar_outlined,
+                            size: 18,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '删除盘库记录',
+                          onPressed: () => _deleteSession(summary.session),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Color(0xFFB91C1C),
+                          ),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: '修改盘库日期',
-                      onPressed: () => _editSessionDate(session),
-                      icon: const Icon(
-                        Icons.edit_calendar_outlined,
-                        size: 18,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '删除盘库记录',
-                      onPressed: () => _deleteSession(session),
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 18,
-                        color: Color(0xFFB91C1C),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _recentSessions
-                .map(
-                  (session) => ActionChip(
-                    label: Text(
-                      '${_formatMonth(session.completedAt ?? session.createdAt)} ${session.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
-                    ),
-                    onPressed: () => _openSession(session),
-                  ),
-                )
-                .toList(),
-          ),
         ],
       ),
     );
@@ -599,7 +616,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       helpText: '选择盘库月份',
     );
     if (selected == null) return;
-    setState(() => _selectedMonth = DateTime(selected.year, selected.month));
+    setState(() => _selectedMonth = DateTime(selected.year, selected.month, selected.day));
   }
 
   Future<void> _createSession() async {
@@ -670,26 +687,36 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
   Future<void> _loadRecent() async {
     final recent = await _stocktakeDao.listRecentSessions();
     _LatestSessionSummary? latest;
+    final history = <_StocktakeHistorySummary>[];
     if (recent.isNotEmpty) {
-      final session = recent.first;
-      final bundle = await _stocktakeDao.loadSession(session.id);
-      final total = bundle.items.length;
-      final pending = bundle.items.where((e) => e.status == StocktakeItemStatus.pending.index).length;
-      final checked = bundle.items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
-      final issue = bundle.items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
-      latest = _LatestSessionSummary(
-        monthKey: session.monthKey,
-        status: session.status,
-        date: session.completedAt ?? session.createdAt,
-        total: total,
-        pending: pending,
-        checked: checked,
-        issue: issue,
-      );
+      for (final session in recent) {
+        final bundle = await _stocktakeDao.loadSession(session.id);
+        final statsMap = await _stocktakeDao.loadFloorStatsForSession(session.id);
+        final total = bundle.items.length;
+        final pending = bundle.items.where((e) => e.status == StocktakeItemStatus.pending.index).length;
+        final checked = bundle.items.where((e) => e.status == StocktakeItemStatus.checked.index).length;
+        final issue = bundle.items.where((e) => e.status == StocktakeItemStatus.issue.index).length;
+        final date = session.completedAt ?? session.createdAt;
+        final summary = _StocktakeHistorySummary(
+          session: session,
+          date: date,
+          status: session.status,
+          total: total,
+          pending: pending,
+          checked: checked,
+          issue: issue,
+        );
+        history.add(summary);
+        latest ??= _LatestSessionSummary(
+          status: session.status,
+          date: date,
+          issueItem: _latestIssueItem(bundle.items, statsMap),
+        );
+      }
     }
     if (!mounted) return;
     setState(() {
-      _recentSessions = recent;
+      _recentHistory = history;
       _latestSummary = latest;
     });
   }
@@ -713,25 +740,131 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '最近盘库：${_formatMonth(summary.date)} ${summary.status == StocktakeSessionStatus.completed.index ? '已完成' : '草稿'}',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
                 Row(
                   children: [
-                    _metric('总数', '${summary.total}'),
-                    _metric('待盘', '${summary.pending}'),
-                    _metric('已盘', '${summary.checked}'),
-                    _metric('异常', '${summary.issue}'),
+                    const Expanded(
+                      child: Text(
+                        '最近异常',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    _statusPill(summary.status),
                   ],
                 ),
+                const SizedBox(height: 10),
+                if (summary.issueItem == null)
+                  Text(
+                    '${_formatMonth(summary.date)} · 无异常记录',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                else
+                  _issueSummary(summary.issueItem!),
               ],
             ),
     );
+  }
+
+  Widget _issueSummary(_LatestIssueItem item) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Color(0xFFB91C1C),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item.productCode} · ${item.batchCode}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.dateBatch,
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFB91C1C),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              item.shortageBoxes > 0 ? '缺${item.shortageBoxes}箱' : '未填数量',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(int status) {
+    final completed = status == StocktakeSessionStatus.completed.index;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: completed ? const Color(0xFFEFF6FF) : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        completed ? '已完成' : '草稿',
+        style: TextStyle(
+          color: completed ? AppTheme.primary : const Color(0xFFC2410C),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  _LatestIssueItem? _latestIssueItem(
+    List<StocktakeItemRecord> items,
+    Map<int, String> statsMap,
+  ) {
+    for (final item in items) {
+      if (item.status != StocktakeItemStatus.issue.index) {
+        continue;
+      }
+      final stats = _decodePersistedStats(statsMap[item.id] ?? '');
+      return _LatestIssueItem(
+        productCode: item.productCode,
+        batchCode: item.batchCode,
+        dateBatch: item.dateBatch,
+        shortageBoxes: stats.issueShortageBoxes,
+      );
+    }
+    return null;
   }
 
   Future<void> _openSession(StocktakeSessionRecord session) async {
@@ -1318,22 +1451,48 @@ class _ProductOption {
 
 class _LatestSessionSummary {
   const _LatestSessionSummary({
-    required this.monthKey,
     required this.status,
     required this.date,
+    required this.issueItem,
+  });
+
+  final int status;
+  final DateTime date;
+  final _LatestIssueItem? issueItem;
+}
+
+class _StocktakeHistorySummary {
+  const _StocktakeHistorySummary({
+    required this.session,
+    required this.date,
+    required this.status,
     required this.total,
     required this.pending,
     required this.checked,
     required this.issue,
   });
 
-  final String monthKey;
-  final int status;
+  final StocktakeSessionRecord session;
   final DateTime date;
+  final int status;
   final int total;
   final int pending;
   final int checked;
   final int issue;
+}
+
+class _LatestIssueItem {
+  const _LatestIssueItem({
+    required this.productCode,
+    required this.batchCode,
+    required this.dateBatch,
+    required this.shortageBoxes,
+  });
+
+  final String productCode;
+  final String batchCode;
+  final String dateBatch;
+  final int shortageBoxes;
 }
 
 class _PersistedStats {
@@ -1370,6 +1529,10 @@ DateTime? _parseDateBatch(String value) {
 
 String _formatMonth(DateTime month) {
   return '${month.year}年${month.month}月${month.day}日';
+}
+
+String _formatShortDate(DateTime date) {
+  return '${date.month}月${date.day}日';
 }
 
 DateTime _defaultMonth() => DateTime.now();
