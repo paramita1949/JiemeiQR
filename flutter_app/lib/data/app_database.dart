@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -118,6 +118,18 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(stocktakeItems, stocktakeItems.initialBoxes);
             }
           }
+          if (from < 14) {
+            await _createStocktakeFloorStatsTable(m);
+          }
+        },
+        beforeOpen: (details) async {
+          await customStatement('''
+            CREATE TABLE IF NOT EXISTS stocktake_item_floor_stats (
+              item_id INTEGER PRIMARY KEY,
+              stats_json TEXT NOT NULL,
+              updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+          ''');
         },
       );
 
@@ -179,6 +191,16 @@ class AppDatabase extends _$AppDatabase {
     await m.database.customStatement(
       'CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id, status);',
     );
+  }
+
+  Future<void> _createStocktakeFloorStatsTable(Migrator m) async {
+    await m.database.customStatement('''
+      CREATE TABLE IF NOT EXISTS stocktake_item_floor_stats (
+        item_id INTEGER PRIMARY KEY,
+        stats_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    ''');
   }
 }
 

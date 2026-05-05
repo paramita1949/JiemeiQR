@@ -112,6 +112,15 @@ class StocktakeDao {
 
   Future<void> deleteSession(int sessionId) async {
     await _database.transaction(() async {
+      await _database.customStatement(
+        '''
+        DELETE FROM stocktake_item_floor_stats
+        WHERE item_id IN (
+          SELECT id FROM stocktake_items WHERE session_id = ?
+        );
+        ''',
+        [sessionId],
+      );
       await (_database.delete(_database.stocktakeItems)
             ..where((t) => t.sessionId.equals(sessionId)))
           .go();
@@ -122,9 +131,50 @@ class StocktakeDao {
   }
 
   Future<void> deleteItem(int itemId) async {
+    await _database.customStatement(
+      'DELETE FROM stocktake_item_floor_stats WHERE item_id = ?;',
+      [itemId],
+    );
     await (_database.delete(_database.stocktakeItems)
           ..where((t) => t.id.equals(itemId)))
         .go();
+  }
+
+  Future<void> saveFloorStats({
+    required int itemId,
+    required String statsJson,
+  }) async {
+    await _database.customStatement(
+      '''
+      INSERT INTO stocktake_item_floor_stats (item_id, stats_json, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(item_id) DO UPDATE SET
+        stats_json = excluded.stats_json,
+        updated_at = datetime('now');
+      ''',
+      [itemId, statsJson],
+    );
+  }
+
+  Future<Map<int, String>> loadFloorStatsForSession(int sessionId) async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT fs.item_id, fs.stats_json
+      FROM stocktake_item_floor_stats fs
+      INNER JOIN stocktake_items si ON si.id = fs.item_id
+      WHERE si.session_id = ?;
+      ''',
+      variables: [Variable.withInt(sessionId)],
+      readsFrom: {_database.stocktakeItems},
+    ).get();
+    final map = <int, String>{};
+    for (final row in rows) {
+      final itemId = row.data['item_id'] as int?;
+      final statsJson = row.data['stats_json'] as String?;
+      if (itemId == null || statsJson == null) continue;
+      map[itemId] = statsJson;
+    }
+    return map;
   }
 
   Future<List<StocktakeCandidateBatch>> listCandidateBatches() async {

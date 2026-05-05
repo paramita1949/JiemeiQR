@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stocktake_dao.dart';
@@ -553,8 +556,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       setState(() {
         _bundle = bundle;
         _statsExpanded.clear();
-        _floorEntries.clear();
       });
+      await _hydrateFloorEntries(bundle);
       await _loadRecent();
     } catch (error) {
       if (!mounted) return;
@@ -574,6 +577,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     final next = await _stocktakeDao.loadSession(current.session.id);
     if (!mounted) return;
     setState(() => _bundle = next);
+    await _hydrateFloorEntries(next);
   }
 
   Future<void> _editNote(StocktakeItemRecord item) async {
@@ -632,8 +636,8 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
         _bundle = bundle;
         _selectedMonth = nextMonth;
         _statsExpanded.clear();
-        _floorEntries.clear();
       });
+      await _hydrateFloorEntries(bundle);
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -830,6 +834,7 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       current.add(const _FloorCountEntry());
       _floorEntries[itemId] = current;
     });
+    _persistFloorEntries(itemId);
   }
 
   void _removeStatsEntry(int itemId, int index) {
@@ -842,24 +847,28 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
       }
       _floorEntries[itemId] = current;
     });
+    _persistFloorEntries(itemId);
   }
 
   void _updateFloor(int itemId, int index, int floor) {
     setState(() {
       _updateEntry(itemId, index, (old) => old.copyWith(floor: floor));
     });
+    _persistFloorEntries(itemId);
   }
 
   void _updateBoards(int itemId, int index, int boards) {
     setState(() {
       _updateEntry(itemId, index, (old) => old.copyWith(boards: boards < 0 ? 0 : boards));
     });
+    _persistFloorEntries(itemId);
   }
 
   void _updateBoxes(int itemId, int index, int boxes) {
     setState(() {
       _updateEntry(itemId, index, (old) => old.copyWith(boxes: boxes < 0 ? 0 : boxes));
     });
+    _persistFloorEntries(itemId);
   }
 
   void _updateEntry(int itemId, int index, _FloorCountEntry Function(_FloorCountEntry) updater) {
@@ -903,6 +912,79 @@ class _StocktakePreviewScreenState extends State<StocktakePreviewScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已删除条目')),
+    );
+  }
+
+  Future<void> _hydrateFloorEntries(StocktakeSessionBundle bundle) async {
+    final statsMap = await _stocktakeDao.loadFloorStatsForSession(bundle.session.id);
+    if (!mounted) return;
+    final next = <int, List<_FloorCountEntry>>{};
+    for (final item in bundle.items) {
+      final json = statsMap[item.id];
+      if (json == null || json.trim().isEmpty) {
+        continue;
+      }
+      final parsed = _decodeFloorEntries(json);
+      if (parsed.isNotEmpty) {
+        next[item.id] = parsed;
+      }
+    }
+    setState(() {
+      _floorEntries
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  List<_FloorCountEntry> _decodeFloorEntries(String jsonText) {
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is! List) return const <_FloorCountEntry>[];
+      final result = <_FloorCountEntry>[];
+      for (final row in decoded) {
+        if (row is! Map) continue;
+        final floor = _toInt(row['floor']) ?? 1;
+        final boards = (_toInt(row['boards']) ?? 0).clamp(0, 1000000000);
+        final boxes = (_toInt(row['boxes']) ?? 0).clamp(0, 1000000000);
+        result.add(
+          _FloorCountEntry(
+            floor: floor < 1 || floor > 4 ? 1 : floor,
+            boards: boards,
+            boxes: boxes,
+          ),
+        );
+      }
+      return result;
+    } catch (_) {
+      return const <_FloorCountEntry>[];
+    }
+  }
+
+  int? _toInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  String _encodeFloorEntries(List<_FloorCountEntry> entries) {
+    final rows = entries
+        .map(
+          (entry) => <String, int>{
+            'floor': entry.floor,
+            'boards': entry.boards,
+            'boxes': entry.boxes,
+          },
+        )
+        .toList();
+    return jsonEncode(rows);
+  }
+
+  void _persistFloorEntries(int itemId) {
+    final entries = _floorEntries[itemId] ?? const <_FloorCountEntry>[];
+    final payload = _encodeFloorEntries(entries);
+    unawaited(
+      _stocktakeDao.saveFloorStats(itemId: itemId, statsJson: payload),
     );
   }
 }
