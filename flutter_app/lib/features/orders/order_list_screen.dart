@@ -139,7 +139,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ],
             if (_restockAggregates.isNotEmpty) ...[
               const SizedBox(height: 8),
-              _RestockAggregateCard(rows: _restockAggregates),
+              _RestockAggregateCard(
+                rows: _restockAggregates,
+                onTapRow: _showRestockWaybillLines,
+              ),
             ],
             const SizedBox(height: 10),
             FilledButton.icon(
@@ -365,6 +368,47 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('订单已删除')),
+    );
+  }
+
+  Future<void> _showRestockWaybillLines(OrderRestockAggregate row) async {
+    final lines = await _orderDao.orderRestockWaybillLines(
+      productCode: row.productCode,
+      actualBatch: row.actualBatch,
+      dateBatch: row.dateBatch,
+      status: _status,
+      dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+    );
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _RestockWaybillSheet(
+        aggregate: row,
+        lines: lines,
+        onOpenOrder: (orderId) {
+          Navigator.of(context).pop();
+          final order = _orders.where((item) => item.id == orderId).firstOrNull;
+          if (order != null) {
+            _openOrderDetail(order);
+            return;
+          }
+          pushAndRefresh(
+            this.context,
+            route: MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(
+                database: _database,
+                orderId: orderId,
+              ),
+            ),
+            onRefresh: _refreshOrders,
+          );
+        },
+      ),
     );
   }
 }
@@ -766,9 +810,13 @@ _StatusMeta _statusMeta(OrderStatus status) {
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
 class _RestockAggregateCard extends StatelessWidget {
-  const _RestockAggregateCard({required this.rows});
+  const _RestockAggregateCard({
+    required this.rows,
+    required this.onTapRow,
+  });
 
   final List<OrderRestockAggregate> rows;
+  final ValueChanged<OrderRestockAggregate> onTapRow;
 
   @override
   Widget build(BuildContext context) {
@@ -805,47 +853,241 @@ class _RestockAggregateCard extends StatelessWidget {
                     dateBatch: row.dateBatch,
                   );
                   final restockColor = _restockQuantityColor(row);
-                  return RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onTapRow(row),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 3,
                       ),
-                      children: [
-                        TextSpan(
-                          text: '${row.productCode} · ',
-                        ),
-                        ..._batchCodeSpans(
-                          row.actualBatch,
-                          variants: row.batchCodeVariants,
-                          highlightDifferences: duplicateKeys.contains(key),
-                        ),
-                        const TextSpan(
-                          text: ' · ',
-                        ),
-                        TextSpan(
-                          text: row.dateBatch,
-                          style: const TextStyle(color: Color(0xFFDC2626)),
-                        ),
-                        TextSpan(
-                          text: ' · ${row.totalBoxes}箱 · ',
-                          style: TextStyle(color: restockColor),
-                        ),
-                        TextSpan(
-                          text: BoardCalculator.format(
-                            boxes: row.totalBoxes,
-                            boxesPerBoard: row.boxesPerBoard,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: '${row.productCode} · ',
+                                  ),
+                                  ..._batchCodeSpans(
+                                    row.actualBatch,
+                                    variants: row.batchCodeVariants,
+                                    highlightDifferences:
+                                        duplicateKeys.contains(key),
+                                  ),
+                                  const TextSpan(
+                                    text: ' · ',
+                                  ),
+                                  TextSpan(
+                                    text: row.dateBatch,
+                                    style: const TextStyle(
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: ' · ${row.totalBoxes}箱 · ',
+                                    style: TextStyle(color: restockColor),
+                                  ),
+                                  TextSpan(
+                                    text: BoardCalculator.format(
+                                      boxes: row.totalBoxes,
+                                      boxesPerBoard: row.boxesPerBoard,
+                                    ),
+                                    style: TextStyle(color: restockColor),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          style: TextStyle(color: restockColor),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 17,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
                 separatorBuilder: (_, __) => const SizedBox(height: 6),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RestockWaybillSheet extends StatelessWidget {
+  const _RestockWaybillSheet({
+    required this.aggregate,
+    required this.lines,
+    required this.onOpenOrder,
+  });
+
+  final OrderRestockAggregate aggregate;
+  final List<OrderRestockWaybillLine> lines;
+  final ValueChanged<int> onOpenOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final sortedLines = [...lines]
+      ..sort((a, b) {
+        final boxDiff = b.totalBoxes.compareTo(a.totalBoxes);
+        if (boxDiff != 0) {
+          return boxDiff;
+        }
+        return b.orderDate.compareTo(a.orderDate);
+      });
+    final totalBoxes = sortedLines.fold<int>(
+      0,
+      (sum, item) => sum + item.totalBoxes,
+    );
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF3F6FB),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.78,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${aggregate.productCode} · ${aggregate.actualBatch} · ${aggregate.dateBatch}',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '合计 ${aggregate.totalBoxes}箱 · ${BoardCalculator.format(boxes: aggregate.totalBoxes, boxesPerBoard: aggregate.boxesPerBoard)}',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '运单 ${sortedLines.length} 单 · 箱数 $totalBoxes 箱（按箱数降序）',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: sortedLines.isEmpty
+                ? const Center(
+                    child: Text(
+                      '当前筛选范围内没有运单明细',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: sortedLines.length,
+                    itemBuilder: (context, index) {
+                      final line = sortedLines[index];
+                      final status = _statusMeta(line.status);
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => onOpenOrder(line.orderId),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      line.waybillNo,
+                                      style: const TextStyle(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${line.merchantName} · ${_formatDate(line.orderDate)}',
+                                      style: const TextStyle(
+                                        color: AppTheme.textSecondary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${line.totalBoxes}箱 · ${BoardCalculator.format(boxes: line.totalBoxes, boxesPerBoard: line.boxesPerBoard)}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF1D4ED8),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: status.color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  status.label,
+                                  style: TextStyle(
+                                    color: status.color,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  ),
           ),
         ],
       ),

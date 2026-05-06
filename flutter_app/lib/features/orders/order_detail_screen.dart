@@ -137,6 +137,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 const <String>[],
                         onEditLine: () => _editOrderLine(line),
                         onDeleteLine: () => _deleteOrderLine(line),
+                        canTogglePicked: detail.order.status != OrderStatus.done,
+                        onPickedChanged: (next) => _setOrderLinePicked(
+                          line: line,
+                          isPicked: next,
+                        ),
                       ),
                     ),
                   ),
@@ -419,6 +424,49 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         const SnackBar(content: Text('箱数无效')),
       );
     }
+  }
+
+  Future<void> _setOrderLinePicked({
+    required OrderDetailLine line,
+    required bool isPicked,
+  }) async {
+    try {
+      await _orderDao.updateOrderItemPicked(
+        itemId: line.item.id,
+        isPicked: isPicked,
+      );
+    } on OrderItemUpdateNotAllowedException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成订单不允许修改单条拣货状态')),
+      );
+      return;
+    }
+    final latest = await _orderDao.orderDetail(widget.orderId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _detailFuture = _loadDetail();
+    });
+    final shouldSuggestPicked = isPicked &&
+        latest.order.status == OrderStatus.pending &&
+        latest.lines.isNotEmpty &&
+        latest.lines.every((item) => item.item.isPicked);
+    if (!shouldSuggestPicked) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('全部产品已勾选，建议将整单设为“已拣货”'),
+        action: SnackBarAction(
+          label: '设为已拣货',
+          onPressed: () => _setStatus(OrderStatus.picked),
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmComplete() async {
@@ -718,6 +766,8 @@ class _LineCard extends StatelessWidget {
     required this.line,
     required this.highlightBatch,
     required this.batchCodeVariants,
+    required this.canTogglePicked,
+    required this.onPickedChanged,
     required this.onEditLine,
     this.onDeleteLine,
   });
@@ -725,6 +775,8 @@ class _LineCard extends StatelessWidget {
   final OrderDetailLine line;
   final bool highlightBatch;
   final List<String> batchCodeVariants;
+  final bool canTogglePicked;
+  final ValueChanged<bool> onPickedChanged;
   final VoidCallback onEditLine;
   final VoidCallback? onDeleteLine;
 
@@ -793,6 +845,25 @@ class _LineCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 9),
+          Row(
+            children: [
+              _MetricChip(
+                text: line.item.isPicked ? '已拣货' : '未拣货',
+                textColor: line.item.isPicked
+                    ? const Color(0xFF166534)
+                    : const Color(0xFF9A3412),
+                backgroundColor: line.item.isPicked
+                    ? const Color(0xFFDCFCE7)
+                    : const Color(0xFFFFEDD5),
+              ),
+              const Spacer(),
+              Switch.adaptive(
+                value: line.item.isPicked,
+                onChanged: canTogglePicked ? onPickedChanged : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,

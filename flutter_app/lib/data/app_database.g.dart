@@ -1516,6 +1516,16 @@ class $OrderItemsTable extends OrderItems
   late final GeneratedColumn<int> piecesPerBox = GeneratedColumn<int>(
       'pieces_per_box', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _isPickedMeta =
+      const VerificationMeta('isPicked');
+  @override
+  late final GeneratedColumn<bool> isPicked = GeneratedColumn<bool>(
+      'is_picked', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_picked" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _isExceptionMeta =
       const VerificationMeta('isException');
   @override
@@ -1543,6 +1553,7 @@ class $OrderItemsTable extends OrderItems
         boxes,
         boxesPerBoard,
         piecesPerBox,
+        isPicked,
         isException,
         createdAt
       ];
@@ -1599,6 +1610,10 @@ class $OrderItemsTable extends OrderItems
     } else if (isInserting) {
       context.missing(_piecesPerBoxMeta);
     }
+    if (data.containsKey('is_picked')) {
+      context.handle(_isPickedMeta,
+          isPicked.isAcceptableOrUnknown(data['is_picked']!, _isPickedMeta));
+    }
     if (data.containsKey('is_exception')) {
       context.handle(
           _isExceptionMeta,
@@ -1632,6 +1647,8 @@ class $OrderItemsTable extends OrderItems
           .read(DriftSqlType.int, data['${effectivePrefix}boxes_per_board'])!,
       piecesPerBox: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}pieces_per_box'])!,
+      isPicked: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_picked'])!,
       isException: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_exception'])!,
       createdAt: attachedDatabase.typeMapping
@@ -1653,6 +1670,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   final int boxes;
   final int boxesPerBoard;
   final int piecesPerBox;
+  final bool isPicked;
   final bool isException;
   final DateTime createdAt;
   const OrderItem(
@@ -1663,6 +1681,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       required this.boxes,
       required this.boxesPerBoard,
       required this.piecesPerBox,
+      required this.isPicked,
       required this.isException,
       required this.createdAt});
   @override
@@ -1675,6 +1694,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     map['boxes'] = Variable<int>(boxes);
     map['boxes_per_board'] = Variable<int>(boxesPerBoard);
     map['pieces_per_box'] = Variable<int>(piecesPerBox);
+    map['is_picked'] = Variable<bool>(isPicked);
     map['is_exception'] = Variable<bool>(isException);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -1689,6 +1709,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       boxes: Value(boxes),
       boxesPerBoard: Value(boxesPerBoard),
       piecesPerBox: Value(piecesPerBox),
+      isPicked: Value(isPicked),
       isException: Value(isException),
       createdAt: Value(createdAt),
     );
@@ -1705,6 +1726,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       boxes: serializer.fromJson<int>(json['boxes']),
       boxesPerBoard: serializer.fromJson<int>(json['boxesPerBoard']),
       piecesPerBox: serializer.fromJson<int>(json['piecesPerBox']),
+      isPicked: serializer.fromJson<bool>(json['isPicked']),
       isException: serializer.fromJson<bool>(json['isException']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -1720,6 +1742,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       'boxes': serializer.toJson<int>(boxes),
       'boxesPerBoard': serializer.toJson<int>(boxesPerBoard),
       'piecesPerBox': serializer.toJson<int>(piecesPerBox),
+      'isPicked': serializer.toJson<bool>(isPicked),
       'isException': serializer.toJson<bool>(isException),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -1733,6 +1756,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           int? boxes,
           int? boxesPerBoard,
           int? piecesPerBox,
+          bool? isPicked,
           bool? isException,
           DateTime? createdAt}) =>
       OrderItem(
@@ -1743,6 +1767,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
         boxes: boxes ?? this.boxes,
         boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
         piecesPerBox: piecesPerBox ?? this.piecesPerBox,
+        isPicked: isPicked ?? this.isPicked,
         isException: isException ?? this.isException,
         createdAt: createdAt ?? this.createdAt,
       );
@@ -1759,6 +1784,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
       piecesPerBox: data.piecesPerBox.present
           ? data.piecesPerBox.value
           : this.piecesPerBox,
+      isPicked: data.isPicked.present ? data.isPicked.value : this.isPicked,
       isException:
           data.isException.present ? data.isException.value : this.isException,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -1775,6 +1801,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           ..write('boxes: $boxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('piecesPerBox: $piecesPerBox, ')
+          ..write('isPicked: $isPicked, ')
           ..write('isException: $isException, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1783,7 +1810,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
 
   @override
   int get hashCode => Object.hash(id, orderId, productId, batchId, boxes,
-      boxesPerBoard, piecesPerBox, isException, createdAt);
+      boxesPerBoard, piecesPerBox, isPicked, isException, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1795,6 +1822,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
           other.boxes == this.boxes &&
           other.boxesPerBoard == this.boxesPerBoard &&
           other.piecesPerBox == this.piecesPerBox &&
+          other.isPicked == this.isPicked &&
           other.isException == this.isException &&
           other.createdAt == this.createdAt);
 }
@@ -1807,6 +1835,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   final Value<int> boxes;
   final Value<int> boxesPerBoard;
   final Value<int> piecesPerBox;
+  final Value<bool> isPicked;
   final Value<bool> isException;
   final Value<DateTime> createdAt;
   const OrderItemsCompanion({
@@ -1817,6 +1846,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     this.boxes = const Value.absent(),
     this.boxesPerBoard = const Value.absent(),
     this.piecesPerBox = const Value.absent(),
+    this.isPicked = const Value.absent(),
     this.isException = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -1828,6 +1858,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     required int boxes,
     required int boxesPerBoard,
     required int piecesPerBox,
+    this.isPicked = const Value.absent(),
     this.isException = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : orderId = Value(orderId),
@@ -1844,6 +1875,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     Expression<int>? boxes,
     Expression<int>? boxesPerBoard,
     Expression<int>? piecesPerBox,
+    Expression<bool>? isPicked,
     Expression<bool>? isException,
     Expression<DateTime>? createdAt,
   }) {
@@ -1855,6 +1887,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       if (boxes != null) 'boxes': boxes,
       if (boxesPerBoard != null) 'boxes_per_board': boxesPerBoard,
       if (piecesPerBox != null) 'pieces_per_box': piecesPerBox,
+      if (isPicked != null) 'is_picked': isPicked,
       if (isException != null) 'is_exception': isException,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -1868,6 +1901,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       Value<int>? boxes,
       Value<int>? boxesPerBoard,
       Value<int>? piecesPerBox,
+      Value<bool>? isPicked,
       Value<bool>? isException,
       Value<DateTime>? createdAt}) {
     return OrderItemsCompanion(
@@ -1878,6 +1912,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
       boxes: boxes ?? this.boxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       piecesPerBox: piecesPerBox ?? this.piecesPerBox,
+      isPicked: isPicked ?? this.isPicked,
       isException: isException ?? this.isException,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -1907,6 +1942,9 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     if (piecesPerBox.present) {
       map['pieces_per_box'] = Variable<int>(piecesPerBox.value);
     }
+    if (isPicked.present) {
+      map['is_picked'] = Variable<bool>(isPicked.value);
+    }
     if (isException.present) {
       map['is_exception'] = Variable<bool>(isException.value);
     }
@@ -1926,6 +1964,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
           ..write('boxes: $boxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('piecesPerBox: $piecesPerBox, ')
+          ..write('isPicked: $isPicked, ')
           ..write('isException: $isException, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -7262,6 +7301,7 @@ typedef $$OrderItemsTableCreateCompanionBuilder = OrderItemsCompanion Function({
   required int boxes,
   required int boxesPerBoard,
   required int piecesPerBox,
+  Value<bool> isPicked,
   Value<bool> isException,
   Value<DateTime> createdAt,
 });
@@ -7273,6 +7313,7 @@ typedef $$OrderItemsTableUpdateCompanionBuilder = OrderItemsCompanion Function({
   Value<int> boxes,
   Value<int> boxesPerBoard,
   Value<int> piecesPerBox,
+  Value<bool> isPicked,
   Value<bool> isException,
   Value<DateTime> createdAt,
 });
@@ -7345,6 +7386,9 @@ class $$OrderItemsTableFilterComposer
 
   ColumnFilters<int> get piecesPerBox => $composableBuilder(
       column: $table.piecesPerBox, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isPicked => $composableBuilder(
+      column: $table.isPicked, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => ColumnFilters(column));
@@ -7436,6 +7480,9 @@ class $$OrderItemsTableOrderingComposer
       column: $table.piecesPerBox,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isPicked => $composableBuilder(
+      column: $table.isPicked, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => ColumnOrderings(column));
 
@@ -7523,6 +7570,9 @@ class $$OrderItemsTableAnnotationComposer
 
   GeneratedColumn<int> get piecesPerBox => $composableBuilder(
       column: $table.piecesPerBox, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPicked =>
+      $composableBuilder(column: $table.isPicked, builder: (column) => column);
 
   GeneratedColumn<bool> get isException => $composableBuilder(
       column: $table.isException, builder: (column) => column);
@@ -7621,6 +7671,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             Value<int> boxes = const Value.absent(),
             Value<int> boxesPerBoard = const Value.absent(),
             Value<int> piecesPerBox = const Value.absent(),
+            Value<bool> isPicked = const Value.absent(),
             Value<bool> isException = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
@@ -7632,6 +7683,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             boxes: boxes,
             boxesPerBoard: boxesPerBoard,
             piecesPerBox: piecesPerBox,
+            isPicked: isPicked,
             isException: isException,
             createdAt: createdAt,
           ),
@@ -7643,6 +7695,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             required int boxes,
             required int boxesPerBoard,
             required int piecesPerBox,
+            Value<bool> isPicked = const Value.absent(),
             Value<bool> isException = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
@@ -7654,6 +7707,7 @@ class $$OrderItemsTableTableManager extends RootTableManager<
             boxes: boxes,
             boxesPerBoard: boxesPerBoard,
             piecesPerBox: piecesPerBox,
+            isPicked: isPicked,
             isException: isException,
             createdAt: createdAt,
           ),

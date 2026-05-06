@@ -491,6 +491,37 @@ class OrderDao {
     });
   }
 
+  Future<void> updateOrderItemPicked({
+    required int itemId,
+    required bool isPicked,
+  }) async {
+    await _database.transaction(() async {
+      final item = await (_database.select(_database.orderItems)
+            ..where((table) => table.id.equals(itemId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (item == null) {
+        return;
+      }
+      final order = await (_database.select(_database.orders)
+            ..where((table) => table.id.equals(item.orderId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (order == null) {
+        return;
+      }
+      if (order.status == OrderStatus.done) {
+        throw const OrderItemUpdateNotAllowedException();
+      }
+      await (_database.update(_database.orderItems)
+            ..where((table) => table.id.equals(itemId)))
+          .write(OrderItemsCompanion(isPicked: Value(isPicked)));
+      await (_database.update(_database.orders)
+            ..where((table) => table.id.equals(order.id)))
+          .write(OrdersCompanion(updatedAt: Value(DateTime.now())));
+    });
+  }
+
   Future<List<String>> recentMerchantNames({int limit = 10}) async {
     final rows = await _database.customSelect(
       '''
@@ -621,6 +652,91 @@ class OrderDao {
         .toList();
   }
 
+  Future<List<OrderRestockWaybillLine>> orderRestockWaybillLines({
+    required String productCode,
+    required String actualBatch,
+    required String dateBatch,
+    OrderStatus? status,
+    DateTimeRange? dateRange,
+    bool unfinishedOnly = false,
+  }) async {
+    final where = <String>[
+      'p.code = ?',
+      'b.actual_batch = ?',
+      'b.date_batch = ?',
+    ];
+    final vars = <Variable<Object>>[
+      Variable.withString(productCode),
+      Variable.withString(actualBatch),
+      Variable.withString(dateBatch),
+    ];
+    if (unfinishedOnly) {
+      where.add('o.status != ?');
+      vars.add(Variable.withInt(OrderStatus.done.index));
+    } else if (status != null) {
+      where.add('o.status = ?');
+      vars.add(Variable.withInt(status.index));
+    }
+    if (dateRange != null) {
+      final start = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+      );
+      final end = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23,
+        59,
+        59,
+      );
+      where.add('o.order_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        o.id AS order_id,
+        o.waybill_no,
+        o.merchant_name,
+        o.order_date,
+        o.status,
+        SUM(oi.boxes) AS total_boxes,
+        MAX(oi.boxes_per_board) AS boxes_per_board
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      INNER JOIN products p ON p.id = oi.product_id
+      INNER JOIN batches b ON b.id = oi.batch_id
+      WHERE ${where.join(' AND ')}
+      GROUP BY o.id, o.waybill_no, o.merchant_name, o.order_date, o.status
+      ORDER BY o.order_date DESC, o.created_at DESC
+      ''',
+      variables: vars,
+      readsFrom: {
+        _database.orderItems,
+        _database.orders,
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    return rows
+        .map(
+          (row) => OrderRestockWaybillLine(
+            orderId: row.data['order_id'] as int? ?? 0,
+            waybillNo: row.data['waybill_no'] as String? ?? '',
+            merchantName: row.data['merchant_name'] as String? ?? '',
+            orderDate: _parseSqlDateTime(row.data['order_date']),
+            status: OrderStatus.values[(row.data['status'] as int?) ?? 0],
+            totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
+            boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
+          ),
+        )
+        .where((row) => row.orderId > 0)
+        .toList(growable: false);
+  }
+
   Future<Map<String, List<String>>> _batchCodesByProductDate() async {
     final rows = await _database.customSelect(
       '''
@@ -650,6 +766,19 @@ class OrderDao {
           .add(actualBatch);
     }
     return result;
+  }
+
+  DateTime _parseSqlDateTime(Object? value) {
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime(1970);
+    }
+    return DateTime(1970);
   }
 
   Future<PagedOrderSummaries> orderSummariesPage({
@@ -1128,6 +1257,26 @@ class OrderRestockAggregate {
   final int totalBoxes;
   final int boxesPerBoard;
   final List<String> batchCodeVariants;
+}
+
+class OrderRestockWaybillLine {
+  const OrderRestockWaybillLine({
+    required this.orderId,
+    required this.waybillNo,
+    required this.merchantName,
+    required this.orderDate,
+    required this.status,
+    required this.totalBoxes,
+    required this.boxesPerBoard,
+  });
+
+  final int orderId;
+  final String waybillNo;
+  final String merchantName;
+  final DateTime orderDate;
+  final OrderStatus status;
+  final int totalBoxes;
+  final int boxesPerBoard;
 }
 
 class _ExceptionOrderIdsPage {
