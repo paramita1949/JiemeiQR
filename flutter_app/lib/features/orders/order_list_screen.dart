@@ -861,58 +861,44 @@ class _RestockAggregateCard extends StatelessWidget {
                         horizontal: 2,
                         vertical: 3,
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: RichText(
-                              text: TextSpan(
-                                style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: '${row.productCode} · ',
-                                  ),
-                                  ..._batchCodeSpans(
-                                    row.actualBatch,
-                                    variants: row.batchCodeVariants,
-                                    highlightDifferences:
-                                        duplicateKeys.contains(key),
-                                  ),
-                                  const TextSpan(
-                                    text: ' · ',
-                                  ),
-                                  TextSpan(
-                                    text: row.dateBatch,
-                                    style: const TextStyle(
-                                      color: Color(0xFFDC2626),
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: ' · ${row.totalBoxes}箱 · ',
-                                    style: TextStyle(color: restockColor),
-                                  ),
-                                  TextSpan(
-                                    text: BoardCalculator.format(
-                                      boxes: row.totalBoxes,
-                                      boxesPerBoard: row.boxesPerBoard,
-                                    ),
-                                    style: TextStyle(color: restockColor),
-                                  ),
-                                ],
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '${row.productCode} · ',
+                            ),
+                            ..._batchCodeSpans(
+                              row.actualBatch,
+                              variants: row.batchCodeVariants,
+                              highlightDifferences: duplicateKeys.contains(key),
+                            ),
+                            const TextSpan(
+                              text: ' · ',
+                            ),
+                            TextSpan(
+                              text: row.dateBatch,
+                              style: const TextStyle(
+                                color: Color(0xFFDC2626),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 17,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ],
+                            TextSpan(
+                              text: ' · ${row.totalBoxes}箱 · ',
+                              style: TextStyle(color: restockColor),
+                            ),
+                            TextSpan(
+                              text: BoardCalculator.format(
+                                boxes: row.totalBoxes,
+                                boxesPerBoard: row.boxesPerBoard,
+                              ),
+                              style: TextStyle(color: restockColor),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );

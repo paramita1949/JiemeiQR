@@ -522,6 +522,18 @@ class OrderDao {
     });
   }
 
+  Future<void> setOrderItemsPickedByOrder({
+    required int orderId,
+    required bool isPicked,
+  }) async {
+    await (_database.update(_database.orderItems)
+          ..where((table) => table.orderId.equals(orderId)))
+        .write(OrderItemsCompanion(isPicked: Value(isPicked)));
+    await (_database.update(_database.orders)
+          ..where((table) => table.id.equals(orderId)))
+        .write(OrdersCompanion(updatedAt: Value(DateTime.now())));
+  }
+
   Future<List<String>> recentMerchantNames({int limit = 10}) async {
     final rows = await _database.customSelect(
       '''

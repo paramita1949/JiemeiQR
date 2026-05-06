@@ -169,6 +169,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         orderId: widget.orderId,
         target: status,
       );
+      if (status == OrderStatus.picked) {
+        await _orderDao.setOrderItemsPickedByOrder(
+          orderId: widget.orderId,
+          isPicked: true,
+        );
+      }
     } on InsufficientStockException {
       if (!mounted) {
         return;
@@ -789,8 +795,12 @@ class _LineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: line.item.isPicked ? const Color(0xFFF0FDF4) : Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color:
+              line.item.isPicked ? const Color(0xFF86EFAC) : Colors.transparent,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

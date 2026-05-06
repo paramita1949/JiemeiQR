@@ -156,10 +156,10 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               totalBoxes: totalBoxes,
               selectedBoxes: selectedBoxes,
             ),
-            if (draft.warnings.isNotEmpty) ...[
+            if (_visibleWarnings(draft.warnings).isNotEmpty) ...[
               const SizedBox(height: 10),
               _InfoCard(
-                children: draft.warnings
+                children: _visibleWarnings(draft.warnings)
                     .map((warning) => Text(
                           warning,
                           style: const TextStyle(color: Color(0xFFB45309)),
@@ -245,6 +245,13 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
       SnackBar(content: Text(message)),
     );
   }
+}
+
+List<String> _visibleWarnings(List<String> warnings) {
+  return warnings.where((warning) {
+    final normalized = warning.replaceAll(' ', '');
+    return !normalized.contains('图片方向已旋转');
+  }).toList();
 }
 
 String _normalizeWaybillNo(String raw) {
