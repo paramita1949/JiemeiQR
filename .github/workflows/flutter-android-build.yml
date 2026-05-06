@@ -41,8 +41,14 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.29.3"
           cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          cd android
+          ./gradlew --version
 
       - name: Install dependencies
         run: flutter pub get
@@ -83,7 +89,11 @@ jobs:
           EOF
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          cd android
+          ./gradlew --refresh-dependencies
+          cd ..
+          flutter build apk --release
 
       - name: Resolve build metadata
         id: meta
