@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -8,7 +6,6 @@ import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/models/qr_record.dart';
-import 'package:qrscan_flutter/services/qr_board_ai_estimator.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -32,11 +29,11 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   bool _autoStarted = false;
   bool _scanStageActive = true;
   bool _scanningNow = false;
-  QrBoardRangeEstimate? _lastEstimate;
   String? _lastSerialTail3Range;
   String? _lastSerialTail4Range;
   int? _rangeSpan;
   int _ignoredOutlierCount = 0;
+  Set<String> _ignoredSerials = <String>{};
   int? _matchedBoxesPerBoard;
   MatchedBaseInfo? _matchedBaseInfo;
   QrBuildResult? _latestBuildResult;
@@ -231,15 +228,14 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
 
   void _recomputeEstimate() {
     final first = _scans.isEmpty ? null : _scans.first;
-    final boxesPerBoard = _matchedBoxesPerBoard;
-    if (first == null || boxesPerBoard == null) {
+    if (first == null) {
       return;
     }
     final stable = _selectStableSerials();
     if (stable.serials.length < 2) {
       setState(() {
         _ignoredOutlierCount = stable.ignoredCount;
-        _lastEstimate = null;
+        _ignoredSerials = stable.ignoredSerials;
         _latestBuildResult = null;
         _lastSerialTail3Range = null;
         _lastSerialTail4Range = null;
@@ -248,30 +244,25 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       return;
     }
     try {
-      final serials = stable.serials;
-      final sample = min(6, serials.length);
-      final estimate = QrBoardAiEstimator.estimateRange(
-        boxesPerBoard: boxesPerBoard,
-        topSerials: serials.take(sample).toList(),
-        bottomSerials: serials.skip(serials.length - sample).toList(),
-      );
+      final serials = stable.serials..sort();
+      final startSerialInt = serials.first;
+      final endSerialInt = serials.last;
+      final generatedCount = endSerialInt - startSerialInt + 1;
       final result = QrParser.buildRecords(
         prefix: first.prefix,
         serialSeed: first.serial,
         batch: first.batch,
         suffix: first.suffix,
-        count: boxesPerBoard,
+        count: generatedCount,
         randomTailEnabled: false,
-        startSerial: estimate.startSerial,
+        startSerial: startSerialInt,
       );
       setState(() {
         _ignoredOutlierCount = stable.ignoredCount;
-        _lastEstimate = estimate;
+        _ignoredSerials = stable.ignoredSerials;
         _latestBuildResult = result;
         final startSerial = result.records.first.serial;
         final endSerial = result.records.last.serial;
-        final startSerialInt = int.tryParse(startSerial) ?? 0;
-        final endSerialInt = int.tryParse(endSerial) ?? 0;
         _lastSerialTail3Range =
             '${_tailOfSerial(startSerial, 3)} - ${_tailOfSerial(endSerial, 3)}';
         _lastSerialTail4Range =
@@ -286,7 +277,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   _StableSerials _selectStableSerials() {
     final serials = _scans.map((e) => e.serialInt).toSet().toList()..sort();
     if (serials.length <= 1) {
-      return _StableSerials(serials, 0);
+      return _StableSerials(serials, 0, const <String>{});
     }
 
     const maxNeighborGap = 100;
@@ -315,8 +306,12 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     });
 
     final best = clusters.first;
-    final ignored = serials.length - best.length;
-    return _StableSerials(best, ignored);
+    final bestSet = best.toSet();
+    final ignored = serials.where((e) => !bestSet.contains(e)).toList();
+    final ignoredSerials = ignored
+        .map((e) => e.toString().padLeft(QrParser.serialLength, '0'))
+        .toSet();
+    return _StableSerials(best, ignored.length, ignoredSerials);
   }
 
   void _openPreview() {
@@ -440,7 +435,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              if (_lastEstimate != null) ...[
+              if (_latestBuildResult != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   '范围跨度：${_rangeSpan ?? "-"}',
@@ -454,7 +449,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   Text(
                     '已自动忽略偏差样本：$_ignoredOutlierCount',
                     style: const TextStyle(
-                      color: AppTheme.textSecondary,
+                      color: Colors.red,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -482,9 +477,16 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   spacing: 6,
                   runSpacing: 6,
                   children: _scans.reversed.take(10).map((item) {
+                    final ignored = _ignoredSerials.contains(item.serial);
                     return Chip(
                       visualDensity: VisualDensity.compact,
+                      backgroundColor:
+                          ignored ? const Color(0xFFFFEBEE) : null,
                       label: Text(item.serial),
+                      labelStyle: TextStyle(
+                        color: ignored ? Colors.red : AppTheme.textPrimary,
+                        fontWeight: ignored ? FontWeight.w700 : FontWeight.w500,
+                      ),
                     );
                   }).toList(),
                 ),
@@ -535,8 +537,9 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
 }
 
 class _StableSerials {
-  const _StableSerials(this.serials, this.ignoredCount);
+  const _StableSerials(this.serials, this.ignoredCount, this.ignoredSerials);
 
   final List<int> serials;
   final int ignoredCount;
+  final Set<String> ignoredSerials;
 }
