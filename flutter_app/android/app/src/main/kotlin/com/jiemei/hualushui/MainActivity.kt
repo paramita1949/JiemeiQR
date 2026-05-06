@@ -84,6 +84,10 @@ class MainActivity : FlutterActivity() {
                     result.success(summary)
                 }
 
+                "getNativeGeofenceLogs" -> {
+                    result.success(AttendanceNativeLog.dump(applicationContext))
+                }
+
                 else -> result.notImplemented()
             }
         }

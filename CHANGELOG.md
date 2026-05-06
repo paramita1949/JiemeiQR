@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.5.6 (2026-05-06)
+
+### Added
+- 新增考勤原生通勤提醒链路：引入通勤闹钟调度、定位服务、通知封装与原生日志组件，支持按通勤场景触发提醒。
+- 新增原生接收器/服务组件：`AttendanceCommuteAlarmReceiver`、`AttendanceCommuteLocationService`、`AttendanceCommuteScheduler`、`AttendanceNotifier`、`AttendanceNativeLog`。
+
+### Changed
+- Android 侧考勤广播与围栏注册链路重构：`AttendanceBootReceiver`、`AttendanceGeofenceReceiver`、`GeofenceRegistrar`、`MainActivity` 与 `AndroidManifest.xml` 同步更新以接入通勤提醒流程。
+- Flutter 侧桥接与首页触发逻辑更新：`attendance_geofence_bridge.dart`、`home_screen.dart` 调整为对接原生通勤提醒能力。
+- 应用代码版本号更新为 `3.5.6`。
+
 ## 3.5.5 (2026-05-05)
 
 ### Added

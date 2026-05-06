@@ -40,8 +40,11 @@ object GeofenceRegistrar {
             client.removeGeofences(pendingIntent(context))
             client.addGeofences(request, pendingIntent(context))
             saveConfig(context, enabled = true, latitude = latitude, longitude = longitude, radiusMeters = radiusMeters)
+            AttendanceCommuteScheduler.schedule(context)
+            AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "register lat=$latitude lng=$longitude radius=$radiusMeters")
             Result.success("REGISTER_REQUEST_SUBMITTED")
         } catch (t: Throwable) {
+            AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "register failed ${t.message}")
             Result.failure(t)
         }
     }
@@ -51,8 +54,11 @@ object GeofenceRegistrar {
         return try {
             client.removeGeofences(pendingIntent(context))
             saveConfig(context, enabled = false, latitude = null, longitude = null, radiusMeters = null)
+            AttendanceCommuteScheduler.cancel(context)
+            AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "unregister")
             Result.success("UNREGISTER_REQUEST_SUBMITTED")
         } catch (t: Throwable) {
+            AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "unregister failed ${t.message}")
             Result.failure(t)
         }
     }
@@ -61,6 +67,7 @@ object GeofenceRegistrar {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
         if (!enabled) {
+            AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "restore skipped disabled")
             return Result.success("RESTORE_SKIPPED_DISABLED")
         }
         if (!hasLocationPermission(context)) {
@@ -74,7 +81,23 @@ object GeofenceRegistrar {
         }
         val latitude = java.lang.Double.longBitsToDouble(latBits)
         val longitude = java.lang.Double.longBitsToDouble(lngBits)
+        AttendanceCommuteScheduler.schedule(context)
+        AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "restore lat=$latitude lng=$longitude radius=$radiusBits")
         return register(context, latitude, longitude, radiusBits.toFloat())
+    }
+
+    fun config(context: Context): GeofenceConfig? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_ENABLED, false)) return null
+        val latBits = prefs.getLong(KEY_LAT, Long.MIN_VALUE)
+        val lngBits = prefs.getLong(KEY_LNG, Long.MIN_VALUE)
+        val radius = prefs.getInt(KEY_RADIUS, -1)
+        if (latBits == Long.MIN_VALUE || lngBits == Long.MIN_VALUE || radius <= 0) return null
+        return GeofenceConfig(
+            latitude = java.lang.Double.longBitsToDouble(latBits),
+            longitude = java.lang.Double.longBitsToDouble(lngBits),
+            radiusMeters = radius.toFloat(),
+        )
     }
 
     private fun pendingIntent(context: Context): PendingIntent {
@@ -114,3 +137,9 @@ object GeofenceRegistrar {
             .apply()
     }
 }
+
+data class GeofenceConfig(
+    val latitude: Double,
+    val longitude: Double,
+    val radiusMeters: Float,
+)

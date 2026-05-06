@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_precheckin_guard_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
@@ -512,6 +513,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       for (final e in filtered) {
         buffer.writeln(e);
       }
+    }
+    try {
+      final nativeLogs = await AttendanceGeofenceBridge.nativeLogs();
+      buffer.writeln('--- native_geofence_events ---');
+      if (nativeLogs.trim().isEmpty) {
+        buffer.writeln('native_geofence_events=empty');
+      } else {
+        buffer.writeln(nativeLogs.trim());
+      }
+    } catch (error) {
+      buffer.writeln('native_geofence_events_error=$error');
     }
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));

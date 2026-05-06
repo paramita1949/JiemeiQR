@@ -30,4 +30,9 @@ class AttendanceGeofenceBridge {
     final value = await _channel.invokeMethod<String>('getLocationProviderSummary');
     return value ?? '系统融合定位（GPS/北斗/网络）';
   }
+
+  static Future<String> nativeLogs() async {
+    final value = await _channel.invokeMethod<String>('getNativeGeofenceLogs');
+    return value ?? '';
+  }
 }

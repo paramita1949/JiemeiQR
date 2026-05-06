@@ -12,7 +12,8 @@ class AttendanceBootReceiver : BroadcastReceiver() {
         ) {
             return
         }
-        GeofenceRegistrar.restoreIfNeeded(context.applicationContext)
+        val appContext = context.applicationContext
+        val result = GeofenceRegistrar.restoreIfNeeded(appContext)
+        AttendanceNativeLog.add(appContext, "GEOFENCE_NATIVE", "boot restore ${result.getOrNull() ?: result.exceptionOrNull()?.message}")
     }
 }
-
