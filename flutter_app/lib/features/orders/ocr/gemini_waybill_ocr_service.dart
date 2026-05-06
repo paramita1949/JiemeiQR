@@ -150,7 +150,7 @@ const _ocrPromptGeneral = '''
 如果图片方向旋转，请先按文字方向阅读。
 只提取：
 - waybillNo: 右上区域的运单号/通单号
-- merchantName: 客户/收货方/经销商相关名称，读不到则空字符串
+- merchantName: 只提取“收货方短名称”，长度4-5个字，优先保留末尾行业词（如 日用/商贸/贸易/供应链）；不要返回公司全称，读不到则空字符串
 - orderDate: 单据日期，读不到则空字符串
 - rows: 表格每一行的 productCode、productName、actualBatch、dateBatch、boxes
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
@@ -164,7 +164,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 如果图片方向旋转，请先按文字方向阅读。
 只提取并返回JSON字段：
 - waybillNo: 右上区域“运单号”
-- merchantName: 优先取“收货方”，没有则取“客户/经销商/售达方”
+- merchantName: 优先取“收货方”短名称，没有则取“客户/经销商/售达方”中的短名称
 - orderDate: 优先取“起运日”，没有则取单据日期
 - rows: 明细表每一行的 productCode、productName、actualBatch、dateBatch、boxes
 列映射固定为：
@@ -177,6 +177,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 - productCode 仅保留数字字符；读不清则空字符串
 - actualBatch 优先识别英数串，注意 O/0、I/1；不确定则空字符串
 - 不同实际批号必须作为不同原始行输出，不要合并
+- merchantName 仅输出4-5个字，优先以“日用/商贸/贸易/供应链”结尾；如果识别到的是长公司名，请截取最稳定的短称
 - 读不清的字段返回空字符串或0，并在warnings用中文写原因
 ''';
 

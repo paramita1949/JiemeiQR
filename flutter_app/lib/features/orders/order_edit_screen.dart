@@ -490,7 +490,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   }
 
   Future<void> _openOcrReview(MatchedWaybillOcrDraft matched) async {
-    final saved = await Navigator.of(context).push<bool>(
+    final reviewResult = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => WaybillOcrReviewScreen(
           orderDao: _orderDao,
@@ -498,23 +498,26 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         ),
       ),
     );
-    if (saved != true || !mounted) {
+    if (reviewResult == null || !mounted) {
       return;
     }
+    final merchantName = reviewResult.trim().isEmpty
+        ? matched.source.merchantName
+        : reviewResult.trim();
     final normalizedWaybillNo = _normalizeWaybillNo(matched.source.waybillNo);
     final orderDate = matched.orderDate ?? DateTime.now();
     _waybillNoController.text = normalizedWaybillNo;
-    _merchantController.text = matched.source.merchantName;
+    _merchantController.text = merchantName;
     _orderDate = DateTime(orderDate.year, orderDate.month, orderDate.day);
     final orderId = await _orderDao.findOpenOrderId(
       waybillNo: normalizedWaybillNo,
-      merchantName: matched.source.merchantName,
+      merchantName: merchantName,
       orderDate: _orderDate,
     );
     if (orderId != null) {
       final headerKey = _orderHeaderKey(
         waybillNo: normalizedWaybillNo,
-        merchantName: matched.source.merchantName,
+        merchantName: merchantName,
         orderDate: _orderDate,
       );
       _draftOrderKey = headerKey;

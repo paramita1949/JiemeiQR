@@ -53,6 +53,8 @@ class _LineEntry {
 
 class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
   bool _saving = false;
+  late final TextEditingController _merchantController =
+      TextEditingController(text: widget.matched.source.merchantName);
   late final List<_LineEntry> _entries = [
     for (final line in widget.matched.lines) _LineEntry(line),
   ];
@@ -60,11 +62,22 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
       _buildBatchVariantsByProductDate(_entries);
 
   @override
+  void dispose() {
+    _merchantController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final draft = widget.matched.source;
     final selected = _entries.where((entry) => entry.included).toList();
     final selectedMatched = selected.where((entry) => entry.line.isMatched);
     final selectedCount = selectedMatched.length;
+    final selectedBoxes = selectedMatched.fold<int>(
+      0,
+      (sum, entry) => sum + entry.line.boxes,
+    );
+    final totalBoxes = _entries.fold<int>(0, (sum, entry) => sum + entry.line.boxes);
     final reviewCount = _entries
         .where((entry) => entry.line.resolvedStatus == OcrLineStatus.needReview)
         .length;
@@ -126,7 +139,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
             _InfoCard(
               children: [
                 _InfoRow(label: '运单号', value: draft.waybillNo),
-                _InfoRow(label: '商家', value: draft.merchantName),
+                _EditableMerchantRow(controller: _merchantController),
                 _InfoRow(
                   label: '日期',
                   value:
@@ -140,6 +153,8 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               autoCount: autoCount,
               reviewCount: reviewCount,
               unmatchedCount: unmatchedCount,
+              totalBoxes: totalBoxes,
+              selectedBoxes: selectedBoxes,
             ),
             if (draft.warnings.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -175,6 +190,9 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
     setState(() => _saving = true);
     final draft = widget.matched.source;
     final normalizedWaybillNo = _normalizeWaybillNo(draft.waybillNo);
+    final merchantName = _merchantController.text.trim().isEmpty
+        ? draft.merchantName
+        : _merchantController.text.trim();
     final orderDate = widget.matched.orderDate ?? DateTime.now();
     final selected =
         _entries.where((entry) => entry.included && entry.line.isMatched);
@@ -186,7 +204,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
         try {
           await widget.orderDao.appendPendingWaybillItem(
             waybillNo: normalizedWaybillNo,
-            merchantName: draft.merchantName,
+            merchantName: merchantName,
             orderDate: orderDate,
             item: PendingOrderItemInput(
               productId: product.id,
@@ -206,7 +224,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(merchantName);
     } on InsufficientStockException {
       _showError('库存不足，无法录入识别明细');
     } on InvalidStockQuantityException {
@@ -244,12 +262,16 @@ class _SummaryCard extends StatelessWidget {
     required this.autoCount,
     required this.reviewCount,
     required this.unmatchedCount,
+    required this.totalBoxes,
+    required this.selectedBoxes,
   });
 
   final int total;
   final int autoCount;
   final int reviewCount;
   final int unmatchedCount;
+  final int totalBoxes;
+  final int selectedBoxes;
 
   @override
   Widget build(BuildContext context) {
@@ -271,6 +293,49 @@ class _SummaryCard extends StatelessWidget {
             style: const TextStyle(
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '总箱数 $totalBoxes 箱（本次录入 $selectedBoxes 箱）',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditableMerchantRow extends StatelessWidget {
+  const _EditableMerchantRow({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 64,
+            child: Text(
+              '商家',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: '可直接修改收货方',
+                border: UnderlineInputBorder(),
+              ),
             ),
           ),
         ],
