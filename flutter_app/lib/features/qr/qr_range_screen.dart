@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
+import 'package:qrscan_flutter/data/daos/qr_range_history_dao.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/models/qr_record.dart';
@@ -22,6 +23,7 @@ class QrRangeScreen extends StatefulWidget {
 class _QrRangeScreenState extends State<QrRangeScreen> {
   late final AppDatabase _database;
   late final ProductDao _productDao;
+  late final QrRangeHistoryDao _historyDao;
   late final bool _ownsDatabase;
 
   final List<ParsedQr> _scans = <ParsedQr>[];
@@ -37,6 +39,9 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   int? _matchedBoxesPerBoard;
   MatchedBaseInfo? _matchedBaseInfo;
   QrBuildResult? _latestBuildResult;
+  String? _stableStartSerial;
+  String? _stableEndSerial;
+  final List<QrRangeHistoryEntry> _history = <QrRangeHistoryEntry>[];
   final ImagePicker _picker = ImagePicker();
   final MobileScannerController _galleryAnalyzeController =
       MobileScannerController();
@@ -47,6 +52,8 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _productDao = ProductDao(_database);
+    _historyDao = QrRangeHistoryDao(_database);
+    _loadHistory();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _autoStarted) {
         return;
@@ -268,6 +275,8 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         _lastSerialTail4Range =
             '${_tailOfSerial(startSerial, 4)} - ${_tailOfSerial(endSerial, 4)}';
         _rangeSpan = (endSerialInt - startSerialInt).abs();
+        _stableStartSerial = startSerial;
+        _stableEndSerial = endSerial;
       });
     } catch (_) {
       // keep scanning with existing last estimate if any
@@ -320,6 +329,11 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       _showMessage('样本不足或未匹配到基础资料，暂无法生成预览');
       return;
     }
+    _saveHistory(
+      startSerial: result.records.first.serial,
+      endSerial: result.records.last.serial,
+      generatedCount: result.records.length,
+    );
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PreviewScreen(
@@ -330,6 +344,131 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openBulkPreviewDialog() async {
+    final parsed = _scans.isEmpty ? null : _scans.first;
+    if (parsed == null) {
+      _showMessage('请先扫描至少1箱');
+      return;
+    }
+    final startController =
+        TextEditingController(text: _stableStartSerial ?? parsed.serial);
+    final endController =
+        TextEditingController(text: _stableEndSerial ?? parsed.serial);
+    final range = await showDialog<({int start, int end})>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('批量预览生成'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: startController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: '起始流水号(10位)'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: endController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: '结束流水号(10位)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final start = int.tryParse(startController.text.trim());
+              final end = int.tryParse(endController.text.trim());
+              if (start == null || end == null || end < start) {
+                return;
+              }
+              Navigator.of(context).pop((start: start, end: end));
+            },
+            child: const Text('生成'),
+          ),
+        ],
+      ),
+    );
+    if (range == null) {
+      return;
+    }
+
+    final count = range.end - range.start + 1;
+    final result = QrParser.buildRecords(
+      prefix: parsed.prefix,
+      serialSeed: parsed.serial,
+      batch: parsed.batch,
+      suffix: parsed.suffix,
+      count: count,
+      randomTailEnabled: false,
+      startSerial: range.start,
+    );
+    _saveHistory(
+      startSerial: result.records.first.serial,
+      endSerial: result.records.last.serial,
+      generatedCount: result.records.length,
+    );
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(
+          records: result.records,
+          scanIndex: result.scanIndex,
+          group: result.group,
+          initialAutoSlideSeconds: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadHistory() async {
+    final rows = await _historyDao.latest(limit: 30);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _history
+        ..clear()
+        ..addAll(rows);
+    });
+  }
+
+  Future<void> _saveHistory({
+    required String startSerial,
+    required String endSerial,
+    required int generatedCount,
+  }) async {
+    final base = _matchedBaseInfo;
+    if (base == null) {
+      return;
+    }
+    await _historyDao.insert(
+      QrRangeHistoryEntry(
+        productCode: base.productCode,
+        actualBatch: base.actualBatch,
+        dateBatch: base.dateBatch,
+        startSerial: startSerial,
+        endSerial: endSerial,
+        generatedCount: generatedCount,
+        ignoredCount: _ignoredOutlierCount,
+        scannedCount: _scans.length,
+        createdAt: DateTime.now(),
+      ),
+    );
+    await _loadHistory();
+  }
+
+  Future<void> _deleteHistory(int id) async {
+    await _historyDao.deleteById(id);
+    await _loadHistory();
   }
 
   @override
@@ -388,6 +527,16 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   onPressed: _latestBuildResult == null ? null : _openPreview,
                   icon: const Icon(Icons.grid_view_rounded),
                   label: const Text('生成预览'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('rangeBulkPreviewButton'),
+                  onPressed: _scans.isEmpty ? null : _openBulkPreviewDialog,
+                  icon: const Icon(Icons.view_carousel_outlined),
+                  label: const Text('批量预览生成'),
                 ),
               ),
               const SizedBox(height: 12),
@@ -490,6 +639,40 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                     );
                   }).toList(),
                 ),
+              ],
+              if (_history.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '历史记录',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._history.map((item) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        '${item.productCode} | ${item.actualBatch} | ${item.startSerial}~${item.endSerial}',
+                      ),
+                      subtitle: Text(
+                        '生成${item.generatedCount}张 | 扫描${item.scannedCount}箱 | 忽略${item.ignoredCount}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: '删除',
+                        onPressed:
+                            item.id == null ? null : () => _deleteHistory(item.id!),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
               ],
             ],
           ),

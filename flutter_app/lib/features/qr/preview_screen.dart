@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -44,6 +45,54 @@ class FileQrSizeStore implements QrSizeStore {
       value.clamp(minSize, maxSize).toDouble();
 }
 
+abstract class PreviewProgressStore {
+  Future<int?> loadLastIndex(String key);
+
+  Future<void> saveLastIndex(String key, int index);
+}
+
+class FilePreviewProgressStore implements PreviewProgressStore {
+  const FilePreviewProgressStore();
+
+  @override
+  Future<int?> loadLastIndex(String key) async {
+    final file = await _file();
+    if (!await file.exists()) {
+      return null;
+    }
+    final text = await file.readAsString();
+    final map = jsonDecode(text);
+    if (map is! Map<String, dynamic>) {
+      return null;
+    }
+    final value = map[key];
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse('$value');
+  }
+
+  @override
+  Future<void> saveLastIndex(String key, int index) async {
+    final file = await _file();
+    Map<String, dynamic> map = <String, dynamic>{};
+    if (await file.exists()) {
+      final text = await file.readAsString();
+      final parsed = jsonDecode(text);
+      if (parsed is Map<String, dynamic>) {
+        map = parsed;
+      }
+    }
+    map[key] = index;
+    await file.writeAsString(jsonEncode(map));
+  }
+
+  Future<File> _file() async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}/qr_preview_progress.json');
+  }
+}
+
 class PreviewScreen extends StatefulWidget {
   const PreviewScreen({
     super.key,
@@ -52,6 +101,7 @@ class PreviewScreen extends StatefulWidget {
     required this.group,
     required this.initialAutoSlideSeconds,
     this.qrSizeStore,
+    this.progressStore,
   });
 
   final List<QrRecord> records;
@@ -59,6 +109,7 @@ class PreviewScreen extends StatefulWidget {
   final QrGroup group;
   final double initialAutoSlideSeconds;
   final QrSizeStore? qrSizeStore;
+  final PreviewProgressStore? progressStore;
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -67,6 +118,8 @@ class PreviewScreen extends StatefulWidget {
 class _PreviewScreenState extends State<PreviewScreen> {
   late final PageController _pageController;
   late final QrSizeStore _qrSizeStore;
+  late final PreviewProgressStore _progressStore;
+  late final String _progressKey;
 
   late List<QrRecord> _records;
   late QrGroup _group;
@@ -86,14 +139,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _scanIndex = widget.scanIndex;
     _autoSlideSeconds = widget.initialAutoSlideSeconds;
     _qrSizeStore = widget.qrSizeStore ?? const FileQrSizeStore();
+    _progressStore = widget.progressStore ?? const FilePreviewProgressStore();
+    _progressKey =
+        '${widget.group.prefix}|${widget.group.batch}|${widget.group.suffix}|${widget.group.startSerial}|${widget.group.count}';
     _currentIndex =
         _records.isEmpty ? 0 : _scanIndex.clamp(0, _records.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
     _loadQrSize();
+    _loadProgress();
   }
 
   @override
   void dispose() {
+    _saveProgress();
     _autoSlideTimer?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -144,6 +202,22 @@ class _PreviewScreenState extends State<PreviewScreen> {
     });
   }
 
+  void _setAutoSlideSecondsDirect(double seconds) {
+    if (seconds <= 0) {
+      return;
+    }
+    final wasRunning = _autoSliding;
+    if (_autoSliding) {
+      _toggleAutoSlide();
+    }
+    setState(() {
+      _autoSlideSeconds = seconds;
+    });
+    if (wasRunning) {
+      _toggleAutoSlide();
+    }
+  }
+
   Future<void> _loadQrSize() async {
     final size = await _qrSizeStore.loadQrSize();
     if (!mounted || size == null) {
@@ -152,6 +226,67 @@ class _PreviewScreenState extends State<PreviewScreen> {
     setState(() {
       _qrSize = FileQrSizeStore._clampSize(size);
     });
+  }
+
+  Future<void> _loadProgress() async {
+    final index = await _progressStore.loadLastIndex(_progressKey);
+    if (!mounted || index == null || _records.isEmpty) {
+      return;
+    }
+    final safe = index.clamp(0, _records.length - 1);
+    setState(() {
+      _currentIndex = safe;
+    });
+    _pageController.jumpToPage(safe);
+  }
+
+  Future<void> _saveProgress() async {
+    if (_records.isEmpty) {
+      return;
+    }
+    await _progressStore.saveLastIndex(_progressKey, _currentIndex);
+  }
+
+  Future<void> _jumpToPage() async {
+    if (_records.isEmpty) {
+      return;
+    }
+    final controller =
+        TextEditingController(text: (_currentIndex + 1).toString());
+    final target = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('跳转到页码'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: '输入 1 - ${_records.length}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value == null) {
+                return;
+              }
+              Navigator.of(context).pop(value);
+            },
+            child: const Text('跳转'),
+          ),
+        ],
+      ),
+    );
+    if (target == null) {
+      return;
+    }
+    final page = target.clamp(1, _records.length) - 1;
+    _goTo(page);
   }
 
   void _setQrSize(double size) {
@@ -285,6 +420,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
             onPressed: _toggleAutoSlide,
             icon: Icon(_autoSliding ? Icons.pause_circle : Icons.play_circle),
           ),
+          IconButton(
+            tooltip: '跳转页码',
+            onPressed: _jumpToPage,
+            icon: const Icon(Icons.pin_outlined),
+          ),
         ],
       ),
       body: Column(
@@ -306,6 +446,48 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       child: const Text('下一组'),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text(
+                      '自动滑动',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ...[0.5, 1.0, 2.0].map((value) {
+                      final selected = (_autoSlideSeconds - value).abs() < 0.01;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          label: Text('${value}s'),
+                          selected: selected,
+                          onSelected: (_) => _setAutoSlideSecondsDirect(value),
+                        ),
+                      );
+                    }),
+                    const Spacer(),
+                    FilledButton.tonalIcon(
+                      onPressed: _toggleAutoSlide,
+                      icon: Icon(
+                        _autoSliding
+                            ? Icons.pause_circle_outline
+                            : Icons.play_circle_outline,
+                      ),
+                      label: Text(_autoSliding ? '暂停' : '继续'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '继续时从当前页开始，不会回到第一张',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -351,6 +533,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   setState(() {
                     _currentIndex = value;
                   });
+                  _saveProgress();
                 },
                 itemBuilder: (context, index) {
                   final item = _records[index];
