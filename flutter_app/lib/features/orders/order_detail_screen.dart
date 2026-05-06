@@ -138,6 +138,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         onEditLine: () => _editOrderLine(line),
                         onDeleteLine: () => _deleteOrderLine(line),
                         canTogglePicked: detail.order.status != OrderStatus.done,
+                        canModifyLine: detail.order.status != OrderStatus.done,
                         onPickedChanged: (next) => _setOrderLinePicked(
                           line: line,
                           isPicked: next,
@@ -773,6 +774,7 @@ class _LineCard extends StatelessWidget {
     required this.highlightBatch,
     required this.batchCodeVariants,
     required this.canTogglePicked,
+    required this.canModifyLine,
     required this.onPickedChanged,
     required this.onEditLine,
     this.onDeleteLine,
@@ -782,6 +784,7 @@ class _LineCard extends StatelessWidget {
   final bool highlightBatch;
   final List<String> batchCodeVariants;
   final bool canTogglePicked;
+  final bool canModifyLine;
   final ValueChanged<bool> onPickedChanged;
   final VoidCallback onEditLine;
   final VoidCallback? onDeleteLine;
@@ -845,12 +848,12 @@ class _LineCard extends StatelessWidget {
               _LineActionButton(
                 tooltip: '编辑该产品',
                 icon: Icons.edit_outlined,
-                onPressed: onEditLine,
+                onPressed: canModifyLine ? onEditLine : null,
               ),
               _LineActionButton(
                 tooltip: '删除该产品',
                 icon: Icons.delete_outline,
-                onPressed: onDeleteLine,
+                onPressed: canModifyLine ? onDeleteLine : null,
               ),
             ],
           ),
