@@ -137,8 +137,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                   IconButton.filledTonal(
-                    tooltip: '复制日志',
-                    onPressed: _copyDebugLog,
+                    tooltip: '日志面板',
+                    onPressed: _openDebugLogPanel,
                     icon: const Icon(Icons.bug_report_outlined),
                   ),
                 ],
@@ -169,7 +169,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (title == 'QR箱码') {
       await pushAndRefresh(
         context,
-        route: MaterialPageRoute(builder: (_) => QrEntryScreen(database: database)),
+        route: MaterialPageRoute(
+            builder: (_) => QrEntryScreen(database: database)),
         onRefresh: () => unawaited(_refreshStats()),
       );
       return;
@@ -325,7 +326,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!decision.shouldRemind) return;
 
       if (forForeground) {
-        if (!AttendancePrecheckinGuardService.shouldShowDialog(decision.dayKey)) {
+        if (!AttendancePrecheckinGuardService.shouldShowDialog(
+            decision.dayKey)) {
           return;
         }
         if (!mounted) return;
@@ -357,7 +359,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         );
       } else {
-        if (!AttendancePrecheckinGuardService.shouldSendNotification(decision.dayKey)) {
+        if (!AttendancePrecheckinGuardService.shouldSendNotification(
+            decision.dayKey)) {
           return;
         }
         DebugEventLog.add('PRECHECKIN', 'show lockscreen notification');
@@ -371,7 +374,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _ensureNotificationPermissionHint() async {
     if (!mounted || _notiHintShownInSession) return;
     try {
-      final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+      final state =
+          await AttendanceGeofenceReminderService.ensureSystemPermissions(
         requestIfNeeded: false,
       );
       if (!mounted || state.notificationGranted) return;
@@ -481,18 +485,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _copyDebugLog() async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _openDebugLogPanel() async {
+    final report = await _buildDebugReport();
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _DebugLogSheet(
+        report: report,
+        onCopy: () async {
+          await Clipboard.setData(ClipboardData(text: report.rawText));
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('日志已复制')),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<_DebugLogReport> _buildDebugReport() async {
     final buffer = StringBuffer();
+    String dbStatus = '正常';
     buffer.writeln('time=${DateTime.now().toIso8601String()}');
     buffer.writeln('schema=${_database.schemaVersion}');
     try {
       final userVersionRow =
           await _database.customSelect('PRAGMA user_version;').getSingle();
-      buffer.writeln('sqlite_user_version=${userVersionRow.data['user_version']}');
+      buffer.writeln(
+          'sqlite_user_version=${userVersionRow.data['user_version']}');
     } catch (error) {
+      dbStatus = '异常（数据库连接失败）';
       buffer.writeln('sqlite_user_version_error=$error');
     }
+    final orderCount = await _safeTableCount('orders', buffer);
+    final orderItemCount = await _safeTableCount('order_items', buffer);
+    final batchCount = await _safeTableCount('batches', buffer);
+    final movementCount = await _safeTableCount('stock_movements', buffer);
 
     buffer.writeln('--- recent_debug_events ---');
     final events = DebugEventLog.dump();
@@ -526,10 +558,274 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       buffer.writeln('native_geofence_events_error=$error');
     }
 
-    await Clipboard.setData(ClipboardData(text: buffer.toString()));
-    if (!mounted) return;
-    messenger.showSnackBar(
-      const SnackBar(content: Text('日志已复制')),
+    return _DebugLogReport(
+      dbStatus: dbStatus,
+      sqliteSchemaVersion: _database.schemaVersion,
+      orderCount: orderCount,
+      orderItemCount: orderItemCount,
+      batchCount: batchCount,
+      movementCount: movementCount,
+      readableEvents: _humanReadableEvents(filtered),
+      rawText: buffer.toString(),
+    );
+  }
+
+  Future<int?> _safeTableCount(String table, StringBuffer buffer) async {
+    try {
+      final row = await _database
+          .customSelect('SELECT COUNT(*) AS c FROM $table;')
+          .getSingle();
+      final count = row.data['c'] as int?;
+      buffer.writeln('table_count_$table=${count ?? 0}');
+      return count;
+    } catch (error) {
+      buffer.writeln('table_count_${table}_error=$error');
+      return null;
+    }
+  }
+
+  List<String> _humanReadableEvents(List<String> events) {
+    if (events.isEmpty) {
+      return const <String>[];
+    }
+    final readable = <String>[];
+    for (final event in events.reversed.take(12)) {
+      final normalized = event.toLowerCase();
+      if (normalized.contains('failed') || normalized.contains('error')) {
+        readable.add('系统操作失败：$event');
+      } else if (normalized.contains('show foreground dialog')) {
+        readable.add('已弹出前台提醒：$event');
+      } else if (normalized.contains('show lockscreen notification')) {
+        readable.add('已触发锁屏通知：$event');
+      } else if (normalized.contains('permission')) {
+        readable.add('权限相关状态：$event');
+      } else {
+        readable.add('系统记录：$event');
+      }
+    }
+    return readable;
+  }
+}
+
+class _DebugLogReport {
+  const _DebugLogReport({
+    required this.dbStatus,
+    required this.sqliteSchemaVersion,
+    required this.orderCount,
+    required this.orderItemCount,
+    required this.batchCount,
+    required this.movementCount,
+    required this.readableEvents,
+    required this.rawText,
+  });
+
+  final String dbStatus;
+  final int sqliteSchemaVersion;
+  final int? orderCount;
+  final int? orderItemCount;
+  final int? batchCount;
+  final int? movementCount;
+  final List<String> readableEvents;
+  final String rawText;
+}
+
+class _DebugLogSheet extends StatelessWidget {
+  const _DebugLogSheet({
+    required this.report,
+    required this.onCopy,
+  });
+
+  final _DebugLogReport report;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 6,
+          bottom: media.viewInsets.bottom + 16,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.82),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '可视化日志',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '先看这个面板；需要排查时再一键复制完整日志。',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _DebugStatusCard(
+                label: '数据库状态',
+                value: report.dbStatus,
+              ),
+              const SizedBox(height: 8),
+              _DebugStatusCard(
+                label: '数据库版本',
+                value: 'schema v${report.sqliteSchemaVersion}',
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _DebugMetricChip(
+                      label: '订单', value: _countText(report.orderCount)),
+                  _DebugMetricChip(
+                      label: '订单明细', value: _countText(report.orderItemCount)),
+                  _DebugMetricChip(
+                      label: '批号', value: _countText(report.batchCount)),
+                  _DebugMetricChip(
+                      label: '库存流水', value: _countText(report.movementCount)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '最近系统记录',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: report.readableEvents.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '暂无关键日志',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: report.readableEvents.length,
+                        itemBuilder: (context, index) => Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Text(
+                            report.readableEvents[index],
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onCopy,
+                  icon: const Icon(Icons.copy_all_rounded),
+                  label: const Text('一键复制完整日志'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _countText(int? value) => value == null ? '读取失败' : '$value 条';
+}
+
+class _DebugStatusCard extends StatelessWidget {
+  const _DebugStatusCard({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DebugMetricChip extends StatelessWidget {
+  const _DebugMetricChip({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F6FB),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(
+          color: AppTheme.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
