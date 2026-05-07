@@ -16,6 +16,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AttendanceCommuteScheduler.cancel(applicationContext)
         cacheImportPathFromIntent(intent)
     }
 

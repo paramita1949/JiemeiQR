@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_record_edit_screen.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_rule_screen.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_stats_screen.dart';
@@ -38,7 +39,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     super.initState();
     _dao = AttendanceDao(widget.database);
     unawaited(_reload());
+    unawaited(_runForegroundAutoCheckIn());
     unawaited(_consumeInitialImport());
+  }
+
+  Future<void> _runForegroundAutoCheckIn() async {
+    try {
+      await AttendanceGeofenceReminderService.checkAndMaybeNotify(
+        database: widget.database,
+      );
+      await _reload();
+    } catch (_) {
+      // Location failures must not block normal manual attendance.
+    }
   }
 
   Future<void> _consumeInitialImport() async {

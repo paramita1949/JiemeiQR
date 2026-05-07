@@ -32,9 +32,30 @@ class AttendanceGeofenceReminderService {
       return;
     }
 
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+    DebugEventLog.add('GEOFENCE_AUTO', 'foreground locate start');
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_AUTO', 'medium locate failed: $e');
+    }
+    try {
+      position ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 6),
+      );
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_AUTO', 'high locate failed: $e');
+    }
+    position ??= await Geolocator.getLastKnownPosition();
+    if (position == null) {
+      DebugEventLog.add('GEOFENCE_AUTO', 'position null');
+      return;
+    }
+
     final distance = Geolocator.distanceBetween(
       position.latitude,
       position.longitude,
@@ -42,23 +63,33 @@ class AttendanceGeofenceReminderService {
       rule.officeLng!,
     );
     final isInsideNow = distance <= rule.officeRadiusMeters;
+    DebugEventLog.add(
+      'GEOFENCE_AUTO',
+      'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
+    );
     final decision = await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
+    DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
     if (!decision.triggered) return;
 
+    await showAutoCheckinNotification();
+  }
+
+  static Future<void> showAutoCheckinNotification() async {
+    await _initNotification();
     const android = AndroidNotificationDetails(
       'attendance_checkin_channel',
-      '考勤签到提醒',
-      channelDescription: '进入公司围栏后的签到提醒',
+      '考勤自动签到',
+      channelDescription: '打开APP进入公司围栏后的自动签到反馈',
       importance: Importance.max,
       priority: Priority.max,
       visibility: NotificationVisibility.public,
-      category: AndroidNotificationCategory.reminder,
+      category: AndroidNotificationCategory.status,
     );
     const details = NotificationDetails(android: android);
     await _notifications.show(
       20260504,
-      '签到提醒',
-      '你已进入公司范围，请完成上班签到',
+      '已自动上班签到',
+      '已在公司范围内完成上班签到',
       details,
     );
   }
@@ -94,8 +125,8 @@ class AttendanceGeofenceReminderService {
     await _initNotification();
     const android = AndroidNotificationDetails(
       'attendance_checkin_channel',
-      '考勤签到提醒',
-      channelDescription: '进入公司围栏后的签到提醒',
+      '考勤自动签到',
+      channelDescription: '打开APP进入公司围栏后的自动签到反馈',
       importance: Importance.max,
       priority: Priority.max,
       visibility: NotificationVisibility.public,
@@ -105,8 +136,8 @@ class AttendanceGeofenceReminderService {
     const details = NotificationDetails(android: android);
     await _notifications.show(
       202605052,
-      '签到提醒',
-      '已进入围栏范围，请完成签到',
+      '围栏测试',
+      '当前位置在公司范围内，正式使用时会自动上班签到',
       details,
     );
   }

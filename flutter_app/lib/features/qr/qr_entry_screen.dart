@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/qr_preview_history_dao.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_range_screen.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
@@ -24,6 +25,28 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   int _randomTailDigits = 3;
   ParsedQr? _lastParsed;
   QrBuildResult? _lastBuildResult;
+  late final AppDatabase _database;
+  late final bool _ownsDatabase;
+  late final QrPreviewHistoryDao _historyDao;
+  String _lastSource = '扫码';
+  final List<QrPreviewHistoryEntry> _history = <QrPreviewHistoryEntry>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsDatabase = widget.database == null;
+    _database = widget.database ?? AppDatabase();
+    _historyDao = QrPreviewHistoryDao(_database);
+    _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    if (_ownsDatabase) {
+      _database.close();
+    }
+    super.dispose();
+  }
 
   Future<void> _startScan() => _openScannerAndPreview(startFromGallery: false);
 
@@ -31,6 +54,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
       _openScannerAndPreview(startFromGallery: true);
 
   Future<void> _openScannerAndPreview({required bool startFromGallery}) async {
+    _lastSource = startFromGallery ? '导入图片' : '开始扫码';
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
@@ -43,6 +67,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   }
 
   Future<void> _startManualInput() async {
+    _lastSource = '手动输入';
     final controller = TextEditingController();
     final content = await showDialog<String>(
       context: context,
@@ -105,6 +130,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
       startSerial: startSerial,
     );
     setState(() => _lastBuildResult = buildResult);
+    _saveHistory(buildResult);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PreviewScreen(
@@ -115,6 +141,42 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadHistory() async {
+    final rows = await _historyDao.latest(limit: 50);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _history
+        ..clear()
+        ..addAll(rows);
+    });
+  }
+
+  Future<void> _saveHistory(QrBuildResult buildResult) async {
+    await _historyDao.insert(
+      QrPreviewHistoryEntry(
+        source: _lastSource,
+        actualBatch: buildResult.group.batch,
+        startSerial: buildResult.records.first.serial,
+        endSerial: buildResult.records.last.serial,
+        generatedCount: buildResult.records.length,
+        createdAt: DateTime.now(),
+      ),
+    );
+    await _loadHistory();
+  }
+
+  Future<void> _deleteHistory(int id) async {
+    await _historyDao.deleteById(id);
+    await _loadHistory();
+  }
+
+  Future<void> _clearHistory() async {
+    await _historyDao.clearAll();
+    await _loadHistory();
   }
 
   void _openNextGroup() {
@@ -284,6 +346,58 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                 '提示: 请先扫描箱贴码或导入图片，再生成预览',
                 style: TextStyle(color: Color(0xFF9A3412), fontSize: 11),
               ),
+              if (_history.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Text(
+                      '预览历史',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _clearHistory,
+                      icon: const Icon(Icons.delete_sweep_outlined,
+                          color: Colors.red),
+                      label: const Text(
+                        '全部清除',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ..._history.map((item) {
+                  final time = item.createdAt.toLocal().toString().split('.').first;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        '${item.source} | 批号 ${item.actualBatch}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '$time\n${item.startSerial} ~ ${item.endSerial}（${item.generatedCount}张）',
+                      ),
+                      isThreeLine: true,
+                      trailing: IconButton(
+                        tooltip: '删除',
+                        onPressed: item.id == null
+                            ? null
+                            : () => _deleteHistory(item.id!),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
             ],
           ),
         ),

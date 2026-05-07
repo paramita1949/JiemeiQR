@@ -16,8 +16,8 @@ object AttendanceNotifier {
         ensureCheckinChannel(manager)
         val notification = NotificationCompat.Builder(context, CHECKIN_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("签到提醒")
-            .setContentText("已进入围栏范围，请完成签到")
+            .setContentTitle("到公司了")
+            .setContentText("打开APP后会自动完成上班签到")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
@@ -45,7 +45,7 @@ object AttendanceNotifier {
             "考勤签到提醒",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "进入公司围栏后的签到提醒"
+            description = "进入公司围栏后的签到提示"
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         manager.createNotificationChannel(channel)
@@ -63,4 +63,3 @@ object AttendanceNotifier {
         manager.createNotificationChannel(channel)
     }
 }
-

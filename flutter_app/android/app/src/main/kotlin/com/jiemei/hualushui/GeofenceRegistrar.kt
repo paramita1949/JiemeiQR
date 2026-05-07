@@ -39,8 +39,8 @@ object GeofenceRegistrar {
         return try {
             client.removeGeofences(pendingIntent(context))
             client.addGeofences(request, pendingIntent(context))
+            AttendanceCommuteScheduler.cancel(context)
             saveConfig(context, enabled = true, latitude = latitude, longitude = longitude, radiusMeters = radiusMeters)
-            AttendanceCommuteScheduler.schedule(context)
             AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "register lat=$latitude lng=$longitude radius=$radiusMeters")
             Result.success("REGISTER_REQUEST_SUBMITTED")
         } catch (t: Throwable) {
@@ -81,7 +81,7 @@ object GeofenceRegistrar {
         }
         val latitude = java.lang.Double.longBitsToDouble(latBits)
         val longitude = java.lang.Double.longBitsToDouble(lngBits)
-        AttendanceCommuteScheduler.schedule(context)
+        AttendanceCommuteScheduler.cancel(context)
         AttendanceNativeLog.add(context, "GEOFENCE_NATIVE", "restore lat=$latitude lng=$longitude radius=$radiusBits")
         return register(context, latitude, longitude, radiusBits.toFloat())
     }

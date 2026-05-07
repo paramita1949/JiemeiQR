@@ -135,7 +135,42 @@ class AttendanceDao {
     if (!rule.checkinReminderEnabled) {
       return const GeofenceDecision(triggered: false, reason: '上班提醒未启用');
     }
-    return const GeofenceDecision(triggered: true, reason: '进入围栏，触发签到提醒');
+    await _saveAutomaticGeofenceCheckIn(ts, rule: rule);
+    return const GeofenceDecision(triggered: true, reason: '进入围栏，已自动上班签到');
+  }
+
+  Future<void> _saveAutomaticGeofenceCheckIn(
+    DateTime ts, {
+    required AttendanceRule rule,
+  }) async {
+    final day = DateTime(ts.year, ts.month, ts.day);
+    final existing = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.day.equals(day)))
+        .getSingleOrNull();
+
+    if (existing == null) {
+      final id = await _db.into(_db.attendanceRecords).insert(
+            AttendanceRecordsCompanion.insert(
+              day: day,
+              checkInAt: Value(ts),
+              source: const Value('geofence_auto'),
+              updatedAt: Value(ts),
+            ),
+          );
+      final inserted = await (_db.select(_db.attendanceRecords)
+            ..where((t) => t.id.equals(id)))
+          .getSingle();
+      await _saveNormalizedRecord(inserted, rule: rule);
+      return;
+    }
+
+    if (existing.checkInAt != null) return;
+    final updated = existing.copyWith(
+      checkInAt: Value(ts),
+      source: 'geofence_auto',
+      updatedAt: ts,
+    );
+    await _saveNormalizedRecord(updated, rule: rule);
   }
 
   Future<GeofenceDailyState?> getTodayGeofenceState({DateTime? now}) async {
@@ -569,6 +604,7 @@ class AttendanceDao {
         isLeave: Value(row.isHoliday ? false : row.isLeave),
         isHoliday: Value(row.isHoliday),
         patched: Value(patched),
+        source: Value(row.source),
         note: Value(row.note),
         updatedAt: Value(DateTime.now()),
       ),

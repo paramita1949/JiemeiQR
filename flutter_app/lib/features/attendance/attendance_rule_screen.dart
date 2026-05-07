@@ -326,7 +326,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           '当前定位：${currentPos.latitude.toStringAsFixed(6)}, ${currentPos.longitude.toStringAsFixed(6)}\n'
           '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
           '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
-          '${inside ? '判定：已进入围栏（已触发正式签到提醒）' : '判定：未进入围栏（未触发提醒）'}',
+          '${inside ? '判定：已进入围栏（打开APP会自动上班签到）' : '判定：未进入围栏（不会自动签到）'}',
           style: const TextStyle(fontSize: 18, height: 1.35, fontWeight: FontWeight.w600),
         ),
         actions: [
@@ -433,11 +433,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           ),
           const SizedBox(height: 14),
           _glassCard(
-            title: '围栏提醒',
+            title: '到公司自动签到',
             icon: Icons.location_on_rounded,
             child: Column(
               children: [
-                _switchTile('启用围栏提醒', _geofenceEnabled, (v) => setState(() => _geofenceEnabled = v)),
+                _switchTile('到公司自动签到', _geofenceEnabled, (v) => setState(() => _geofenceEnabled = v)),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -488,8 +488,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _switchTile('上班提醒', _checkInRemindEnabled, (v) => setState(() => _checkInRemindEnabled = v)),
-                _switchTile('下班提醒', _checkOutRemindEnabled, (v) => setState(() => _checkOutRemindEnabled = v)),
+                _switchTile('上班前通知', _checkInRemindEnabled, (v) => setState(() => _checkInRemindEnabled = v)),
+                _switchTile('下班通知', _checkOutRemindEnabled, (v) => setState(() => _checkOutRemindEnabled = v)),
                 if (_todayGeofenceState != null)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
@@ -722,7 +722,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         value: value,
         onChanged: (v) async {
           onChanged(v);
-          if (title == '启用围栏提醒' || title == '上班提醒' || title == '下班提醒') {
+          if (title == '到公司自动签到' || title == '上班前通知' || title == '下班通知') {
             await _saveGeofenceOnly();
           }
         },
