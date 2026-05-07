@@ -35,4 +35,42 @@ class AttendanceGeofenceBridge {
     final value = await _channel.invokeMethod<String>('getNativeGeofenceLogs');
     return value ?? '';
   }
+
+  static Future<AmapLocationSnapshot?> amapCurrentLocation() async {
+    try {
+      final value = await _channel.invokeMapMethod<String, Object?>(
+        'getAmapCurrentLocation',
+      );
+      if (value == null) return null;
+      final latitude = (value['latitude'] as num?)?.toDouble();
+      final longitude = (value['longitude'] as num?)?.toDouble();
+      if (latitude == null || longitude == null) return null;
+      return AmapLocationSnapshot(
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: (value['accuracy'] as num?)?.toDouble(),
+        address: value['address'] as String?,
+        locationType: (value['locationType'] as num?)?.toInt(),
+      );
+    } on PlatformException catch (e) {
+      DebugEventLog.add('AMAP_LOCATE', 'failed ${e.code}: ${e.message}');
+      return null;
+    }
+  }
+}
+
+class AmapLocationSnapshot {
+  const AmapLocationSnapshot({
+    required this.latitude,
+    required this.longitude,
+    this.accuracy,
+    this.address,
+    this.locationType,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double? accuracy;
+  final String? address;
+  final int? locationType;
 }

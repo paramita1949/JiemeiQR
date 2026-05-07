@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 class AttendanceGeofenceReminderService {
@@ -33,6 +34,43 @@ class AttendanceGeofenceReminderService {
     }
 
     DebugEventLog.add('GEOFENCE_AUTO', 'foreground locate start');
+    final location = await _locateForAttendance();
+    if (location == null) {
+      DebugEventLog.add('GEOFENCE_AUTO', 'position null');
+      return;
+    }
+
+    final distance = Geolocator.distanceBetween(
+      location.latitude,
+      location.longitude,
+      rule.officeLat!,
+      rule.officeLng!,
+    );
+    final isInsideNow = distance <= rule.officeRadiusMeters;
+    DebugEventLog.add(
+      'GEOFENCE_AUTO',
+      'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
+    );
+    final decision = await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
+    DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
+    if (!decision.triggered) return;
+
+    await showAutoCheckinNotification();
+  }
+
+  static Future<_AttendanceLocation?> _locateForAttendance() async {
+    final amap = await AttendanceGeofenceBridge.amapCurrentLocation();
+    if (amap != null) {
+      DebugEventLog.add(
+        'GEOFENCE_AUTO',
+        'amap lat=${amap.latitude} lng=${amap.longitude} acc=${amap.accuracy} type=${amap.locationType}',
+      );
+      return _AttendanceLocation(
+        latitude: amap.latitude,
+        longitude: amap.longitude,
+      );
+    }
+
     Position? position;
     try {
       position = await Geolocator.getCurrentPosition(
@@ -51,27 +89,15 @@ class AttendanceGeofenceReminderService {
       DebugEventLog.add('GEOFENCE_AUTO', 'high locate failed: $e');
     }
     position ??= await Geolocator.getLastKnownPosition();
-    if (position == null) {
-      DebugEventLog.add('GEOFENCE_AUTO', 'position null');
-      return;
-    }
-
-    final distance = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      rule.officeLat!,
-      rule.officeLng!,
-    );
-    final isInsideNow = distance <= rule.officeRadiusMeters;
+    if (position == null) return null;
     DebugEventLog.add(
       'GEOFENCE_AUTO',
-      'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
+      'system lat=${position.latitude} lng=${position.longitude} acc=${position.accuracy}',
     );
-    final decision = await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
-    DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
-    if (!decision.triggered) return;
-
-    await showAutoCheckinNotification();
+    return _AttendanceLocation(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
   }
 
   static Future<void> showAutoCheckinNotification() async {
@@ -194,6 +220,16 @@ class AttendanceGeofenceReminderService {
       notificationGranted: notificationGranted ?? true,
     );
   }
+}
+
+class _AttendanceLocation {
+  const _AttendanceLocation({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final double latitude;
+  final double longitude;
 }
 
 class AttendancePermissionState {

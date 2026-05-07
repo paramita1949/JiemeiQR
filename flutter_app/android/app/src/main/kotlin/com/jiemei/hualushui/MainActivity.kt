@@ -89,6 +89,10 @@ class MainActivity : FlutterActivity() {
                     result.success(AttendanceNativeLog.dump(applicationContext))
                 }
 
+                "getAmapCurrentLocation" -> {
+                    AmapLocationBridge.locateOnce(applicationContext, result)
+                }
+
                 else -> result.notImplemented()
             }
         }
