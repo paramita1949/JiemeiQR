@@ -63,7 +63,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
       'https://api-inference.modelscope.cn/v1/chat/completions';
   static const _qianfanOcrModel = 'baidu-qianfan/Qianfan-OCR';
   static const _qianfanOcrCompletionUrl =
-      'https://ms-ens-9fc2bf8e-b006.api-inference.modelscope.cn/v1/chat/completions';
+      'https://ms-ens-c1ab2111-416c.api-inference.modelscope.cn/v1/chat/completions';
 
   static ModelScopeRateLimitInfo? get lastRateLimitInfo => _lastRateLimitInfo;
 
