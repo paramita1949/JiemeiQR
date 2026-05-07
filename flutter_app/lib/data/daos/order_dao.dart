@@ -785,7 +785,15 @@ class OrderDao {
       return value;
     }
     if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
+      // Drift/customSelect may surface epoch time as seconds, milliseconds,
+      // or microseconds depending on platform/driver. Normalize defensively.
+      if (value > 1000000000000000) {
+        return DateTime.fromMicrosecondsSinceEpoch(value);
+      }
+      if (value > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
     }
     if (value is String) {
       return DateTime.tryParse(value) ?? DateTime(1970);

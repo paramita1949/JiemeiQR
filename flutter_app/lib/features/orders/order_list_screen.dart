@@ -201,12 +201,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
       limit: _pageSize,
     );
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
-    final restockAggregates = _quickFilter == _OrderQuickFilter.exception
+    final hideRestock =
+        _quickFilter == _OrderQuickFilter.exception ||
+            _status == OrderStatus.picked ||
+            _status == OrderStatus.done;
+    final restockStatus = _status ?? OrderStatus.pending;
+    final restockAggregates = hideRestock
         ? const <OrderRestockAggregate>[]
         : await _orderDao.orderRestockAggregates(
-            status: _status,
+            status: restockStatus,
             dateRange: _dateRange,
-            unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+            unfinishedOnly: false,
           );
     if (!mounted) {
       return;
