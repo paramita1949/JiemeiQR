@@ -70,6 +70,10 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
@@ -81,5 +85,7 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(files("libs/AMapLocation_11.1.200_20260424.aar"))
+    implementation("net.jafama:jafama:2.3.2")
+    implementation("com.google.android.gms:play-services-basement:18.5.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
 }
