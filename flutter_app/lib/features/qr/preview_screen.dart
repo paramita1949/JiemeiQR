@@ -448,38 +448,43 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text(
-                      '自动滑动',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w700,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          '自动滑动',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    ...[0.5, 1.0, 2.0].map((value) {
-                      final selected = (_autoSlideSeconds - value).abs() < 0.01;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ChoiceChip(
+                      ...[0.5, 1.0, 2.0].map((value) {
+                        final selected =
+                            (_autoSlideSeconds - value).abs() < 0.01;
+                        return ChoiceChip(
                           label: Text('${value}s'),
                           selected: selected,
                           onSelected: (_) => _setAutoSlideSecondsDirect(value),
+                        );
+                      }),
+                      FilledButton.tonalIcon(
+                        onPressed: _toggleAutoSlide,
+                        icon: Icon(
+                          _autoSliding
+                              ? Icons.pause_circle_outline
+                              : Icons.play_circle_outline,
                         ),
-                      );
-                    }),
-                    const Spacer(),
-                    FilledButton.tonalIcon(
-                      onPressed: _toggleAutoSlide,
-                      icon: Icon(
-                        _autoSliding
-                            ? Icons.pause_circle_outline
-                            : Icons.play_circle_outline,
+                        label: Text(_autoSliding ? '暂停' : '继续'),
                       ),
-                      label: Text(_autoSliding ? '暂停' : '继续'),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Align(

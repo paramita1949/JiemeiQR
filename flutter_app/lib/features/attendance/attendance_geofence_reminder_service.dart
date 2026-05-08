@@ -49,6 +49,8 @@ class AttendanceGeofenceReminderService {
     final isInsideNow = distance <= rule.officeRadiusMeters;
     DebugEventLog.add(
       'GEOFENCE_AUTO',
+      'current=${location.latitude.toStringAsFixed(6)},${location.longitude.toStringAsFixed(6)} '
+      'center=${rule.officeLat!.toStringAsFixed(6)},${rule.officeLng!.toStringAsFixed(6)} '
       'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
     );
     final decision = await dao.handleGeofenceTransition(isInsideNow: isInsideNow);

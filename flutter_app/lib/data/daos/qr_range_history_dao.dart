@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'dart:convert';
 
 import '../app_database.dart';
 
@@ -19,12 +20,24 @@ class QrRangeHistoryDao {
         generated_count INTEGER NOT NULL,
         ignored_count INTEGER NOT NULL DEFAULT 0,
         scanned_count INTEGER NOT NULL DEFAULT 0,
+        raw_anchor_content TEXT NOT NULL DEFAULT '',
+        scanned_codes_json TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
     ''');
+    await _ensureColumn('qr_range_histories', 'raw_anchor_content', "TEXT NOT NULL DEFAULT ''");
+    await _ensureColumn('qr_range_histories', 'scanned_codes_json', "TEXT NOT NULL DEFAULT '[]'");
     await _db.customStatement(
       'CREATE INDEX IF NOT EXISTS idx_qr_range_histories_batch_created ON qr_range_histories(actual_batch, created_at DESC);',
     );
+  }
+
+  Future<void> _ensureColumn(String table, String column, String type) async {
+    final rows = await _db.customSelect('PRAGMA table_info($table);').get();
+    final exists = rows.any((row) => row.data['name']?.toString() == column);
+    if (!exists) {
+      await _db.customStatement('ALTER TABLE $table ADD COLUMN $column $type;');
+    }
   }
 
   Future<void> insert(QrRangeHistoryEntry entry) async {
@@ -33,8 +46,8 @@ class QrRangeHistoryDao {
       '''
       INSERT INTO qr_range_histories (
         product_code, actual_batch, date_batch, start_serial, end_serial,
-        generated_count, ignored_count, scanned_count, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        generated_count, ignored_count, scanned_count, raw_anchor_content, scanned_codes_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       ''',
       [
         entry.productCode,
@@ -45,6 +58,8 @@ class QrRangeHistoryDao {
         entry.generatedCount,
         entry.ignoredCount,
         entry.scannedCount,
+        entry.rawAnchorContent,
+        jsonEncode(entry.scannedCodes),
         entry.createdAt.toIso8601String(),
       ],
     );
@@ -55,7 +70,7 @@ class QrRangeHistoryDao {
     final rows = await _db.customSelect(
       '''
       SELECT id, product_code, actual_batch, date_batch, start_serial, end_serial,
-             generated_count, ignored_count, scanned_count, created_at
+             generated_count, ignored_count, scanned_count, raw_anchor_content, scanned_codes_json, created_at
       FROM qr_range_histories
       ORDER BY created_at DESC, id DESC
       LIMIT ?
@@ -75,9 +90,22 @@ class QrRangeHistoryDao {
         generatedCount: row.read<int>('generated_count'),
         ignoredCount: row.read<int>('ignored_count'),
         scannedCount: row.read<int>('scanned_count'),
+        rawAnchorContent: row.read<String>('raw_anchor_content'),
+        scannedCodes: _decodeCodes(row.read<String>('scanned_codes_json')),
         createdAt: createdAt,
       );
     }).toList();
+  }
+
+  List<String> _decodeCodes(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const <String>[];
+    }
+    final parsed = jsonDecode(raw);
+    if (parsed is List) {
+      return parsed.map((e) => '$e').toList();
+    }
+    return const <String>[];
   }
 
   Future<void> deleteById(int id) async {
@@ -100,6 +128,8 @@ class QrRangeHistoryEntry {
     required this.generatedCount,
     required this.ignoredCount,
     required this.scannedCount,
+    required this.rawAnchorContent,
+    required this.scannedCodes,
     required this.createdAt,
   });
 
@@ -112,5 +142,7 @@ class QrRangeHistoryEntry {
   final int generatedCount;
   final int ignoredCount;
   final int scannedCount;
+  final String rawAnchorContent;
+  final List<String> scannedCodes;
   final DateTime createdAt;
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/qr_preview_history_dao.dart';
+import 'package:qrscan_flutter/features/qr/broken_box_code_screen.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_range_screen.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
@@ -29,6 +31,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   late final bool _ownsDatabase;
   late final QrPreviewHistoryDao _historyDao;
   String _lastSource = '扫码';
+  String _lastRawContent = '';
   final List<QrPreviewHistoryEntry> _history = <QrPreviewHistoryEntry>[];
 
   @override
@@ -110,6 +113,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
       );
       return;
     }
+    _lastRawContent = content;
     setState(() => _lastParsed = parsed);
     _openPreview();
   }
@@ -163,6 +167,9 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
         startSerial: buildResult.records.first.serial,
         endSerial: buildResult.records.last.serial,
         generatedCount: buildResult.records.length,
+        rawContent: _lastRawContent,
+        prefix: buildResult.group.prefix,
+        suffix: buildResult.group.suffix,
         createdAt: DateTime.now(),
       ),
     );
@@ -177,6 +184,45 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   Future<void> _clearHistory() async {
     await _historyDao.clearAll();
     await _loadHistory();
+  }
+
+  Future<void> _openHistoryPreview(QrPreviewHistoryEntry item) async {
+    final raw = item.rawContent.trim();
+    final parsed = QrParser.parse(raw);
+    if (parsed == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('历史记录缺少有效原始码，无法进入预览')),
+      );
+      return;
+    }
+    final start = int.tryParse(item.startSerial);
+    final end = int.tryParse(item.endSerial);
+    if (start == null || end == null || end < start) {
+      return;
+    }
+    final count = end - start + 1;
+    final result = QrParser.buildRecords(
+      prefix: parsed.prefix,
+      serialSeed: parsed.serial,
+      batch: parsed.batch,
+      suffix: parsed.suffix,
+      count: count,
+      randomTailEnabled: false,
+      startSerial: start,
+    );
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(
+          records: result.records,
+          scanIndex: result.scanIndex,
+          group: result.group,
+          initialAutoSlideSeconds: _autoSlideSeconds,
+        ),
+      ),
+    );
   }
 
   void _openNextGroup() {
@@ -289,6 +335,13 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                     MaterialPageRoute(builder: (_) => const QrRangeScreen()),
                   );
                 },
+                onOpenBroken: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BrokenBoxCodeScreen(database: _database),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _GenerateParamCard(
@@ -375,6 +428,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
+                      onTap: () => _openHistoryPreview(item),
                       dense: true,
                       title: Text(
                         '${item.source} | 批号 ${item.actualBatch}',
@@ -384,15 +438,34 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                         '$time\n${item.startSerial} ~ ${item.endSerial}（${item.generatedCount}张）',
                       ),
                       isThreeLine: true,
-                      trailing: IconButton(
-                        tooltip: '删除',
-                        onPressed: item.id == null
-                            ? null
-                            : () => _deleteHistory(item.id!),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
+                      trailing: Wrap(
+                        spacing: 2,
+                        children: [
+                          IconButton(
+                            tooltip: '复制原始码',
+                            onPressed: item.rawContent.isEmpty
+                                ? null
+                                : () {
+                                    Clipboard.setData(
+                                      ClipboardData(text: item.rawContent),
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('已复制原始完整码')),
+                                    );
+                                  },
+                            icon: const Icon(Icons.copy_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '删除',
+                            onPressed: item.id == null
+                                ? null
+                                : () => _deleteHistory(item.id!),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -412,12 +485,14 @@ class _ScanCard extends StatelessWidget {
     required this.onImportImage,
     required this.onManualInput,
     required this.onOpenRange,
+    required this.onOpenBroken,
   });
 
   final VoidCallback onScan;
   final VoidCallback onImportImage;
   final VoidCallback onManualInput;
   final VoidCallback onOpenRange;
+  final VoidCallback onOpenBroken;
 
   @override
   Widget build(BuildContext context) {
@@ -468,6 +543,15 @@ class _ScanCard extends StatelessWidget {
             onPressed: onManualInput,
             icon: const Icon(Icons.keyboard_outlined),
             label: const Text('手动输入'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonalIcon(
+            onPressed: onOpenBroken,
+            icon: const Icon(Icons.inventory_2_outlined),
+            label: const Text('破损箱码'),
           ),
         ),
       ],

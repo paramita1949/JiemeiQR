@@ -41,6 +41,43 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   GeofenceDailyState? _todayGeofenceState;
   bool _geofenceTesting = false;
 
+  Future<({double lat, double lng, String provider, double? accuracy})?>
+      _resolveFenceLocation() async {
+    final amap = await AttendanceGeofenceBridge.amapCurrentLocation();
+    if (amap != null) {
+      return (
+        lat: amap.latitude,
+        lng: amap.longitude,
+        provider: '高德',
+        accuracy: amap.accuracy,
+      );
+    }
+    Position? pos = await Geolocator.getLastKnownPosition();
+    try {
+      pos ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_LOCATE', 'system medium failed: $e');
+    }
+    try {
+      pos ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+    } catch (e) {
+      DebugEventLog.add('GEOFENCE_LOCATE', 'system high failed: $e');
+    }
+    if (pos == null) return null;
+    return (
+      lat: pos.latitude,
+      lng: pos.longitude,
+      provider: '系统',
+      accuracy: pos.accuracy,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -174,53 +211,33 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
 
     try {
-      DebugEventLog.add('GEOFENCE_LOCATE', 'begin Geolocator.getCurrentPosition');
-      Position? pos;
-      try {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'try accuracy=balanced');
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 5),
-        );
-      } catch (e) {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'balanced failed: $e');
-      }
-      if (pos != null) {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'balanced success');
-      } else {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'try accuracy=high');
-      }
-      try {
-        pos ??= await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 8),
-        );
-      } catch (e) {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'high failed: $e');
-      }
-      pos ??= await Geolocator.getLastKnownPosition();
-      if (pos == null) {
-        DebugEventLog.add('GEOFENCE_LOCATE', 'lastKnownPosition is null');
+      DebugEventLog.add('GEOFENCE_LOCATE', 'begin resolve fence location');
+      final resolved = await _resolveFenceLocation();
+      if (resolved == null) {
+        DebugEventLog.add('GEOFENCE_LOCATE', 'resolved location is null');
         if (!mounted) return;
         messenger.showSnackBar(
           const SnackBar(content: Text('定位超时：请先打开系统地图定位一次，再重试')),
         );
         return;
       }
-      final currentPos = pos;
       DebugEventLog.add(
         'GEOFENCE_LOCATE',
-        'position lat=${currentPos.latitude} lng=${currentPos.longitude} accuracy=${currentPos.accuracy}',
+        'position provider=${resolved.provider} lat=${resolved.lat} lng=${resolved.lng} accuracy=${resolved.accuracy}',
       );
       if (!mounted) return;
       setState(() {
-        _latController.text = currentPos.latitude.toStringAsFixed(6);
-        _lngController.text = currentPos.longitude.toStringAsFixed(6);
+        _latController.text = resolved.lat.toStringAsFixed(6);
+        _lngController.text = resolved.lng.toStringAsFixed(6);
       });
       await _saveGeofenceOnly(silent: true);
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('已获取当前位置：${_latController.text}, ${_lngController.text}')),
+        SnackBar(
+          content: Text(
+            '已使用${resolved.provider}定位更新围栏中心：${_latController.text}, ${_lngController.text}',
+          ),
+        ),
       );
     } catch (e) {
       DebugEventLog.add('GEOFENCE_LOCATE', 'get location failed: $e');
@@ -264,30 +281,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       return;
     }
 
-    Position? pos = await Geolocator.getLastKnownPosition();
-    if (pos != null) {
-      DebugEventLog.add(
-        'GEOFENCE_TEST',
-        'use lastKnown first lat=${pos.latitude} lng=${pos.longitude} accuracy=${pos.accuracy}',
-      );
-    }
-    try {
-      pos ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 3),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_TEST', 'medium failed: $e');
-    }
-    try {
-      pos ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 4),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_TEST', 'high failed: $e');
-    }
-    if (pos == null) {
+    final resolved = await _resolveFenceLocation();
+    if (resolved == null) {
       DebugEventLog.add('GEOFENCE_TEST', 'position_null');
       if (!mounted) return;
       messenger.showSnackBar(
@@ -296,18 +291,17 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       setState(() => _geofenceTesting = false);
       return;
     }
-    final currentPos = pos;
 
     final distance = Geolocator.distanceBetween(
-      currentPos.latitude,
-      currentPos.longitude,
+      resolved.lat,
+      resolved.lng,
       fenceLat,
       fenceLng,
     );
     final inside = distance <= radius;
     DebugEventLog.add(
       'GEOFENCE_TEST',
-      'distance=${distance.toStringAsFixed(1)} radius=$radius inside=$inside lat=${currentPos.latitude} lng=${currentPos.longitude}',
+      'distance=${distance.toStringAsFixed(1)} radius=$radius inside=$inside provider=${resolved.provider} lat=${resolved.lat} lng=${resolved.lng}',
     );
 
     if (inside) {
@@ -323,7 +317,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
         ),
         content: Text(
-          '当前定位：${currentPos.latitude.toStringAsFixed(6)}, ${currentPos.longitude.toStringAsFixed(6)}\n'
+          '当前定位（${resolved.provider}）：${resolved.lat.toStringAsFixed(6)}, ${resolved.lng.toStringAsFixed(6)}\n'
           '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
           '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
           '${inside ? '判定：已进入围栏（打开APP会自动上班签到）' : '判定：未进入围栏（不会自动签到）'}',

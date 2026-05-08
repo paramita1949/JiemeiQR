@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
@@ -460,6 +461,14 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         generatedCount: generatedCount,
         ignoredCount: _ignoredOutlierCount,
         scannedCount: _scans.length,
+        rawAnchorContent: _scans.isEmpty
+            ? ''
+            : '${_scans.first.prefix}${_scans.first.serial}${_scans.first.batch}${_scans.first.suffix}',
+        scannedCodes: _scans
+            .map(
+              (e) => '${e.prefix}${e.serial}${e.batch}${e.suffix}',
+            )
+            .toList(),
         createdAt: DateTime.now(),
       ),
     );
@@ -469,6 +478,43 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   Future<void> _deleteHistory(int id) async {
     await _historyDao.deleteById(id);
     await _loadHistory();
+  }
+
+  Future<void> _openRangeHistoryPreview(QrRangeHistoryEntry item) async {
+    final raw = item.rawAnchorContent.trim();
+    final parsed = QrParser.parse(raw);
+    if (parsed == null) {
+      _showMessage('历史记录缺少有效原始码，无法进入预览');
+      return;
+    }
+    final start = int.tryParse(item.startSerial);
+    final end = int.tryParse(item.endSerial);
+    if (start == null || end == null || end < start) {
+      return;
+    }
+    final count = end - start + 1;
+    final result = QrParser.buildRecords(
+      prefix: parsed.prefix,
+      serialSeed: parsed.serial,
+      batch: parsed.batch,
+      suffix: parsed.suffix,
+      count: count,
+      randomTailEnabled: false,
+      startSerial: start,
+    );
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(
+          records: result.records,
+          scanIndex: result.scanIndex,
+          group: result.group,
+          initialAutoSlideSeconds: 1.0,
+        ),
+      ),
+    );
   }
 
   @override
@@ -654,6 +700,7 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
+                      onTap: () => _openRangeHistoryPreview(item),
                       dense: true,
                       title: Text(
                         '${item.productCode} | ${item.actualBatch} | ${item.startSerial}~${item.endSerial}',
@@ -661,14 +708,34 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
                       subtitle: Text(
                         '生成${item.generatedCount}张 | 扫描${item.scannedCount}箱 | 忽略${item.ignoredCount}',
                       ),
-                      trailing: IconButton(
-                        tooltip: '删除',
-                        onPressed:
-                            item.id == null ? null : () => _deleteHistory(item.id!),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
+                      trailing: Wrap(
+                        spacing: 2,
+                        children: [
+                          IconButton(
+                            tooltip: '复制完整码',
+                            onPressed: item.scannedCodes.isEmpty
+                                ? null
+                                : () {
+                                    Clipboard.setData(
+                                      ClipboardData(
+                                        text: item.scannedCodes.join('\n'),
+                                      ),
+                                    );
+                                    _showMessage('已复制完整码');
+                                  },
+                            icon: const Icon(Icons.copy_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '删除',
+                            onPressed: item.id == null
+                                ? null
+                                : () => _deleteHistory(item.id!),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
