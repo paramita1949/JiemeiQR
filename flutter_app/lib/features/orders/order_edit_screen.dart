@@ -438,14 +438,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       Navigator.of(context, rootNavigator: true).pop();
       final rateLimitInfo = ModelScopeWaybillOcrService.lastRateLimitInfo;
       final rateLimitText = rateLimitInfo?.summaryText();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rateLimitText == null
-                ? error.message
-                : '${error.message}\n$rateLimitText',
-          ),
-        ),
+      _showOcrFeedback(
+        rateLimitText == null
+            ? error.message
+            : '${error.message}\n$rateLimitText',
+        duration: const Duration(seconds: 4),
       );
     } catch (_) {
       if (!mounted) {
@@ -528,13 +525,22 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     }
     final rateLimitText =
         ModelScopeWaybillOcrService.lastRateLimitInfo?.summaryText();
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showOcrFeedback(
+      rateLimitText == null ? '识别明细已录入' : '识别明细已录入\n$rateLimitText',
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _showOcrFeedback(String message, {required Duration duration}) {
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          rateLimitText == null
-              ? '识别明细已录入'
-              : '识别明细已录入\n$rateLimitText',
-        ),
+        content: Text(message),
+        duration: duration,
       ),
     );
   }

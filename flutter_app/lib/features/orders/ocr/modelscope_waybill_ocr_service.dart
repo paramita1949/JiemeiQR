@@ -27,7 +27,7 @@ class ModelScopeRateLimitInfo {
         headers['x-ratelimit-remaining-requests'];
   }
 
-  String summaryText() {
+  String? summaryText() {
     final parts = <String>[];
     if (remaining != null && remaining!.trim().isNotEmpty) {
       parts.add('剩余次数: ${remaining!.trim()}');
@@ -37,7 +37,7 @@ class ModelScopeRateLimitInfo {
       parts.add('建议等待: ${retry}s');
     }
     if (parts.isEmpty) {
-      return '魔搭限流信息未返回';
+      return null;
     }
     return '魔搭限流 ${parts.join('，')}';
   }
