@@ -48,8 +48,6 @@ class AiOcrConfig {
   ];
   static const defaultModelScopeModelPresets = [
     defaultModelScopeModel,
-    'Qwen/Qwen2.5-VL-72B-Instruct',
-    'baidu-qianfan/Qianfan-OCR',
   ];
   static const defaultOpenRouterModelPresets = [
     defaultOpenRouterModel,
@@ -145,7 +143,7 @@ class AiOcrConfig {
       modelscopeToken: json['modelscopeToken']?.toString() ?? '',
       modelscopeModel:
           json['modelscopeModel']?.toString().trim().isNotEmpty == true
-              ? json['modelscopeModel'].toString().trim()
+              ? _normalizeModelScopeModel(json['modelscopeModel'].toString())
               : defaultModelScopeModel,
       openRouterApiKey: json['openRouterApiKey']?.toString() ?? '',
       openRouterModel:
@@ -160,6 +158,7 @@ class AiOcrConfig {
         json['modelScopeModelPresets'],
         fallback: defaultModelScopeModelPresets,
         ensureIncludes: defaultModelScopeModelPresets,
+        excludeModels: _removedModelScopeModels,
       ),
       openRouterModelPresets: _decodePresetList(
         json['openRouterModelPresets'],
@@ -301,11 +300,13 @@ List<String> _decodePresetList(
   Object? raw, {
   required List<String> fallback,
   List<String> ensureIncludes = const [],
+  Set<String> excludeModels = const {},
 }) {
   final source = raw is List ? raw : fallback;
   final values = source
       .map((item) => item.toString().trim())
       .where((item) => item.isNotEmpty)
+      .where((item) => !excludeModels.contains(item))
       .toSet()
       .toList();
   if (values.isEmpty) {
@@ -318,4 +319,17 @@ List<String> _decodePresetList(
     }
   }
   return values;
+}
+
+const Set<String> _removedModelScopeModels = {
+  'Qwen/Qwen2.5-VL-72B-Instruct',
+  'baidu-qianfan/Qianfan-OCR',
+};
+
+String _normalizeModelScopeModel(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || _removedModelScopeModels.contains(value)) {
+    return AiOcrConfig.defaultModelScopeModel;
+  }
+  return value;
 }
