@@ -84,15 +84,59 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final bytes = await image.readAsBytes();
     final base64Image = base64Encode(bytes);
     final uri = Uri.parse(_completionUrl);
-    final body = {
-      'model': effectiveModel,
+    final primaryPrompt = _promptByPreset(promptPreset);
+    const fallbackPrompt = _ocrPromptGeneral;
+    final attempts = <String>[
+      primaryPrompt,
+      primaryPrompt,
+      fallbackPrompt,
+    ];
+    ModelScopeWaybillOcrException? lastError;
+    for (var i = 0; i < attempts.length; i += 1) {
+      final body = _buildBody(
+        model: effectiveModel,
+        prompt: attempts[i],
+        base64Image: base64Image,
+      );
+      try {
+        final responseText = await _httpPost(uri, body, normalizedApiKey);
+        final draft = _parseResponse(responseText);
+        if (_isRecognizedDraftEmpty(draft)) {
+          lastError = ModelScopeWaybillOcrException(
+            '魔搭返回空结果（第${i + 1}次）',
+          );
+          continue;
+        }
+        return draft;
+      } on ModelScopeWaybillOcrException catch (error) {
+        lastError = error;
+        if (_isRetryableEmptyError(error.message) && i < attempts.length - 1) {
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw ModelScopeWaybillOcrException(
+      '未识别到任何内容。可能原因：图片模糊/反光/倾斜、文字过小，或模型当次返回为空。'
+      '建议：重拍更清晰正面照片后重试。'
+      '${lastError == null ? '' : '（最后一次：${lastError.message}）'}',
+    );
+  }
+
+  Map<String, Object?> _buildBody({
+    required String model,
+    required String prompt,
+    required String base64Image,
+  }) {
+    return {
+      'model': model,
       'messages': [
         {
           'role': 'user',
           'content': [
             {
               'type': 'text',
-              'text': _promptByPreset(promptPreset),
+              'text': prompt,
             },
             {
               'type': 'image_url',
@@ -104,9 +148,6 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
       'response_format': {'type': 'json_object'},
       'temperature': 0.0,
     };
-
-    final responseText = await _httpPost(uri, body, normalizedApiKey);
-    return _parseResponse(responseText);
   }
 
   WaybillOcrDraft _parseResponse(String responseText) {
@@ -198,6 +239,21 @@ String _normalizeApiKey(String raw) {
     return value.substring(7).trim();
   }
   return value;
+}
+
+bool _isRecognizedDraftEmpty(WaybillOcrDraft draft) {
+  final hasHeader = draft.waybillNo.trim().isNotEmpty ||
+      draft.merchantName.trim().isNotEmpty ||
+      draft.orderDateText.trim().isNotEmpty;
+  final hasRows = draft.rows.any((row) => row.hasContent && row.boxes > 0);
+  return !hasHeader && !hasRows;
+}
+
+bool _isRetryableEmptyError(String message) {
+  return message.contains('未返回识别结果') ||
+      message.contains('返回内容为空') ||
+      message.contains('返回文本为空') ||
+      message.contains('返回空结果');
 }
 
 String _promptByPreset(String preset) {

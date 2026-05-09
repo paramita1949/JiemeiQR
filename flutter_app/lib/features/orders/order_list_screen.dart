@@ -1008,7 +1008,7 @@ class _RestockWaybillSheet extends StatelessWidget {
                     itemCount: sortedLines.length,
                     itemBuilder: (context, index) {
                       final line = sortedLines[index];
-                      final status = _statusMeta(line.status);
+                      final status = _restockLineStatusMeta(line);
                       return InkWell(
                         borderRadius: BorderRadius.circular(14),
                         onTap: () => onOpenOrder(line.orderId),
@@ -1084,6 +1084,22 @@ class _RestockWaybillSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+_StatusMeta _restockLineStatusMeta(OrderRestockWaybillLine line) {
+  if (line.status == OrderStatus.done) {
+    return _statusMeta(OrderStatus.done);
+  }
+  if (line.isFullyPicked) {
+    return const _StatusMeta('已拣货', Color(0xFF2563EB));
+  }
+  if (line.isPartiallyPicked) {
+    return _StatusMeta(
+      '部分拣货 ${line.pickedLineCount}/${line.lineCount}',
+      const Color(0xFFF59E0B),
+    );
+  }
+  return _statusMeta(OrderStatus.pending);
 }
 
 Color _restockQuantityColor(OrderRestockAggregate row) {

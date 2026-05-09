@@ -716,7 +716,9 @@ class OrderDao {
         o.order_date,
         o.status,
         SUM(oi.boxes) AS total_boxes,
-        MAX(oi.boxes_per_board) AS boxes_per_board
+        MAX(oi.boxes_per_board) AS boxes_per_board,
+        SUM(CASE WHEN oi.is_picked = 1 THEN 1 ELSE 0 END) AS picked_line_count,
+        COUNT(*) AS line_count
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
       INNER JOIN products p ON p.id = oi.product_id
@@ -743,6 +745,8 @@ class OrderDao {
             status: OrderStatus.values[(row.data['status'] as int?) ?? 0],
             totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
             boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
+            pickedLineCount: (row.data['picked_line_count'] as int?) ?? 0,
+            lineCount: (row.data['line_count'] as int?) ?? 0,
           ),
         )
         .where((row) => row.orderId > 0)
@@ -1288,6 +1292,8 @@ class OrderRestockWaybillLine {
     required this.status,
     required this.totalBoxes,
     required this.boxesPerBoard,
+    required this.pickedLineCount,
+    required this.lineCount,
   });
 
   final int orderId;
@@ -1297,6 +1303,14 @@ class OrderRestockWaybillLine {
   final OrderStatus status;
   final int totalBoxes;
   final int boxesPerBoard;
+  final int pickedLineCount;
+  final int lineCount;
+
+  bool get isFullyPicked =>
+      lineCount > 0 && pickedLineCount > 0 && pickedLineCount == lineCount;
+
+  bool get isPartiallyPicked =>
+      pickedLineCount > 0 && pickedLineCount < lineCount;
 }
 
 class _ExceptionOrderIdsPage {

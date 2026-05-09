@@ -438,10 +438,12 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       Navigator.of(context, rootNavigator: true).pop();
       final rateLimitInfo = ModelScopeWaybillOcrService.lastRateLimitInfo;
       final rateLimitText = rateLimitInfo?.summaryText();
+      final diagnosis = _diagnoseModelScopeFailure(error.message);
       _showOcrFeedback(
-        rateLimitText == null
-            ? error.message
-            : '${error.message}\n$rateLimitText',
+        [
+          diagnosis,
+          if (rateLimitText != null) rateLimitText,
+        ].join('\n'),
         duration: const Duration(seconds: 4),
       );
     } catch (_) {
@@ -543,6 +545,30 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         duration: duration,
       ),
     );
+  }
+
+  String _diagnoseModelScopeFailure(String rawMessage) {
+    final message = rawMessage.trim();
+    if (message.contains('429') || message.contains('限流')) {
+      return '$message\n定位建议：当前是接口限流，稍后重试或避开高峰。';
+    }
+    if (message.contains('未识别到任何内容') ||
+        message.contains('返回空结果') ||
+        message.contains('返回文本为空') ||
+        message.contains('返回内容为空') ||
+        message.contains('未返回识别结果')) {
+      return '$message\n定位建议：优先检查照片是否模糊、反光、倾斜或裁切不完整。';
+    }
+    if (message.contains('400')) {
+      return '$message\n定位建议：通常是图片尺寸/请求参数问题，请重新拍照后重试。';
+    }
+    if (message.contains('401') || message.contains('403')) {
+      return '$message\n定位建议：请检查魔搭 Token 是否有效、是否有该模型权限。';
+    }
+    if (message.contains('500') || message.contains('502') || message.contains('503')) {
+      return '$message\n定位建议：服务端波动，建议稍后重试。';
+    }
+    return '$message\n定位建议：请重试一次；若持续失败，换更清晰正拍照片。';
   }
 
   Future<void> _save({
