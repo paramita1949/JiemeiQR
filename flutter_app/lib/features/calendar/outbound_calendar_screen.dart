@@ -31,6 +31,16 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   late DateTimeRange _range;
   late Future<_CalendarState> _stateFuture;
   int? _selectedOrderId;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  _OutboundSearchType _searchType = _OutboundSearchType.waybill;
+  _SearchRangePreset _searchRangePreset = _SearchRangePreset.week;
+  DateTimeRange? _searchCustomRange;
+  bool _searchLoading = false;
+  int _searchVersion = 0;
+  List<_OutboundSearchSuggestion> _searchSuggestions =
+      const <_OutboundSearchSuggestion>[];
+  List<_OutboundSearchRow> _searchRows = const <_OutboundSearchRow>[];
 
   @override
   void initState() {
@@ -46,6 +56,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     if (_ownsDatabase) {
       _database.close();
     }
@@ -60,6 +72,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
           future: _stateFuture,
           builder: (context, snapshot) {
             final state = snapshot.data;
+            final hasSearchQuery = _searchController.text.trim().isNotEmpty;
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 42),
               children: [
@@ -80,6 +93,22 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                   onCustom: _pickCustomRange,
                 ),
                 const SizedBox(height: 10),
+                _OutboundSearchPanel(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  searchType: _searchType,
+                  rangePreset: _searchRangePreset,
+                  customRange: _searchCustomRange,
+                  suggestions: _searchSuggestions,
+                  loading: _searchLoading,
+                  onTypeChanged: _onSearchTypeChanged,
+                  onRangePresetChanged: _onSearchRangePresetChanged,
+                  onPickCustomRange: _pickSearchCustomRange,
+                  onChanged: _onSearchChanged,
+                  onSuggestionTap: _onSuggestionTap,
+                  onClear: _clearSearch,
+                ),
+                const SizedBox(height: 10),
                 Text(
                   _rangeText(_range),
                   style: const TextStyle(
@@ -92,24 +121,29 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                 if (snapshot.connectionState != ConnectionState.done)
                   const Center(child: CircularProgressIndicator())
                 else ...[
-                  _OrderSummaryCard(
-                    orders: state?.orders ?? const <_OutboundOrderSummary>[],
-                    selectedOrderId: _selectedOrderId,
-                    onSelected: _selectOrder,
-                  ),
-                  const SizedBox(height: 10),
-                  _OutboundDetailCard(
-                    title: _detailTitle(state),
-                    rows: _detailRows(state),
-                    batchCodesByProductDate:
-                        state?.batchCodesByProductDate ??
-                            const <String, List<String>>{},
-                  ),
+                  if (hasSearchQuery) ...[
+                    _OutboundSearchResultCard(rows: _searchRows),
+                  ] else ...[
+                    _OrderSummaryCard(
+                      orders: state?.orders ?? const <_OutboundOrderSummary>[],
+                      selectedOrderId: _selectedOrderId,
+                      onSelected: _selectOrder,
+                    ),
+                    const SizedBox(height: 10),
+                    _OutboundDetailCard(
+                      title: _detailTitle(state),
+                      rows: _detailRows(state),
+                      batchCodesByProductDate:
+                          state?.batchCodesByProductDate ??
+                              const <String, List<String>>{},
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: FilledButton(
+                          key: const Key('outboundViewOrdersButton'),
                           onPressed: _openOrders,
                           child: const Text('查看订单信息'),
                         ),
@@ -117,6 +151,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: OutlinedButton(
+                          key: const Key('outboundViewInventoryButton'),
                           onPressed: _openInventory,
                           child: const Text('查看库存明细'),
                         ),
@@ -275,6 +310,322 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     });
   }
 
+  void _onSearchTypeChanged(_OutboundSearchType type) {
+    setState(() {
+      _searchType = type;
+      if (type == _OutboundSearchType.waybill) {
+        _searchRangePreset = _SearchRangePreset.all;
+      } else if (_searchRangePreset == _SearchRangePreset.all) {
+        _searchRangePreset = _SearchRangePreset.week;
+      }
+    });
+    _refreshSearch();
+  }
+
+  void _onSearchRangePresetChanged(_SearchRangePreset preset) {
+    if (_searchType == _OutboundSearchType.waybill) {
+      return;
+    }
+    setState(() {
+      _searchRangePreset = preset;
+    });
+    _refreshSearch();
+  }
+
+  void _onSearchChanged(String _) {
+    _refreshSearch();
+  }
+
+  Future<void> _onSuggestionTap(_OutboundSearchSuggestion suggestion) async {
+    _searchController.text = suggestion.value;
+    _searchController.selection = TextSelection.collapsed(
+      offset: _searchController.text.length,
+    );
+    await _refreshSearch();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {
+      _searchSuggestions = const <_OutboundSearchSuggestion>[];
+      _searchRows = const <_OutboundSearchRow>[];
+    });
+  }
+
+  Future<void> _pickSearchCustomRange() async {
+    if (_searchType == _OutboundSearchType.waybill) {
+      return;
+    }
+    final now = DateTime.now();
+    final initial = _searchCustomRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, now.day - 6),
+          end: DateTime(now.year, now.month, now.day),
+        );
+    final picked = await showDateRangePicker(
+      context: context,
+      locale: const Locale('zh', 'CN'),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 5),
+      initialDateRange: initial,
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _searchCustomRange = DateTimeRange(
+        start: _dateOnly(picked.start),
+        end: _dateOnly(picked.end),
+      );
+      _searchRangePreset = _SearchRangePreset.custom;
+    });
+    await _refreshSearch();
+  }
+
+  DateTimeRange? _effectiveSearchRange() {
+    if (_searchType == _OutboundSearchType.waybill) {
+      return null;
+    }
+    final today = _dateOnly(DateTime.now());
+    switch (_searchRangePreset) {
+      case _SearchRangePreset.all:
+        return null;
+      case _SearchRangePreset.today:
+        return DateTimeRange(start: today, end: today);
+      case _SearchRangePreset.yesterday:
+        final yesterday = today.subtract(const Duration(days: 1));
+        return DateTimeRange(start: yesterday, end: yesterday);
+      case _SearchRangePreset.week:
+        return DateTimeRange(
+          start: today.subtract(const Duration(days: 6)),
+          end: today,
+        );
+      case _SearchRangePreset.month:
+        return DateTimeRange(
+          start: DateTime(today.year, today.month, 1),
+          end: today,
+        );
+      case _SearchRangePreset.custom:
+        return _searchCustomRange;
+    }
+  }
+
+  Future<void> _refreshSearch() async {
+    final keyword = _searchController.text.trim();
+    final version = ++_searchVersion;
+    if (keyword.isEmpty) {
+      setState(() {
+        _searchLoading = false;
+        _searchSuggestions = const <_OutboundSearchSuggestion>[];
+        _searchRows = const <_OutboundSearchRow>[];
+      });
+      return;
+    }
+    setState(() => _searchLoading = true);
+    final range = _effectiveSearchRange();
+    final suggestions = await _querySearchSuggestions(
+      keyword: keyword,
+      type: _searchType,
+      range: range,
+    );
+    final rows = await _querySearchRows(
+      keyword: keyword,
+      type: _searchType,
+      range: range,
+    );
+    if (!mounted || version != _searchVersion) {
+      return;
+    }
+    setState(() {
+      _searchLoading = false;
+      _searchSuggestions = suggestions;
+      _searchRows = rows;
+    });
+  }
+
+  Future<List<_OutboundSearchSuggestion>> _querySearchSuggestions({
+    required String keyword,
+    required _OutboundSearchType type,
+    required DateTimeRange? range,
+  }) async {
+    final where = <String>[
+      'sm.type = ${StockMovementType.orderOut.index}',
+    ];
+    final vars = <Variable<Object>>[];
+    final like = '%${keyword.toLowerCase()}%';
+    switch (type) {
+      case _OutboundSearchType.waybill:
+        where.add('LOWER(o.waybill_no) LIKE ?');
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.merchant:
+        where.add('LOWER(o.merchant_name) LIKE ?');
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.product:
+        where.add('(LOWER(p.code) LIKE ? OR LOWER(p.name) LIKE ?)');
+        vars.add(Variable.withString(like));
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.batch:
+        where.add('(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
+        vars.add(Variable.withString(like));
+        vars.add(Variable.withString(like));
+        break;
+    }
+    if (range != null) {
+      final start = DateTime(range.start.year, range.start.month, range.start.day);
+      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+      where.add('sm.movement_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    final selectSql = switch (type) {
+      _OutboundSearchType.waybill =>
+        'o.waybill_no AS value, o.merchant_name AS subtitle, MAX(sm.movement_date) AS sort_date',
+      _OutboundSearchType.merchant =>
+        'o.merchant_name AS value, MAX(o.waybill_no) AS subtitle, MAX(sm.movement_date) AS sort_date',
+      _OutboundSearchType.product =>
+        "p.code AS value, b.actual_batch || ' · ' || b.date_batch AS subtitle, MAX(sm.movement_date) AS sort_date",
+      _OutboundSearchType.batch =>
+        "b.actual_batch AS value, p.code || ' · ' || b.date_batch AS subtitle, MAX(sm.movement_date) AS sort_date",
+    };
+    final groupBySql = switch (type) {
+      _OutboundSearchType.waybill => 'o.waybill_no, o.merchant_name',
+      _OutboundSearchType.merchant => 'o.merchant_name',
+      _OutboundSearchType.product => 'p.code, b.actual_batch, b.date_batch',
+      _OutboundSearchType.batch => 'b.actual_batch, p.code, b.date_batch',
+    };
+    final rows = await _database.customSelect(
+      '''
+      SELECT $selectSql
+      FROM stock_movements sm
+      INNER JOIN orders o ON o.id = sm.order_id
+      INNER JOIN batches b ON b.id = sm.batch_id
+      INNER JOIN products p ON p.id = b.product_id
+      WHERE ${where.join(' AND ')}
+      GROUP BY $groupBySql
+      ORDER BY sort_date DESC
+      LIMIT 10
+      ''',
+      variables: vars,
+      readsFrom: {
+        _database.stockMovements,
+        _database.orders,
+        _database.batches,
+        _database.products,
+      },
+    ).get();
+    return rows
+        .map(
+          (row) => _OutboundSearchSuggestion(
+            value: row.data['value']?.toString() ?? '',
+            subtitle: row.data['subtitle']?.toString() ?? '',
+          ),
+        )
+        .where((row) => row.value.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<List<_OutboundSearchRow>> _querySearchRows({
+    required String keyword,
+    required _OutboundSearchType type,
+    required DateTimeRange? range,
+  }) async {
+    final where = <String>[
+      'sm.type = ${StockMovementType.orderOut.index}',
+    ];
+    final vars = <Variable<Object>>[];
+    final like = '%${keyword.toLowerCase()}%';
+    switch (type) {
+      case _OutboundSearchType.waybill:
+        where.add('LOWER(o.waybill_no) LIKE ?');
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.merchant:
+        where.add('LOWER(o.merchant_name) LIKE ?');
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.product:
+        where.add('(LOWER(p.code) LIKE ? OR LOWER(p.name) LIKE ?)');
+        vars.add(Variable.withString(like));
+        vars.add(Variable.withString(like));
+        break;
+      case _OutboundSearchType.batch:
+        where.add('(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
+        vars.add(Variable.withString(like));
+        vars.add(Variable.withString(like));
+        break;
+    }
+    if (range != null) {
+      final start = DateTime(range.start.year, range.start.month, range.start.day);
+      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+      where.add('sm.movement_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        o.id AS order_id,
+        o.waybill_no,
+        o.merchant_name,
+        p.code AS product_code,
+        b.actual_batch,
+        b.date_batch,
+        SUM(sm.boxes) AS total_boxes,
+        MAX(sm.movement_date) AS movement_date
+      FROM stock_movements sm
+      INNER JOIN orders o ON o.id = sm.order_id
+      INNER JOIN batches b ON b.id = sm.batch_id
+      INNER JOIN products p ON p.id = b.product_id
+      WHERE ${where.join(' AND ')}
+      GROUP BY o.id, o.waybill_no, o.merchant_name, p.code, b.actual_batch, b.date_batch
+      ORDER BY movement_date DESC, o.waybill_no ASC
+      LIMIT 200
+      ''',
+      variables: vars,
+      readsFrom: {
+        _database.stockMovements,
+        _database.orders,
+        _database.batches,
+        _database.products,
+      },
+    ).get();
+    return rows
+        .map((row) => _OutboundSearchRow(
+              orderId: row.data['order_id'] as int? ?? 0,
+              waybillNo: row.data['waybill_no']?.toString() ?? '',
+              merchantName: row.data['merchant_name']?.toString() ?? '',
+              productCode: row.data['product_code']?.toString() ?? '',
+              actualBatch: row.data['actual_batch']?.toString() ?? '',
+              dateBatch: row.data['date_batch']?.toString() ?? '',
+              boxes: row.data['total_boxes'] as int? ?? 0,
+              movementDate: _parseSqlDateTime(row.data['movement_date']),
+            ))
+        .where((row) => row.orderId > 0)
+        .toList(growable: false);
+  }
+
+  DateTime _parseSqlDateTime(Object? value) {
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      if (value > 1000000000000000) {
+        return DateTime.fromMicrosecondsSinceEpoch(value);
+      }
+      if (value > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+    }
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime(1970);
+    }
+    return DateTime(1970);
+  }
+
   void _selectOrder(int orderId) {
     setState(() {
       _selectedOrderId = _selectedOrderId == orderId ? null : orderId;
@@ -399,6 +750,330 @@ class _OutboundOrderSummary {
   final String waybillNo;
   final String merchantName;
   final int boxes;
+}
+
+enum _OutboundSearchType { waybill, merchant, product, batch }
+
+enum _SearchRangePreset { all, today, yesterday, week, month, custom }
+
+class _OutboundSearchSuggestion {
+  const _OutboundSearchSuggestion({
+    required this.value,
+    required this.subtitle,
+  });
+
+  final String value;
+  final String subtitle;
+}
+
+class _OutboundSearchRow {
+  const _OutboundSearchRow({
+    required this.orderId,
+    required this.waybillNo,
+    required this.merchantName,
+    required this.productCode,
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.boxes,
+    required this.movementDate,
+  });
+
+  final int orderId;
+  final String waybillNo;
+  final String merchantName;
+  final String productCode;
+  final String actualBatch;
+  final String dateBatch;
+  final int boxes;
+  final DateTime movementDate;
+}
+
+class _OutboundSearchPanel extends StatelessWidget {
+  const _OutboundSearchPanel({
+    required this.controller,
+    required this.focusNode,
+    required this.searchType,
+    required this.rangePreset,
+    required this.customRange,
+    required this.suggestions,
+    required this.loading,
+    required this.onTypeChanged,
+    required this.onRangePresetChanged,
+    required this.onPickCustomRange,
+    required this.onChanged,
+    required this.onSuggestionTap,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final _OutboundSearchType searchType;
+  final _SearchRangePreset rangePreset;
+  final DateTimeRange? customRange;
+  final List<_OutboundSearchSuggestion> suggestions;
+  final bool loading;
+  final ValueChanged<_OutboundSearchType> onTypeChanged;
+  final ValueChanged<_SearchRangePreset> onRangePresetChanged;
+  final VoidCallback onPickCustomRange;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<_OutboundSearchSuggestion> onSuggestionTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeEnabled = searchType != _OutboundSearchType.waybill;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _typeChip(
+                label: '运单号',
+                type: _OutboundSearchType.waybill,
+              ),
+              _typeChip(
+                label: '商家',
+                type: _OutboundSearchType.merchant,
+              ),
+              _typeChip(
+                label: '产品',
+                type: _OutboundSearchType.product,
+              ),
+              _typeChip(
+                label: '批号',
+                type: _OutboundSearchType.batch,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: controller,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: switch (searchType) {
+                _OutboundSearchType.waybill => '输入运单号，如 169',
+                _OutboundSearchType.merchant => '输入商家，如 鸿旺',
+                _OutboundSearchType.product => '输入产品编号/名称，如 72067',
+                _OutboundSearchType.batch => '输入实际批号或日期批号',
+              },
+              suffixIcon: controller.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: onClear,
+                      icon: const Icon(Icons.close),
+                    ),
+              filled: true,
+              fillColor: const Color(0xFFF7F9FC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (!timeEnabled)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '运单号按全历史唯一匹配',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _rangeChip('今日', _SearchRangePreset.today),
+                  const SizedBox(width: 6),
+                  _rangeChip('昨日', _SearchRangePreset.yesterday),
+                  const SizedBox(width: 6),
+                  _rangeChip('一周', _SearchRangePreset.week),
+                  const SizedBox(width: 6),
+                  _rangeChip('一月', _SearchRangePreset.month),
+                  const SizedBox(width: 6),
+                  _rangeChip('全部', _SearchRangePreset.all),
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    label: Text(
+                      customRange == null
+                          ? '自定义'
+                          : '${_formatDate(customRange!.start)}-${_formatDate(customRange!.end)}',
+                    ),
+                    onPressed: onPickCustomRange,
+                  ),
+                ],
+              ),
+            ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          if (suggestions.isNotEmpty && focusNode.hasFocus) ...[
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 220),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: suggestions.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = suggestions[index];
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      item.value,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: item.subtitle.isEmpty
+                        ? null
+                        : Text(
+                            item.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                    onTap: () => onSuggestionTap(item),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _typeChip({
+    required String label,
+    required _OutboundSearchType type,
+  }) {
+    final selected = searchType == type;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTypeChanged(type),
+    );
+  }
+
+  Widget _rangeChip(String label, _SearchRangePreset preset) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: rangePreset == preset,
+      onSelected: (_) => onRangePresetChanged(preset),
+    );
+  }
+}
+
+class _OutboundSearchResultCard extends StatelessWidget {
+  const _OutboundSearchResultCard({
+    required this.rows,
+  });
+
+  final List<_OutboundSearchRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final waybills = rows.map((e) => e.orderId).toSet().length;
+    final products = rows.map((e) => e.productCode).toSet().length;
+    final batches =
+        rows.map((e) => '${e.productCode}|${e.actualBatch}|${e.dateBatch}').toSet().length;
+    final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.boxes);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '反查结果 ${rows.length} 条',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '运单 $waybills 单 · 箱数 $totalBoxes 箱 · 产品 $products 个 · 批号 $batches 个',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (rows.isEmpty)
+            const Text('当前条件无已出库记录', style: TextStyle(color: AppTheme.textSecondary))
+          else
+            ...rows.map((row) {
+              return Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '运单 ${row.waybillNo} · ${row.merchantName}',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.boxes}箱',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '出库时间 ${_formatDate(row.movementDate)}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
 }
 
 class _TotalCard extends StatelessWidget {
