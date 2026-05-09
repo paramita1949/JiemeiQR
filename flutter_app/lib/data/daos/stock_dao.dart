@@ -122,8 +122,12 @@ class StockDao {
         WHERE movement_date <= ?
         GROUP BY batch_id
       ) m ON m.batch_id = b.id
+      WHERE b.created_at <= ?
       ''',
-      variables: [Variable.withDateTime(snapshotAt)],
+      variables: [
+        Variable.withDateTime(snapshotAt),
+        Variable.withDateTime(snapshotAt),
+      ],
       readsFrom: {
         _database.batches,
         _database.products,
