@@ -934,12 +934,14 @@ class OrderDao {
           item.boxes,
           tsRequired: tsRequired,
           isException: item.isException,
+          isPicked: item.isPicked,
           location: location,
         ),
         ifAbsent: () => _OrderItemStats(
           item.boxes,
           tsRequired: tsRequired,
           isException: item.isException,
+          isPicked: item.isPicked,
           location: location,
         ),
       );
@@ -956,6 +958,7 @@ class OrderDao {
           status: order.status,
           itemCount: stats?.count ?? 0,
           totalBoxes: stats?.totalBoxes ?? 0,
+          pickedItemCount: stats?.pickedCount ?? 0,
           hasTsRequired: stats?.hasTsRequired ?? false,
           hasException: stats?.hasException ?? false,
           locationsText: stats?.locationsText ?? '',
@@ -1221,6 +1224,7 @@ class OrderSummary {
     required this.status,
     required this.itemCount,
     required this.totalBoxes,
+    required this.pickedItemCount,
     required this.hasTsRequired,
     required this.hasException,
     required this.locationsText,
@@ -1234,6 +1238,7 @@ class OrderSummary {
   final OrderStatus status;
   final int itemCount;
   final int totalBoxes;
+  final int pickedItemCount;
   final bool hasTsRequired;
   final bool hasException;
   final String locationsText;
@@ -1367,9 +1372,11 @@ class _OrderItemStats {
     this.totalBoxes, {
     required bool tsRequired,
     required bool isException,
+    required bool isPicked,
     String? location,
   })  : hasTsRequired = tsRequired,
-        hasException = isException {
+        hasException = isException,
+        pickedCount = isPicked ? 1 : 0 {
     if (location != null && location.isNotEmpty) {
       _locations.add(location);
     }
@@ -1377,6 +1384,7 @@ class _OrderItemStats {
 
   int count = 1;
   int totalBoxes;
+  int pickedCount;
   bool hasTsRequired;
   bool hasException;
   final Set<String> _locations = <String>{};
@@ -1396,10 +1404,14 @@ class _OrderItemStats {
     int boxes, {
     required bool tsRequired,
     required bool isException,
+    required bool isPicked,
     String? location,
   }) {
     count += 1;
     totalBoxes += boxes;
+    if (isPicked) {
+      pickedCount += 1;
+    }
     hasTsRequired = hasTsRequired || tsRequired;
     hasException = hasException || isException;
     if (location != null && location.isNotEmpty) {

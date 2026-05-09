@@ -747,6 +747,8 @@ class _OrderCard extends StatelessWidget {
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            _OrderPickProgress(order: order),
           ],
         ),
       ),
@@ -1093,13 +1095,48 @@ _StatusMeta _restockLineStatusMeta(OrderRestockWaybillLine line) {
   if (line.isFullyPicked) {
     return const _StatusMeta('已拣货', Color(0xFF2563EB));
   }
-  if (line.isPartiallyPicked) {
-    return _StatusMeta(
-      '部分拣货 ${line.pickedLineCount}/${line.lineCount}',
-      const Color(0xFFF59E0B),
+  return _statusMeta(OrderStatus.pending);
+}
+
+class _OrderPickProgress extends StatelessWidget {
+  const _OrderPickProgress({required this.order});
+
+  final OrderSummary order;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = order.itemCount;
+    final picked = (order.status == OrderStatus.done ||
+            order.status == OrderStatus.picked)
+        ? total
+        : order.pickedItemCount.clamp(0, total);
+    final progress = total <= 0 ? 0.0 : picked / total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '拣货进度 $picked/$total',
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            minHeight: 6,
+            value: progress,
+            backgroundColor: const Color(0xFFE5E7EB),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              progress >= 1 ? const Color(0xFF16A34A) : const Color(0xFF2563EB),
+            ),
+          ),
+        ),
+      ],
     );
   }
-  return _statusMeta(OrderStatus.pending);
 }
 
 Color _restockQuantityColor(OrderRestockAggregate row) {
