@@ -532,6 +532,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       '[GEOFENCE_',
       '[PRECHECKIN]',
       '[PERMISSION]',
+      '[OUTBOUND]',
     ];
     final filtered = events.where((e) {
       for (final tag in allowTags) {

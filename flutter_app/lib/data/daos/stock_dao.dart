@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 import '../app_database.dart';
 
@@ -134,7 +135,12 @@ class StockDao {
         _database.stockMovements,
       },
     ).getSingleOrNull();
-    return (row?.data['total_pieces'] as int?) ?? 0;
+    final totalPieces = (row?.data['total_pieces'] as int?) ?? 0;
+    DebugEventLog.add(
+      'OUTBOUND',
+      'totalInventoryPiecesAt snapshot=${snapshotAt.toIso8601String()} total_pieces=$totalPieces',
+    );
+    return totalPieces;
   }
 
   Future<List<InventoryDetailRow>> inventoryDetailRows() async {

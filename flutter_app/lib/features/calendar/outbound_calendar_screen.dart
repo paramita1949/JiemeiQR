@@ -6,6 +6,7 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -33,7 +34,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   int? _selectedOrderId;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  _OutboundSearchType _searchType = _OutboundSearchType.waybill;
+  _OutboundSearchType _detectedSearchType = _OutboundSearchType.waybill;
   _SearchRangePreset _searchRangePreset = _SearchRangePreset.week;
   DateTimeRange? _searchCustomRange;
   bool _searchLoading = false;
@@ -96,12 +97,11 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                 _OutboundSearchPanel(
                   controller: _searchController,
                   focusNode: _searchFocusNode,
-                  searchType: _searchType,
+                  detectedType: _detectedSearchType,
                   rangePreset: _searchRangePreset,
                   customRange: _searchCustomRange,
                   suggestions: _searchSuggestions,
                   loading: _searchLoading,
-                  onTypeChanged: _onSearchTypeChanged,
                   onRangePresetChanged: _onSearchRangePresetChanged,
                   onPickCustomRange: _pickSearchCustomRange,
                   onChanged: _onSearchChanged,
@@ -133,9 +133,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                     _OutboundDetailCard(
                       title: _detailTitle(state),
                       rows: _detailRows(state),
-                      batchCodesByProductDate:
-                          state?.batchCodesByProductDate ??
-                              const <String, List<String>>{},
+                      batchCodesByProductDate: state?.batchCodesByProductDate ??
+                          const <String, List<String>>{},
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -170,7 +169,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   Future<_CalendarState> _loadState() async {
     final snapshotAt =
         DateTime(_range.end.year, _range.end.month, _range.end.day, 23, 59, 59);
+    DebugEventLog.add(
+      'OUTBOUND',
+      'load_state range=${_rangeText(_range)} snapshot_at=${snapshotAt.toIso8601String()}',
+    );
     final totalPieces = await _stockDao.totalInventoryPiecesAt(snapshotAt);
+    DebugEventLog.add(
+      'OUTBOUND',
+      'snapshot_total_pieces=$totalPieces at=${snapshotAt.toIso8601String()}',
+    );
     final allRows = await _outboundRows();
     final batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     final orders = await _orderSummariesFromRows(allRows);
@@ -310,20 +317,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     });
   }
 
-  void _onSearchTypeChanged(_OutboundSearchType type) {
-    setState(() {
-      _searchType = type;
-      if (type == _OutboundSearchType.waybill) {
-        _searchRangePreset = _SearchRangePreset.all;
-      } else if (_searchRangePreset == _SearchRangePreset.all) {
-        _searchRangePreset = _SearchRangePreset.week;
-      }
-    });
-    _refreshSearch();
-  }
-
   void _onSearchRangePresetChanged(_SearchRangePreset preset) {
-    if (_searchType == _OutboundSearchType.waybill) {
+    if (_detectedSearchType == _OutboundSearchType.waybill) {
       return;
     }
     setState(() {
@@ -353,7 +348,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   Future<void> _pickSearchCustomRange() async {
-    if (_searchType == _OutboundSearchType.waybill) {
+    if (_detectedSearchType == _OutboundSearchType.waybill) {
       return;
     }
     final now = DateTime.now();
@@ -382,8 +377,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     await _refreshSearch();
   }
 
-  DateTimeRange? _effectiveSearchRange() {
-    if (_searchType == _OutboundSearchType.waybill) {
+  DateTimeRange? _effectiveSearchRange(_OutboundSearchType type) {
+    if (type == _OutboundSearchType.waybill) {
       return null;
     }
     final today = _dateOnly(DateTime.now());
@@ -415,32 +410,67 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     final version = ++_searchVersion;
     if (keyword.isEmpty) {
       setState(() {
+        _detectedSearchType = _OutboundSearchType.waybill;
+        _searchRangePreset = _SearchRangePreset.week;
         _searchLoading = false;
         _searchSuggestions = const <_OutboundSearchSuggestion>[];
         _searchRows = const <_OutboundSearchRow>[];
       });
       return;
     }
+    final detectedType = _detectSearchType(keyword);
+    if (_searchRangePreset == _SearchRangePreset.all &&
+        detectedType != _OutboundSearchType.waybill) {
+      _searchRangePreset = _SearchRangePreset.week;
+    } else if (detectedType == _OutboundSearchType.waybill &&
+        _searchRangePreset == _SearchRangePreset.custom) {
+      _searchRangePreset = _SearchRangePreset.week;
+    }
     setState(() => _searchLoading = true);
-    final range = _effectiveSearchRange();
+    final range = _effectiveSearchRange(detectedType);
     final suggestions = await _querySearchSuggestions(
       keyword: keyword,
-      type: _searchType,
+      type: detectedType,
       range: range,
     );
     final rows = await _querySearchRows(
       keyword: keyword,
-      type: _searchType,
+      type: detectedType,
       range: range,
     );
     if (!mounted || version != _searchVersion) {
       return;
     }
     setState(() {
+      _detectedSearchType = detectedType;
       _searchLoading = false;
       _searchSuggestions = suggestions;
       _searchRows = rows;
     });
+  }
+
+  _OutboundSearchType _detectSearchType(String keyword) {
+    final text = keyword.trim();
+    if (text.isEmpty) {
+      return _OutboundSearchType.waybill;
+    }
+    final lower = text.toLowerCase();
+    if (RegExp(r'[\u4e00-\u9fff]').hasMatch(lower)) {
+      return _OutboundSearchType.merchant;
+    }
+    if (RegExp(r'^\d{8,}$').hasMatch(lower)) {
+      return _OutboundSearchType.waybill;
+    }
+    if (RegExp(r'^\d{4,7}$').hasMatch(lower)) {
+      return _OutboundSearchType.product;
+    }
+    if (RegExp(r'^\d{4}\.\d{1,2}\.\d{1,2}$').hasMatch(lower)) {
+      return _OutboundSearchType.batch;
+    }
+    if (RegExp(r'^(?=.*[a-z])(?=.*\d)[a-z0-9.-]+$').hasMatch(lower)) {
+      return _OutboundSearchType.batch;
+    }
+    return _OutboundSearchType.product;
   }
 
   Future<List<_OutboundSearchSuggestion>> _querySearchSuggestions({
@@ -468,14 +498,17 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         vars.add(Variable.withString(like));
         break;
       case _OutboundSearchType.batch:
-        where.add('(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
+        where.add(
+            '(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
         vars.add(Variable.withString(like));
         vars.add(Variable.withString(like));
         break;
     }
     if (range != null) {
-      final start = DateTime(range.start.year, range.start.month, range.start.day);
-      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+      final start =
+          DateTime(range.start.year, range.start.month, range.start.day);
+      final end =
+          DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
       where.add('sm.movement_date BETWEEN ? AND ?');
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
@@ -496,8 +529,9 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _OutboundSearchType.product => 'p.code, b.actual_batch, b.date_batch',
       _OutboundSearchType.batch => 'b.actual_batch, p.code, b.date_batch',
     };
-    final rows = await _database.customSelect(
-      '''
+    final rows = await _database
+        .customSelect(
+          '''
       SELECT $selectSql
       FROM stock_movements sm
       INNER JOIN orders o ON o.id = sm.order_id
@@ -508,14 +542,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       ORDER BY sort_date DESC
       LIMIT 10
       ''',
-      variables: vars,
-      readsFrom: {
-        _database.stockMovements,
-        _database.orders,
-        _database.batches,
-        _database.products,
-      },
-    ).get();
+          variables: vars,
+          readsFrom: {
+            _database.stockMovements,
+            _database.orders,
+            _database.batches,
+            _database.products,
+          },
+        )
+        .get();
     return rows
         .map(
           (row) => _OutboundSearchSuggestion(
@@ -552,20 +587,24 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         vars.add(Variable.withString(like));
         break;
       case _OutboundSearchType.batch:
-        where.add('(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
+        where.add(
+            '(LOWER(b.actual_batch) LIKE ? OR LOWER(b.date_batch) LIKE ?)');
         vars.add(Variable.withString(like));
         vars.add(Variable.withString(like));
         break;
     }
     if (range != null) {
-      final start = DateTime(range.start.year, range.start.month, range.start.day);
-      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+      final start =
+          DateTime(range.start.year, range.start.month, range.start.day);
+      final end =
+          DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
       where.add('sm.movement_date BETWEEN ? AND ?');
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
     }
-    final rows = await _database.customSelect(
-      '''
+    final rows = await _database
+        .customSelect(
+          '''
       SELECT
         o.id AS order_id,
         o.waybill_no,
@@ -584,14 +623,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       ORDER BY movement_date DESC, o.waybill_no ASC
       LIMIT 200
       ''',
-      variables: vars,
-      readsFrom: {
-        _database.stockMovements,
-        _database.orders,
-        _database.batches,
-        _database.products,
-      },
-    ).get();
+          variables: vars,
+          readsFrom: {
+            _database.stockMovements,
+            _database.orders,
+            _database.batches,
+            _database.products,
+          },
+        )
+        .get();
     return rows
         .map((row) => _OutboundSearchRow(
               orderId: row.data['order_id'] as int? ?? 0,
@@ -792,12 +832,11 @@ class _OutboundSearchPanel extends StatelessWidget {
   const _OutboundSearchPanel({
     required this.controller,
     required this.focusNode,
-    required this.searchType,
+    required this.detectedType,
     required this.rangePreset,
     required this.customRange,
     required this.suggestions,
     required this.loading,
-    required this.onTypeChanged,
     required this.onRangePresetChanged,
     required this.onPickCustomRange,
     required this.onChanged,
@@ -807,12 +846,11 @@ class _OutboundSearchPanel extends StatelessWidget {
 
   final TextEditingController controller;
   final FocusNode focusNode;
-  final _OutboundSearchType searchType;
+  final _OutboundSearchType detectedType;
   final _SearchRangePreset rangePreset;
   final DateTimeRange? customRange;
   final List<_OutboundSearchSuggestion> suggestions;
   final bool loading;
-  final ValueChanged<_OutboundSearchType> onTypeChanged;
   final ValueChanged<_SearchRangePreset> onRangePresetChanged;
   final VoidCallback onPickCustomRange;
   final ValueChanged<String> onChanged;
@@ -821,62 +859,72 @@ class _OutboundSearchPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeEnabled = searchType != _OutboundSearchType.waybill;
+    final hasText = controller.text.trim().isNotEmpty;
+    final timeEnabled = detectedType != _OutboundSearchType.waybill;
+    final typeLabel = switch (detectedType) {
+      _OutboundSearchType.waybill => '自动识别：运单号（不限制日期）',
+      _OutboundSearchType.merchant => '自动识别：商家（可切换时间）',
+      _OutboundSearchType.product => '自动识别：产品（可切换时间）',
+      _OutboundSearchType.batch => '自动识别：批号（可切换时间）',
+    };
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFFAFBFF),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3E8F5)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              _typeChip(
-                label: '运单号',
-                type: _OutboundSearchType.waybill,
+              const Icon(
+                Icons.travel_explore_rounded,
+                size: 18,
+                color: Color(0xFF2563EB),
               ),
-              _typeChip(
-                label: '商家',
-                type: _OutboundSearchType.merchant,
-              ),
-              _typeChip(
-                label: '产品',
-                type: _OutboundSearchType.product,
-              ),
-              _typeChip(
-                label: '批号',
-                type: _OutboundSearchType.batch,
+              const SizedBox(width: 6),
+              const Text(
+                '出库反查',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           TextField(
             controller: controller,
             focusNode: focusNode,
             onChanged: onChanged,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
-              hintText: switch (searchType) {
-                _OutboundSearchType.waybill => '输入运单号，如 169',
-                _OutboundSearchType.merchant => '输入商家，如 鸿旺',
-                _OutboundSearchType.product => '输入产品编号/名称，如 72067',
-                _OutboundSearchType.batch => '输入实际批号或日期批号',
-              },
-              suffixIcon: controller.text.trim().isEmpty
-                  ? null
-                  : IconButton(
+              hintText: '输入运单号 / 商家 / 产品 / 批号，系统自动识别',
+              suffixIcon: hasText
+                  ? IconButton(
                       onPressed: onClear,
                       icon: const Icon(Icons.close),
-                    ),
+                    )
+                  : null,
               filled: true,
               fillColor: const Color(0xFFF7F9FC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            typeLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF4B5563),
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -965,18 +1013,6 @@ class _OutboundSearchPanel extends StatelessWidget {
     );
   }
 
-  Widget _typeChip({
-    required String label,
-    required _OutboundSearchType type,
-  }) {
-    final selected = searchType == type;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTypeChanged(type),
-    );
-  }
-
   Widget _rangeChip(String label, _SearchRangePreset preset) {
     return ChoiceChip(
       label: Text(label),
@@ -997,8 +1033,10 @@ class _OutboundSearchResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final waybills = rows.map((e) => e.orderId).toSet().length;
     final products = rows.map((e) => e.productCode).toSet().length;
-    final batches =
-        rows.map((e) => '${e.productCode}|${e.actualBatch}|${e.dateBatch}').toSet().length;
+    final batches = rows
+        .map((e) => '${e.productCode}|${e.actualBatch}|${e.dateBatch}')
+        .toSet()
+        .length;
     final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.boxes);
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1028,7 +1066,8 @@ class _OutboundSearchResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           if (rows.isEmpty)
-            const Text('当前条件无已出库记录', style: TextStyle(color: AppTheme.textSecondary))
+            const Text('当前条件无已出库记录',
+                style: TextStyle(color: AppTheme.textSecondary))
           else
             ...rows.map((row) {
               return Container(
