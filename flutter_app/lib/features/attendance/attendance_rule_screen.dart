@@ -52,30 +52,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         accuracy: amap.accuracy,
       );
     }
-    Position? pos = await Geolocator.getLastKnownPosition();
-    try {
-      pos ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 4),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_LOCATE', 'system medium failed: $e');
-    }
-    try {
-      pos ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 8),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_LOCATE', 'system high failed: $e');
-    }
-    if (pos == null) return null;
-    return (
-      lat: pos.latitude,
-      lng: pos.longitude,
-      provider: '系统',
-      accuracy: pos.accuracy,
-    );
+    DebugEventLog.add('GEOFENCE_LOCATE', 'amap location unavailable');
+    return null;
   }
 
   @override
@@ -217,7 +195,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         DebugEventLog.add('GEOFENCE_LOCATE', 'resolved location is null');
         if (!mounted) return;
         messenger.showSnackBar(
-          const SnackBar(content: Text('定位超时：请先打开系统地图定位一次，再重试')),
+          const SnackBar(content: Text('高德定位失败：请检查网络/GPS后重试')),
         );
         return;
       }

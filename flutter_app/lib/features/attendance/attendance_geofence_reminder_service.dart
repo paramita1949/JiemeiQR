@@ -72,34 +72,8 @@ class AttendanceGeofenceReminderService {
         longitude: amap.longitude,
       );
     }
-
-    Position? position;
-    try {
-      position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 4),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_AUTO', 'medium locate failed: $e');
-    }
-    try {
-      position ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 6),
-      );
-    } catch (e) {
-      DebugEventLog.add('GEOFENCE_AUTO', 'high locate failed: $e');
-    }
-    position ??= await Geolocator.getLastKnownPosition();
-    if (position == null) return null;
-    DebugEventLog.add(
-      'GEOFENCE_AUTO',
-      'system lat=${position.latitude} lng=${position.longitude} acc=${position.accuracy}',
-    );
-    return _AttendanceLocation(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
+    DebugEventLog.add('GEOFENCE_AUTO', 'amap location unavailable');
+    return null;
   }
 
   static Future<void> showAutoCheckinNotification() async {
