@@ -34,8 +34,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   int? _selectedOrderId;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  _OutboundSearchType _detectedSearchType = _OutboundSearchType.waybill;
-  _SearchRangePreset _searchRangePreset = _SearchRangePreset.week;
+  _OutboundSearchType _searchType = _OutboundSearchType.waybill;
+  _SearchRangePreset _searchRangePreset = _SearchRangePreset.all;
   DateTimeRange? _searchCustomRange;
   bool _searchLoading = false;
   int _searchVersion = 0;
@@ -97,11 +97,12 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                 _OutboundSearchPanel(
                   controller: _searchController,
                   focusNode: _searchFocusNode,
-                  detectedType: _detectedSearchType,
+                  searchType: _searchType,
                   rangePreset: _searchRangePreset,
                   customRange: _searchCustomRange,
                   suggestions: _searchSuggestions,
                   loading: _searchLoading,
+                  onTypeChanged: _onSearchTypeChanged,
                   onRangePresetChanged: _onSearchRangePresetChanged,
                   onPickCustomRange: _pickSearchCustomRange,
                   onChanged: _onSearchChanged,
@@ -355,8 +356,20 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     });
   }
 
+  void _onSearchTypeChanged(_OutboundSearchType type) {
+    setState(() {
+      _searchType = type;
+      if (type == _OutboundSearchType.waybill) {
+        _searchRangePreset = _SearchRangePreset.all;
+      } else if (_searchRangePreset == _SearchRangePreset.all) {
+        _searchRangePreset = _SearchRangePreset.week;
+      }
+    });
+    _refreshSearch();
+  }
+
   void _onSearchRangePresetChanged(_SearchRangePreset preset) {
-    if (_detectedSearchType == _OutboundSearchType.waybill) {
+    if (_searchType == _OutboundSearchType.waybill) {
       return;
     }
     setState(() {
@@ -386,7 +399,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   Future<void> _pickSearchCustomRange() async {
-    if (_detectedSearchType == _OutboundSearchType.waybill) {
+    if (_searchType == _OutboundSearchType.waybill) {
       return;
     }
     final now = DateTime.now();
@@ -448,67 +461,35 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     final version = ++_searchVersion;
     if (keyword.isEmpty) {
       setState(() {
-        _detectedSearchType = _OutboundSearchType.waybill;
-        _searchRangePreset = _SearchRangePreset.week;
+        if (_searchType == _OutboundSearchType.waybill) {
+          _searchRangePreset = _SearchRangePreset.all;
+        }
         _searchLoading = false;
         _searchSuggestions = const <_OutboundSearchSuggestion>[];
         _searchRows = const <_OutboundSearchRow>[];
       });
       return;
     }
-    final detectedType = _detectSearchType(keyword);
-    if (_searchRangePreset == _SearchRangePreset.all &&
-        detectedType != _OutboundSearchType.waybill) {
-      _searchRangePreset = _SearchRangePreset.week;
-    } else if (detectedType == _OutboundSearchType.waybill &&
-        _searchRangePreset == _SearchRangePreset.custom) {
-      _searchRangePreset = _SearchRangePreset.week;
-    }
     setState(() => _searchLoading = true);
-    final range = _effectiveSearchRange(detectedType);
+    final range = _effectiveSearchRange(_searchType);
     final suggestions = await _querySearchSuggestions(
       keyword: keyword,
-      type: detectedType,
+      type: _searchType,
       range: range,
     );
     final rows = await _querySearchRows(
       keyword: keyword,
-      type: detectedType,
+      type: _searchType,
       range: range,
     );
     if (!mounted || version != _searchVersion) {
       return;
     }
     setState(() {
-      _detectedSearchType = detectedType;
       _searchLoading = false;
       _searchSuggestions = suggestions;
       _searchRows = rows;
     });
-  }
-
-  _OutboundSearchType _detectSearchType(String keyword) {
-    final text = keyword.trim();
-    if (text.isEmpty) {
-      return _OutboundSearchType.waybill;
-    }
-    final lower = text.toLowerCase();
-    if (RegExp(r'[\u4e00-\u9fff]').hasMatch(lower)) {
-      return _OutboundSearchType.merchant;
-    }
-    if (RegExp(r'^\d{8,}$').hasMatch(lower)) {
-      return _OutboundSearchType.waybill;
-    }
-    if (RegExp(r'^\d{4,7}$').hasMatch(lower)) {
-      return _OutboundSearchType.product;
-    }
-    if (RegExp(r'^\d{4}\.\d{1,2}\.\d{1,2}$').hasMatch(lower)) {
-      return _OutboundSearchType.batch;
-    }
-    if (RegExp(r'^(?=.*[a-z])(?=.*\d)[a-z0-9.-]+$').hasMatch(lower)) {
-      return _OutboundSearchType.batch;
-    }
-    return _OutboundSearchType.product;
   }
 
   Future<List<_OutboundSearchSuggestion>> _querySearchSuggestions({
@@ -590,12 +571,18 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         )
         .get();
     return rows
-        .map(
-          (row) => _OutboundSearchSuggestion(
-            value: row.data['value']?.toString() ?? '',
-            subtitle: row.data['subtitle']?.toString() ?? '',
-          ),
-        )
+        .map((row) {
+          final value = row.data['value']?.toString() ?? '';
+          var subtitle = row.data['subtitle']?.toString() ?? '';
+          if (type == _OutboundSearchType.waybill) {
+            final day = _formatDate(_parseSqlDateTime(row.data['sort_date']));
+            subtitle = subtitle.isEmpty ? day : '$subtitle · $day';
+          }
+          return _OutboundSearchSuggestion(
+            value: value,
+            subtitle: subtitle,
+          );
+        })
         .where((row) => row.value.isNotEmpty)
         .toList(growable: false);
   }
@@ -876,11 +863,12 @@ class _OutboundSearchPanel extends StatelessWidget {
   const _OutboundSearchPanel({
     required this.controller,
     required this.focusNode,
-    required this.detectedType,
+    required this.searchType,
     required this.rangePreset,
     required this.customRange,
     required this.suggestions,
     required this.loading,
+    required this.onTypeChanged,
     required this.onRangePresetChanged,
     required this.onPickCustomRange,
     required this.onChanged,
@@ -890,11 +878,12 @@ class _OutboundSearchPanel extends StatelessWidget {
 
   final TextEditingController controller;
   final FocusNode focusNode;
-  final _OutboundSearchType detectedType;
+  final _OutboundSearchType searchType;
   final _SearchRangePreset rangePreset;
   final DateTimeRange? customRange;
   final List<_OutboundSearchSuggestion> suggestions;
   final bool loading;
+  final ValueChanged<_OutboundSearchType> onTypeChanged;
   final ValueChanged<_SearchRangePreset> onRangePresetChanged;
   final VoidCallback onPickCustomRange;
   final ValueChanged<String> onChanged;
@@ -904,13 +893,7 @@ class _OutboundSearchPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasText = controller.text.trim().isNotEmpty;
-    final timeEnabled = detectedType != _OutboundSearchType.waybill;
-    final typeLabel = switch (detectedType) {
-      _OutboundSearchType.waybill => '自动识别：运单号（不限制日期）',
-      _OutboundSearchType.merchant => '自动识别：商家（可切换时间）',
-      _OutboundSearchType.product => '自动识别：产品（可切换时间）',
-      _OutboundSearchType.batch => '自动识别：批号（可切换时间）',
-    };
+    final timeEnabled = searchType != _OutboundSearchType.waybill;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
@@ -941,13 +924,28 @@ class _OutboundSearchPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _typeChip(label: '运单', type: _OutboundSearchType.waybill),
+              _typeChip(label: '商家', type: _OutboundSearchType.merchant),
+              _typeChip(label: '产品', type: _OutboundSearchType.product),
+            ],
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: controller,
             focusNode: focusNode,
             onChanged: onChanged,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
-              hintText: '输入运单号 / 商家 / 产品 / 批号，系统自动识别',
+              hintText: switch (searchType) {
+                _OutboundSearchType.waybill => '输入运单号，如 169123456',
+                _OutboundSearchType.merchant => '输入商家，如 鸿旺',
+                _OutboundSearchType.product => '输入产品编码，如 72067',
+                _OutboundSearchType.batch => '输入批号',
+              },
               suffixIcon: hasText
                   ? IconButton(
                       onPressed: onClear,
@@ -960,15 +958,6 @@ class _OutboundSearchPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            typeLabel,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF4B5563),
-              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -1053,6 +1042,26 @@ class _OutboundSearchPanel extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _typeChip({
+    required String label,
+    required _OutboundSearchType type,
+  }) {
+    final selected = searchType == type;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTypeChanged(type),
+      selectedColor: const Color(0x1A2563EB),
+      side: BorderSide(
+        color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+      ),
+      labelStyle: TextStyle(
+        color: selected ? const Color(0xFF2563EB) : AppTheme.textSecondary,
+        fontWeight: FontWeight.w700,
       ),
     );
   }
