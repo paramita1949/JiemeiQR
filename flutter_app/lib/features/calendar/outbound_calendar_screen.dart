@@ -35,8 +35,6 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   _OutboundSearchType _searchType = _OutboundSearchType.waybill;
-  _SearchRangePreset _searchRangePreset = _SearchRangePreset.all;
-  DateTimeRange? _searchCustomRange;
   bool _searchLoading = false;
   int _searchVersion = 0;
   List<_OutboundSearchSuggestion> _searchSuggestions =
@@ -98,13 +96,9 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                   controller: _searchController,
                   focusNode: _searchFocusNode,
                   searchType: _searchType,
-                  rangePreset: _searchRangePreset,
-                  customRange: _searchCustomRange,
                   suggestions: _searchSuggestions,
                   loading: _searchLoading,
                   onTypeChanged: _onSearchTypeChanged,
-                  onRangePresetChanged: _onSearchRangePresetChanged,
-                  onPickCustomRange: _pickSearchCustomRange,
                   onChanged: _onSearchChanged,
                   onSuggestionTap: _onSuggestionTap,
                   onClear: _clearSearch,
@@ -359,21 +353,6 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   void _onSearchTypeChanged(_OutboundSearchType type) {
     setState(() {
       _searchType = type;
-      if (type == _OutboundSearchType.waybill) {
-        _searchRangePreset = _SearchRangePreset.all;
-      } else if (_searchRangePreset == _SearchRangePreset.all) {
-        _searchRangePreset = _SearchRangePreset.week;
-      }
-    });
-    _refreshSearch();
-  }
-
-  void _onSearchRangePresetChanged(_SearchRangePreset preset) {
-    if (_searchType == _OutboundSearchType.waybill) {
-      return;
-    }
-    setState(() {
-      _searchRangePreset = preset;
     });
     _refreshSearch();
   }
@@ -398,72 +377,11 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     });
   }
 
-  Future<void> _pickSearchCustomRange() async {
-    if (_searchType == _OutboundSearchType.waybill) {
-      return;
-    }
-    final now = DateTime.now();
-    final initial = _searchCustomRange ??
-        DateTimeRange(
-          start: DateTime(now.year, now.month, now.day - 6),
-          end: DateTime(now.year, now.month, now.day),
-        );
-    final picked = await showDateRangePicker(
-      context: context,
-      locale: const Locale('zh', 'CN'),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 5),
-      initialDateRange: initial,
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() {
-      _searchCustomRange = DateTimeRange(
-        start: _dateOnly(picked.start),
-        end: _dateOnly(picked.end),
-      );
-      _searchRangePreset = _SearchRangePreset.custom;
-    });
-    await _refreshSearch();
-  }
-
-  DateTimeRange? _effectiveSearchRange(_OutboundSearchType type) {
-    if (type == _OutboundSearchType.waybill) {
-      return null;
-    }
-    final today = _dateOnly(DateTime.now());
-    switch (_searchRangePreset) {
-      case _SearchRangePreset.all:
-        return null;
-      case _SearchRangePreset.today:
-        return DateTimeRange(start: today, end: today);
-      case _SearchRangePreset.yesterday:
-        final yesterday = today.subtract(const Duration(days: 1));
-        return DateTimeRange(start: yesterday, end: yesterday);
-      case _SearchRangePreset.week:
-        return DateTimeRange(
-          start: today.subtract(const Duration(days: 6)),
-          end: today,
-        );
-      case _SearchRangePreset.month:
-        return DateTimeRange(
-          start: DateTime(today.year, today.month, 1),
-          end: today,
-        );
-      case _SearchRangePreset.custom:
-        return _searchCustomRange;
-    }
-  }
-
   Future<void> _refreshSearch() async {
     final keyword = _searchController.text.trim();
     final version = ++_searchVersion;
     if (keyword.isEmpty) {
       setState(() {
-        if (_searchType == _OutboundSearchType.waybill) {
-          _searchRangePreset = _SearchRangePreset.all;
-        }
         _searchLoading = false;
         _searchSuggestions = const <_OutboundSearchSuggestion>[];
         _searchRows = const <_OutboundSearchRow>[];
@@ -471,7 +389,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       return;
     }
     setState(() => _searchLoading = true);
-    final range = _effectiveSearchRange(_searchType);
+    final range = _searchType == _OutboundSearchType.waybill ? null : _range;
     final suggestions = await _querySearchSuggestions(
       keyword: keyword,
       type: _searchType,
@@ -825,8 +743,6 @@ class _OutboundOrderSummary {
 
 enum _OutboundSearchType { waybill, merchant, product, batch }
 
-enum _SearchRangePreset { all, today, yesterday, week, month, custom }
-
 class _OutboundSearchSuggestion {
   const _OutboundSearchSuggestion({
     required this.value,
@@ -864,13 +780,9 @@ class _OutboundSearchPanel extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.searchType,
-    required this.rangePreset,
-    required this.customRange,
     required this.suggestions,
     required this.loading,
     required this.onTypeChanged,
-    required this.onRangePresetChanged,
-    required this.onPickCustomRange,
     required this.onChanged,
     required this.onSuggestionTap,
     required this.onClear,
@@ -879,13 +791,9 @@ class _OutboundSearchPanel extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final _OutboundSearchType searchType;
-  final _SearchRangePreset rangePreset;
-  final DateTimeRange? customRange;
   final List<_OutboundSearchSuggestion> suggestions;
   final bool loading;
   final ValueChanged<_OutboundSearchType> onTypeChanged;
-  final ValueChanged<_SearchRangePreset> onRangePresetChanged;
-  final VoidCallback onPickCustomRange;
   final ValueChanged<String> onChanged;
   final ValueChanged<_OutboundSearchSuggestion> onSuggestionTap;
   final VoidCallback onClear;
@@ -893,7 +801,6 @@ class _OutboundSearchPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasText = controller.text.trim().isNotEmpty;
-    final timeEnabled = searchType != _OutboundSearchType.waybill;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
@@ -905,25 +812,6 @@ class _OutboundSearchPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.travel_explore_rounded,
-                size: 18,
-                color: Color(0xFF2563EB),
-              ),
-              SizedBox(width: 6),
-              Text(
-                '出库反查',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -961,44 +849,16 @@ class _OutboundSearchPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          if (!timeEnabled)
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '运单号按全历史唯一匹配',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _rangeChip('今日', _SearchRangePreset.today),
-                  const SizedBox(width: 6),
-                  _rangeChip('昨日', _SearchRangePreset.yesterday),
-                  const SizedBox(width: 6),
-                  _rangeChip('一周', _SearchRangePreset.week),
-                  const SizedBox(width: 6),
-                  _rangeChip('一月', _SearchRangePreset.month),
-                  const SizedBox(width: 6),
-                  _rangeChip('全部', _SearchRangePreset.all),
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    label: Text(
-                      customRange == null
-                          ? '自定义'
-                          : '${_formatDate(customRange!.start)}-${_formatDate(customRange!.end)}',
-                    ),
-                    onPressed: onPickCustomRange,
-                  ),
-                ],
-              ),
+          Text(
+            searchType == _OutboundSearchType.waybill
+                ? '运单按全历史匹配'
+                : '日期范围共用上方日历',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
+          ),
           if (loading)
             const Padding(
               padding: EdgeInsets.only(top: 8),
@@ -1063,14 +923,6 @@ class _OutboundSearchPanel extends StatelessWidget {
         color: selected ? const Color(0xFF2563EB) : AppTheme.textSecondary,
         fontWeight: FontWeight.w700,
       ),
-    );
-  }
-
-  Widget _rangeChip(String label, _SearchRangePreset preset) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: rangePreset == preset,
-      onSelected: (_) => onRangePresetChanged(preset),
     );
   }
 }

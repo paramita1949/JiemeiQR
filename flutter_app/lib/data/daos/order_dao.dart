@@ -883,8 +883,8 @@ class OrderDao {
     }
     if (!exceptionOnly) {
       query.orderBy([
-        (table) => OrderingTerm.desc(table.orderDate),
         (table) => OrderingTerm.asc(table.status),
+        (table) => OrderingTerm.desc(table.orderDate),
         (table) => OrderingTerm.asc(table.waybillNo),
         (table) => OrderingTerm.desc(table.createdAt),
       ]);
