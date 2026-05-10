@@ -167,11 +167,18 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   Future<_CalendarState> _loadState() async {
-    final snapshotAt =
-        DateTime(_range.end.year, _range.end.month, _range.end.day, 23, 59, 59);
+    final snapshotDate = _snapshotDateForInventory(_range);
+    final snapshotAt = DateTime(
+      snapshotDate.year,
+      snapshotDate.month,
+      snapshotDate.day,
+      23,
+      59,
+      59,
+    );
     DebugEventLog.add(
       'OUTBOUND',
-      'load_state range=${_rangeText(_range)} snapshot_at=${snapshotAt.toIso8601String()}',
+      'load_state range=${_rangeText(_range)} snapshot_day=${_formatDate(snapshotDate)} snapshot_at=${snapshotAt.toIso8601String()}',
     );
     final totalPieces = await _stockDao.totalInventoryPiecesAt(snapshotAt);
     DebugEventLog.add(
@@ -193,6 +200,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       rows: allRows,
       batchCodesByProductDate: batchCodesByProductDate,
     );
+  }
+
+  DateTime _snapshotDateForInventory(DateTimeRange range) {
+    final start = _dateOnly(range.start);
+    final end = _dateOnly(range.end);
+    if (_sameDate(start, end)) {
+      return end;
+    }
+    return start;
   }
 
   Future<List<_OutboundRow>> _outboundRows() async {
@@ -245,13 +261,21 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       }
       final order =
           movement.orderId == null ? null : ordersById[movement.orderId];
-      final key = '${product.id}-${batch.id}-${movement.orderId ?? 0}';
+      final outboundDate = _dateOnly(movement.movementDate);
+      final key =
+          '${product.id}-${batch.id}-${movement.orderId ?? 0}-${outboundDate.toIso8601String()}';
       final current = rows[key];
       final nextBoxes = (current?.boxes ?? 0) + movement.boxes;
       rows[key] = _OutboundRow(
         productCode: product.code,
         actualBatch: batch.actualBatch,
         dateBatch: batch.dateBatch,
+        outboundDate: outboundDate,
+        latestMovementAt: current == null
+            ? movement.movementDate
+            : (movement.movementDate.isAfter(current.latestMovementAt)
+                ? movement.movementDate
+                : current.latestMovementAt),
         boxesPerBoard: batch.boxesPerBoard,
         boxes: nextBoxes,
         orderId: movement.orderId,
@@ -262,6 +286,14 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
 
     return rows.values.toList()
       ..sort((a, b) {
+        final dateCmp = b.outboundDate.compareTo(a.outboundDate);
+        if (dateCmp != 0) {
+          return dateCmp;
+        }
+        final timeCmp = b.latestMovementAt.compareTo(a.latestMovementAt);
+        if (timeCmp != 0) {
+          return timeCmp;
+        }
         final waybillCmp = (a.waybillNo ?? '').compareTo(b.waybillNo ?? '');
         if (waybillCmp != 0) {
           return waybillCmp;
@@ -278,10 +310,14 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     List<_OutboundRow> rows,
   ) async {
     final boxesByOrderId = <int, int>{};
+    final datesByOrderId = <int, Set<DateTime>>{};
     for (final row in rows) {
       if (row.orderId == null) {
         continue;
       }
+      datesByOrderId
+          .putIfAbsent(row.orderId!, () => <DateTime>{})
+          .add(row.outboundDate);
       boxesByOrderId.update(
         row.orderId!,
         (value) => value + row.boxes,
@@ -302,6 +338,8 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
             waybillNo: order.waybillNo,
             merchantName: order.merchantName,
             boxes: boxesByOrderId[order.id] ?? 0,
+            outboundDateText:
+                _formatDateSet(datesByOrderId[order.id] ?? const <DateTime>{}),
           ),
         )
         .toList();
@@ -761,6 +799,8 @@ class _OutboundRow {
     required this.productCode,
     required this.actualBatch,
     required this.dateBatch,
+    required this.outboundDate,
+    required this.latestMovementAt,
     required this.boxesPerBoard,
     required this.boxes,
     required this.orderId,
@@ -771,6 +811,8 @@ class _OutboundRow {
   final String productCode;
   final String actualBatch;
   final String dateBatch;
+  final DateTime outboundDate;
+  final DateTime latestMovementAt;
   final int boxesPerBoard;
   final int boxes;
   final int? orderId;
@@ -784,12 +826,14 @@ class _OutboundOrderSummary {
     required this.waybillNo,
     required this.merchantName,
     required this.boxes,
+    required this.outboundDateText,
   });
 
   final int id;
   final String waybillNo;
   final String merchantName;
   final int boxes;
+  final String outboundDateText;
 }
 
 enum _OutboundSearchType { waybill, merchant, product, batch }
@@ -878,15 +922,15 @@ class _OutboundSearchPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.travel_explore_rounded,
                 size: 18,
                 color: Color(0xFF2563EB),
               ),
-              const SizedBox(width: 6),
-              const Text(
+              SizedBox(width: 6),
+              Text(
                 '出库反查',
                 style: TextStyle(
                   fontSize: 14,
@@ -1304,6 +1348,15 @@ class _OrderSummaryCard extends StatelessWidget {
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '出库日期 ${order.outboundDateText}',
+                                  style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1400,6 +1453,22 @@ class _OutboundDetailCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _formatDate(group.outboundDate),
+                  style: const TextStyle(
+                    color: Color(0xFF334155),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   group.waybillTitle,
@@ -1574,12 +1643,16 @@ List<InlineSpan> _batchCodeSpans(
 
 class _OutboundGroup {
   const _OutboundGroup({
+    required this.outboundDate,
+    required this.latestMovementAt,
     required this.waybillTitle,
     required this.merchantName,
     required this.totalBoxes,
     required this.rows,
   });
 
+  final DateTime outboundDate;
+  final DateTime latestMovementAt;
   final String waybillTitle;
   final String? merchantName;
   final int totalBoxes;
@@ -1589,17 +1662,21 @@ class _OutboundGroup {
     final grouped = <String, List<_OutboundRow>>{};
     for (final row in rows) {
       final key = row.orderId == null
-          ? 'no-order-${row.productCode}-${row.dateBatch}'
-          : 'order-${row.orderId}';
+          ? 'no-order-${_formatDate(row.outboundDate)}-${row.productCode}-${row.dateBatch}'
+          : 'order-${row.orderId}-${_formatDate(row.outboundDate)}';
       grouped.putIfAbsent(key, () => <_OutboundRow>[]).add(row);
     }
-    return grouped.values.map((groupRows) {
+    final results = grouped.values.map((groupRows) {
       final first = groupRows.first;
       final totalBoxes = groupRows.fold<int>(
         0,
         (sum, row) => sum + row.boxes,
       );
       return _OutboundGroup(
+        outboundDate: first.outboundDate,
+        latestMovementAt: groupRows
+            .map((e) => e.latestMovementAt)
+            .reduce((a, b) => a.isAfter(b) ? a : b),
         waybillTitle: first.waybillNo == null || first.waybillNo!.isEmpty
             ? '未关联运单'
             : '运单 ${first.waybillNo}',
@@ -1608,6 +1685,18 @@ class _OutboundGroup {
         rows: groupRows,
       );
     }).toList();
+    results.sort((a, b) {
+      final dateCmp = b.outboundDate.compareTo(a.outboundDate);
+      if (dateCmp != 0) {
+        return dateCmp;
+      }
+      final timeCmp = b.latestMovementAt.compareTo(a.latestMovementAt);
+      if (timeCmp != 0) {
+        return timeCmp;
+      }
+      return a.waybillTitle.compareTo(b.waybillTitle);
+    });
+    return results;
   }
 }
 
@@ -1641,6 +1730,18 @@ String _rangeText(DateTimeRange range) {
   final start = _formatDate(range.start);
   final end = _formatDate(range.end);
   return start == end ? start : '$start - $end';
+}
+
+String _formatDateSet(Set<DateTime> dates) {
+  if (dates.isEmpty) {
+    return '--';
+  }
+  final sorted = dates.map(_dateOnly).toSet().toList()
+    ..sort((a, b) => b.compareTo(a));
+  if (sorted.length == 1) {
+    return _formatDate(sorted.first);
+  }
+  return '${_formatDate(sorted.last)} ~ ${_formatDate(sorted.first)}';
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
