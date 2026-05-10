@@ -33,22 +33,26 @@ class AttendanceDao {
   Future<void> checkInOrOut({DateTime? now}) async {
     final ts = now ?? DateTime.now();
     final day = DateTime(ts.year, ts.month, ts.day);
+    final rule = await getRule();
     final existing = await (_db.select(_db.attendanceRecords)
           ..where((t) => t.day.equals(day)))
         .getSingleOrNull();
     if (existing == null) {
-      await _db.into(_db.attendanceRecords).insert(
+      final id = await _db.into(_db.attendanceRecords).insert(
             AttendanceRecordsCompanion.insert(
               day: day,
               checkInAt: Value(ts),
               updatedAt: Value(ts),
             ),
           );
+      final inserted = await (_db.select(_db.attendanceRecords)
+            ..where((t) => t.id.equals(id)))
+          .getSingle();
+      await _saveNormalizedRecord(inserted, rule: rule);
       return;
     }
     if (existing.checkOutAt != null) return;
 
-    final rule = await getRule();
     final end = _mergeDayTime(day, rule.workEndTime);
     final rawMinutes = ts.isAfter(end) ? ts.difference(end).inMinutes : 0;
     final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
@@ -567,20 +571,27 @@ class AttendanceDao {
 
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
+    final autoHoliday = await _shouldAutoHoliday(
+      day: day,
+      checkIn: checkIn,
+      checkOut: checkOut,
+      rule: rule,
+    );
+    final effectiveHoliday = row.isHoliday || autoHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;
     final exception = (hasCheckIn ^ hasCheckOut) ||
         (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
-    final needsPatch = exception || (row.isAbsent && !row.isLeave && !row.isHoliday);
+    final needsPatch = exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
     final patched = row.patched || (row.needsPatch && !needsPatch);
-    final late = row.isLeave || row.isHoliday
+    final late = row.isLeave || effectiveHoliday
         ? false
         : (checkIn != null ? checkIn.isAfter(workStart) : false);
-    final early = row.isHoliday ? false : (checkOut != null ? checkOut.isBefore(workEnd) : false);
-    final leaveMinutes = row.isLeave && !row.isHoliday && checkIn != null && checkIn.isAfter(workStartBase)
+    final early = effectiveHoliday ? false : (checkOut != null ? checkOut.isBefore(workEnd) : false);
+    final leaveMinutes = row.isLeave && !effectiveHoliday && checkIn != null && checkIn.isAfter(workStartBase)
         ? checkIn.difference(workStartBase).inMinutes
         : 0;
-    final rawMinutes = row.isHoliday
+    final rawMinutes = effectiveHoliday
         ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
             ? checkOut.difference(checkIn).inMinutes
             : 0
@@ -600,15 +611,37 @@ class AttendanceDao {
         overtimeMinutesRaw: Value(rawMinutes),
         leaveMinutes: Value(leaveMinutes),
         overtimeHoursRounded: Value(roundedHours),
-        isAbsent: Value(row.isHoliday ? false : row.isAbsent),
-        isLeave: Value(row.isHoliday ? false : row.isLeave),
-        isHoliday: Value(row.isHoliday),
+        isAbsent: Value(effectiveHoliday ? false : row.isAbsent),
+        isLeave: Value(effectiveHoliday ? false : row.isLeave),
+        isHoliday: Value(effectiveHoliday),
         patched: Value(patched),
         source: Value(row.source),
         note: Value(row.note),
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  Future<bool> _shouldAutoHoliday({
+    required DateTime day,
+    required DateTime? checkIn,
+    required DateTime? checkOut,
+    required AttendanceRule rule,
+  }) async {
+    final workedToday = checkIn != null || checkOut != null;
+    if (!workedToday) return false;
+
+    if (day.weekday != DateTime.sunday) return false;
+    final sat = day.subtract(const Duration(days: 1));
+    final satRow = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.day.equals(sat)))
+        .getSingleOrNull();
+    final satWorked = satRow?.checkInAt != null || satRow?.checkOutAt != null;
+    if (!satWorked) return false;
+
+    // 单休：周六周日可休一天；双休：周六周日都为休息日。
+    // 共同规则：当周六、周日都上班时，周日按假期/加班模式处理。
+    return rule.weekendType == 'single' || rule.weekendType == 'double';
   }
 }
 
