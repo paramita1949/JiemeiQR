@@ -279,7 +279,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ..._filteredRows.take(12).map(
                         (r) => _DetailCard(
                           row: r,
-                          isWeekendOvertimeDay: _isWeekendOvertimeDay(r),
                           onTap: () => _openEdit(r),
                         ),
                       ),
@@ -361,23 +360,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
     return null;
-  }
-
-  bool _isWeekendOvertimeDay(AttendanceRecord row) {
-    if (row.day.weekday != DateTime.sunday ||
-        row.checkInAt == null ||
-        row.checkOutAt == null) {
-      return false;
-    }
-    final sat = row.day.subtract(const Duration(days: 1));
-    AttendanceRecord? satRow;
-    for (final r in _rows) {
-      if (r.day.year == sat.year && r.day.month == sat.month && r.day.day == sat.day) {
-        satRow = r;
-        break;
-      }
-    }
-    return satRow != null && satRow.checkInAt != null && satRow.checkOutAt != null;
   }
 }
 
@@ -470,12 +452,10 @@ class _MonthSummaryCard extends StatelessWidget {
 class _DetailCard extends StatelessWidget {
   const _DetailCard({
     required this.row,
-    required this.isWeekendOvertimeDay,
     required this.onTap,
   });
 
   final AttendanceRecord row;
-  final bool isWeekendOvertimeDay;
   final VoidCallback onTap;
 
   @override
@@ -514,7 +494,7 @@ class _DetailCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${_md(row.day)}${isWeekendOvertimeDay ? ' 加班日' : ''}  ${_timeRange(row)}',
+                '${_md(row.day)}  ${_timeRange(row)}',
                 style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
