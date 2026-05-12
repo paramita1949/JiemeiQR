@@ -1081,6 +1081,7 @@ class OrderDao {
           item: item,
           product: product,
           batch: batch,
+          availableAfterReserveBoxes: await _availableBoxesForBatch(item.batchId),
         ),
       );
     }
@@ -1362,11 +1363,13 @@ class OrderDetailLine {
     required this.item,
     required this.product,
     required this.batch,
+    required this.availableAfterReserveBoxes,
   });
 
   final OrderItem item;
   final Product product;
   final BatchRecord batch;
+  final int availableAfterReserveBoxes;
 }
 
 class _OrderItemStats {

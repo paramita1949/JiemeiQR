@@ -23,18 +23,22 @@ class OrderDetailScreen extends StatefulWidget {
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> {
+class _OrderDetailScreenState extends State<OrderDetailScreen>
+    with WidgetsBindingObserver {
   late final AppDatabase _database;
   late final OrderDao _orderDao;
   late final ProductDao _productDao;
   late final OrderCompletionService _completionService;
   late final bool _ownsDatabase;
+  late final ScrollController _scrollController;
   late Future<_OrderDetailViewData> _detailFuture;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
+    _scrollController = ScrollController();
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
     _productDao = ProductDao(_database);
@@ -44,10 +48,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _scrollController.dispose();
     if (_ownsDatabase) {
       _database.close();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _refreshDetail();
+    }
   }
 
   @override
@@ -64,95 +77,111 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             final duplicateBatchKeys = detail == null
                 ? const <String>{}
                 : _duplicateProductDateBatches(batchCodesByProductDate);
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Expanded(
-                      child: PageTitle(
-                        icon: Icons.receipt_long_outlined,
-                        title: '运单详情',
-                        subtitle: '订单状态与产品明细',
+            return RefreshIndicator(
+              onRefresh: _refreshDetail,
+              child: ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 80),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(
+                        child: PageTitle(
+                          icon: Icons.receipt_long_outlined,
+                          title: '运单详情',
+                          subtitle: '订单状态与产品明细',
+                        ),
                       ),
+                      if (detail != null) ...[
+                        IconButton.filledTonal(
+                          tooltip: '编辑订单',
+                          onPressed: () => _editOrderBasic(detail),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton.filledTonal(
+                          tooltip: '删除订单',
+                          onPressed: _deleteOrder,
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (snapshot.connectionState != ConnectionState.done)
+                    const Center(child: CircularProgressIndicator())
+                  else if (detail == null)
+                    const Text('未找到运单')
+                  else ...[
+                    _HeaderCard(detail: detail),
+                    const SizedBox(height: 10),
+                    _StatusControls(
+                      status: detail.order.status,
+                      onChanged: _setStatus,
+                      onComplete: _confirmComplete,
                     ),
-                    if (detail != null) ...[
-                      IconButton.filledTonal(
-                        tooltip: '编辑订单',
-                        onPressed: () => _editOrderBasic(detail),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton.filledTonal(
-                        tooltip: '删除订单',
-                        onPressed: _deleteOrder,
-                        icon: const Icon(Icons.delete_outline),
+                    if (detail.order.status != OrderStatus.done) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonalIcon(
+                          key: const Key('addOrderLineButton'),
+                          onPressed: () => _openAddOrderLine(detail),
+                          icon: const Icon(Icons.add),
+                          label: const Text('新增产品'),
+                        ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 14),
-                if (snapshot.connectionState != ConnectionState.done)
-                  const Center(child: CircularProgressIndicator())
-                else if (detail == null)
-                  const Text('未找到运单')
-                else ...[
-                  _HeaderCard(detail: detail),
-                  const SizedBox(height: 10),
-                  _StatusControls(
-                    status: detail.order.status,
-                    onChanged: _setStatus,
-                    onComplete: _confirmComplete,
-                  ),
-                  if (detail.order.status != OrderStatus.done) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.tonalIcon(
-                        key: const Key('addOrderLineButton'),
-                        onPressed: () => _openAddOrderLine(detail),
-                        icon: const Icon(Icons.add),
-                        label: const Text('新增产品'),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  ...detail.lines.map(
-                    (line) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _LineCard(
-                        line: line,
-                        highlightBatch: duplicateBatchKeys.contains(
-                          _productDateKey(
-                            productCode: line.product.code,
-                            dateBatch: line.batch.dateBatch,
+                    const SizedBox(height: 10),
+                    ...detail.lines.map(
+                      (line) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _LineCard(
+                          line: line,
+                          highlightBatch: duplicateBatchKeys.contains(
+                            _productDateKey(
+                              productCode: line.product.code,
+                              dateBatch: line.batch.dateBatch,
+                            ),
+                          ),
+                          batchCodeVariants:
+                              batchCodesByProductDate[_productDateKey(
+                                    productCode: line.product.code,
+                                    dateBatch: line.batch.dateBatch,
+                                  )] ??
+                                  const <String>[],
+                          onEditLine: () => _editOrderLine(line),
+                          onDeleteLine: () => _deleteOrderLine(line),
+                          canTogglePicked:
+                              detail.order.status != OrderStatus.done,
+                          canModifyLine:
+                              detail.order.status != OrderStatus.done,
+                          onPickedChanged: (next) => _setOrderLinePicked(
+                            line: line,
+                            isPicked: next,
                           ),
                         ),
-                        batchCodeVariants:
-                            batchCodesByProductDate[_productDateKey(
-                                  productCode: line.product.code,
-                                  dateBatch: line.batch.dateBatch,
-                                )] ??
-                                const <String>[],
-                        onEditLine: () => _editOrderLine(line),
-                        onDeleteLine: () => _deleteOrderLine(line),
-                        canTogglePicked: detail.order.status != OrderStatus.done,
-                        canModifyLine: detail.order.status != OrderStatus.done,
-                        onPickedChanged: (next) => _setOrderLinePicked(
-                          line: line,
-                          isPicked: next,
-                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             );
           },
         ),
       ),
     );
+  }
+
+  Future<void> _refreshDetail() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _detailFuture = _loadDetail();
+    });
+    await _detailFuture;
   }
 
   Future<_OrderDetailViewData> _loadDetail() async {
@@ -458,22 +487,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     setState(() {
       _detailFuture = _loadDetail();
     });
-    final shouldSuggestPicked = isPicked &&
+    final shouldAutoSetPicked = isPicked &&
         latest.order.status == OrderStatus.pending &&
         latest.lines.isNotEmpty &&
         latest.lines.every((item) => item.item.isPicked);
-    if (!shouldSuggestPicked) {
+    if (!shouldAutoSetPicked) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('全部产品已勾选，建议将整单设为“已拣货”'),
-        action: SnackBarAction(
-          label: '设为已拣货',
-          onPressed: () => _setStatus(OrderStatus.picked),
-        ),
-      ),
-    );
+    await _setStatus(OrderStatus.picked);
   }
 
   Future<void> _confirmComplete() async {
@@ -795,6 +816,12 @@ class _LineCard extends StatelessWidget {
       boxes: line.item.boxes,
       boxesPerBoard: line.batch.boxesPerBoard,
     );
+    final remainText = BoardCalculator.format(
+      boxes: line.availableAfterReserveBoxes,
+      boxesPerBoard: line.batch.boxesPerBoard,
+    );
+    final lowStockThresholdBoxes = line.batch.boxesPerBoard * 10;
+    final isLowStock = line.availableAfterReserveBoxes < lowStockThresholdBoxes;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -891,6 +918,12 @@ class _LineCard extends StatelessWidget {
                 text:
                     '${line.batch.boxesPerBoard}箱/板 · ${line.product.piecesPerBox}件/箱',
               ),
+              if (isLowStock)
+                _MetricChip(
+                  text: '预占后余量 $remainText',
+                  textColor: const Color(0xFFDC2626),
+                  backgroundColor: const Color(0xFFFEE2E2),
+                ),
               _MetricChip(text: '库位 ${line.batch.location ?? '--'}'),
               if (line.item.isException)
                 const _MetricChip(

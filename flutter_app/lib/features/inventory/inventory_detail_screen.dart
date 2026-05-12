@@ -741,16 +741,19 @@ class _InventoryRowCard extends StatelessWidget {
       boxes: row.availableBoxes,
       boxesPerBoard: row.batch.boxesPerBoard,
     );
+    final lowStockThreshold = row.batch.boxesPerBoard * 10;
+    final isLowStock =
+        !row.isZeroStock && row.currentBoxes < lowStockThreshold;
     final statusColor =
-        row.isZeroStock ? Colors.red.shade700 : Colors.green.shade700;
+        (row.isZeroStock || isLowStock) ? Colors.red.shade700 : Colors.green.shade700;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: row.isZeroStock ? const Color(0xFFFFF1F2) : Colors.white,
+        color: row.isZeroStock || isLowStock ? const Color(0xFFFFF1F2) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: row.isZeroStock ? const Color(0xFFFECACA) : Colors.transparent,
+          color: row.isZeroStock || isLowStock ? const Color(0xFFFECACA) : Colors.transparent,
         ),
       ),
       child: Column(
@@ -807,6 +810,12 @@ class _InventoryRowCard extends StatelessWidget {
                   text: '已空',
                   color: statusColor,
                 ),
+              ] else if (isLowStock) ...[
+                const SizedBox(width: 8),
+                _StatusPill(
+                  text: '低于10板',
+                  color: statusColor,
+                ),
               ],
             ],
           ),
@@ -815,7 +824,15 @@ class _InventoryRowCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _MetricChip(text: '${row.currentBoxes}箱'),
+              _MetricChip(
+                text: '${row.currentBoxes}箱',
+                textColor: isLowStock || row.isZeroStock
+                    ? const Color(0xFFB91C1C)
+                    : AppTheme.primary,
+                backgroundColor: isLowStock || row.isZeroStock
+                    ? const Color(0xFFFEE2E2)
+                    : const Color(0xFFF3F6FB),
+              ),
               if (row.reservedBoxes > 0)
                 _MetricChip(
                   text: '占用 ${row.reservedBoxes}箱',
