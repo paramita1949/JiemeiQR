@@ -409,6 +409,10 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     final widgets = <Widget>[];
     final duplicateDateKeys = _duplicateBatchDateKeys(_batchCodesByProductDate);
     final batchCodesByKey = _batchCodesByProductDate;
+    final lowStockProductCodes = rows
+        .where(_isLowStockRow)
+        .map((row) => row.product.code)
+        .toSet();
     String? currentProductCode;
     var currentGroupCollapsed = false;
     for (final row in rows) {
@@ -425,6 +429,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               productCode: code,
               summary: summary,
               collapsed: collapsedAtBuild,
+              hasLowStock: lowStockProductCodes.contains(code),
               onTap: () {
                 setState(() {
                   if (collapsedAtBuild) {
@@ -459,6 +464,11 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       );
     }
     return widgets;
+  }
+
+  bool _isLowStockRow(InventoryDetailRow row) {
+    return !row.isZeroStock &&
+        row.currentBoxes < row.batch.boxesPerBoard * 10;
   }
 
   List<InventoryDetailRow> _sortRowsByGroupRanking(
@@ -666,18 +676,22 @@ class _ProductGroupHeader extends StatelessWidget {
     required this.productCode,
     required this.summary,
     required this.collapsed,
+    required this.hasLowStock,
     required this.onTap,
   });
 
   final String productCode;
   final InventoryGroupSummary? summary;
   final bool collapsed;
+  final bool hasLowStock;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final totalPieces = summary?.totalPieces ?? 0;
     final totalBoxes = summary?.totalBoxes ?? 0;
+    final textColor =
+        hasLowStock ? const Color(0xFFB91C1C) : AppTheme.textSecondary;
     return InkWell(
       key: Key('inventory-group-$productCode'),
       onTap: onTap,
@@ -689,13 +703,13 @@ class _ProductGroupHeader extends StatelessWidget {
             Icon(
               collapsed ? Icons.chevron_right : Icons.expand_more,
               size: 17,
-              color: AppTheme.textSecondary,
+              color: textColor,
             ),
             const SizedBox(width: 2),
             Text(
               productCode,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: textColor,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
@@ -704,8 +718,8 @@ class _ProductGroupHeader extends StatelessWidget {
             Expanded(
               child: Text(
                 '${_formatNumber(totalPieces)}件 · ${_formatNumber(totalBoxes)}箱',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -808,12 +822,6 @@ class _InventoryRowCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _StatusPill(
                   text: '已空',
-                  color: statusColor,
-                ),
-              ] else if (isLowStock) ...[
-                const SizedBox(width: 8),
-                _StatusPill(
-                  text: '低于10板',
                   color: statusColor,
                 ),
               ],
