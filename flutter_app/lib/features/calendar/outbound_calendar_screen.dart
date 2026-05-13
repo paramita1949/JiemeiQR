@@ -1323,8 +1323,8 @@ class _OutboundDetailCard extends StatelessWidget {
                 child: Text(
                   _formatDate(group.outboundDate),
                   style: const TextStyle(
-                    color: Color(0xFF334155),
-                    fontSize: 11,
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
                 ),

@@ -921,8 +921,8 @@ class _LineCard extends StatelessWidget {
               if (isLowStock)
                 _MetricChip(
                   text: '预占后余量 $remainText',
-                  textColor: const Color(0xFFDC2626),
-                  backgroundColor: const Color(0xFFFEE2E2),
+                  textColor: const Color(0xFFC2410C),
+                  backgroundColor: const Color(0xFFFFEDD5),
                 ),
               _MetricChip(text: '库位 ${line.batch.location ?? '--'}'),
               if (line.item.isException)
