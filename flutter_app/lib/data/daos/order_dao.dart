@@ -591,7 +591,7 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
   }) async {
-    final where = <String>[];
+    final where = <String>['oi.is_picked = 0'];
     final vars = <Variable<Object>>[];
     if (unfinishedOnly) {
       where.add('o.status != ?');
@@ -676,6 +676,7 @@ class OrderDao {
       'p.code = ?',
       'b.actual_batch = ?',
       'b.date_batch = ?',
+      'oi.is_picked = 0',
     ];
     final vars = <Variable<Object>>[
       Variable.withString(productCode),
