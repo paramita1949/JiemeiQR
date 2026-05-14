@@ -1001,15 +1001,21 @@ class _RestockWaybillSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          _RestockRemainChip(aggregate: aggregate),
-          const SizedBox(height: 6),
-          Text(
-            '运单 ${sortedLines.length} 单 · 箱数 $totalBoxes 箱（按箱数降序）',
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '运单 ${sortedLines.length} 单 · 箱数 $totalBoxes 箱（按箱数降序）',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _RestockRemainText(aggregate: aggregate),
+            ],
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -1105,8 +1111,8 @@ class _RestockWaybillSheet extends StatelessWidget {
   }
 }
 
-class _RestockRemainChip extends StatelessWidget {
-  const _RestockRemainChip({required this.aggregate});
+class _RestockRemainText extends StatelessWidget {
+  const _RestockRemainText({required this.aggregate});
 
   final OrderRestockAggregate aggregate;
 
@@ -1118,19 +1124,12 @@ class _RestockRemainChip extends StatelessWidget {
     );
     final lowThresholdBoxes = aggregate.boxesPerBoard * 10;
     final isLow = aggregate.availableAfterReserveBoxes < lowThresholdBoxes;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isLow ? const Color(0xFFFFEDD5) : const Color(0xFFDCFCE7),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '预占后余量 $remainText',
-        style: TextStyle(
-          color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
+    return Text(
+      '余量 $remainText',
+      style: TextStyle(
+        color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
       ),
     );
   }

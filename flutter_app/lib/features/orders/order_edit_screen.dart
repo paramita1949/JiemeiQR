@@ -147,24 +147,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                       ),
                       if (state != null && state.merchants.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
+                        _MerchantHistoryPicker(
                           key: const Key('merchantHistoryDropdown'),
-                          initialValue: null,
-                          decoration: _inputDecoration('历史商家'),
-                          items: state.merchants
-                              .map(
-                                (name) => DropdownMenuItem<String>(
-                                  value: name,
-                                  child: Text(name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (name) {
-                            if (name == null) {
-                              return;
-                            }
-                            _merchantController.text = name;
-                          },
+                          names: state.merchants,
+                          onSelect: (name) => _merchantController.text = name,
                         ),
                       ],
                     ],
@@ -266,7 +252,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   }
 
   Future<_OrderEditState> _loadState() async {
-    final merchants = await _orderDao.recentMerchantNames(limit: 10);
+    final merchants = await _orderDao.recentMerchantNames(limit: 1000);
     _batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     _productOptions = await _productDao.productsForOrderEntry();
     _products = _productOptions.map((option) => option.product).toList();
@@ -964,6 +950,143 @@ class _OrderEditState {
   const _OrderEditState({required this.merchants});
 
   final List<String> merchants;
+}
+
+class _MerchantHistoryPicker extends StatelessWidget {
+  const _MerchantHistoryPicker({
+    super.key,
+    required this.names,
+    required this.onSelect,
+  });
+
+  final List<String> names;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        final selected = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _MerchantHistorySheet(names: names),
+        );
+        if (selected != null && selected.trim().isNotEmpty) {
+          onSelect(selected);
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: const InputDecorator(
+        decoration: InputDecoration(
+          labelText: '历史商家',
+          suffixIcon: Icon(Icons.keyboard_arrow_down_rounded),
+        ),
+        child: Text(
+          '点击选择或搜索',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MerchantHistorySheet extends StatefulWidget {
+  const _MerchantHistorySheet({required this.names});
+
+  final List<String> names;
+
+  @override
+  State<_MerchantHistorySheet> createState() => _MerchantHistorySheetState();
+}
+
+class _MerchantHistorySheetState extends State<_MerchantHistorySheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _keyword = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyword = _keyword.trim();
+    final filtered = keyword.isEmpty
+        ? widget.names
+        : widget.names
+            .where((name) => name.toLowerCase().contains(keyword.toLowerCase()))
+            .toList(growable: false);
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _keyword = value),
+            decoration: const InputDecoration(
+              hintText: '搜索历史商家',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Text(
+                      '未找到匹配商家',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final name = filtered[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 8),
+                        title: Text(
+                          name,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () => Navigator.of(context).pop(name),
+                      );
+                    },
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionCard extends StatelessWidget {
