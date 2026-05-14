@@ -10,6 +10,10 @@ String resolveMerchantNameFromHistory({
   if (normalizedRecognized.isEmpty) {
     return original;
   }
+  if (normalizedRecognized.length < 4) {
+    // Too short: high risk of mapping to a wrong historical merchant.
+    return original;
+  }
 
   final matches = <_MerchantMatch>[];
   for (final historyName in historyNames) {
@@ -25,8 +29,17 @@ String resolveMerchantNameFromHistory({
       matches.add(_MerchantMatch(candidate, normalizedCandidate.length + 1000));
       continue;
     }
-    if (normalizedRecognized.contains(normalizedCandidate) ||
-        normalizedCandidate.contains(normalizedRecognized)) {
+    final shorterLength = normalizedRecognized.length < normalizedCandidate.length
+        ? normalizedRecognized.length
+        : normalizedCandidate.length;
+    final longerLength = normalizedRecognized.length > normalizedCandidate.length
+        ? normalizedRecognized.length
+        : normalizedCandidate.length;
+    final coverage = shorterLength / longerLength;
+    if ((normalizedRecognized.contains(normalizedCandidate) ||
+            normalizedCandidate.contains(normalizedRecognized)) &&
+        shorterLength >= 4 &&
+        coverage >= 0.72) {
       matches.add(_MerchantMatch(candidate, normalizedCandidate.length));
     }
   }
