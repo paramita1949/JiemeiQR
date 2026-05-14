@@ -479,6 +479,15 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     );
   }
 
+  Future<void> _refreshMerchantHistory() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _stateFuture = _loadState();
+    });
+  }
+
   WaybillPhotoOcrService get _effectiveOcrService {
     return _ocrService ??=
         widget.ocrService ?? const ConfiguredWaybillOcrService();
@@ -565,7 +574,9 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (message.contains('401') || message.contains('403')) {
       return '$message\n定位建议：请检查魔搭 Token 是否有效、是否有该模型权限。';
     }
-    if (message.contains('500') || message.contains('502') || message.contains('503')) {
+    if (message.contains('500') ||
+        message.contains('502') ||
+        message.contains('503')) {
       return '$message\n定位建议：服务端波动，建议稍后重试。';
     }
     return '$message\n定位建议：请重试一次；若持续失败，换更清晰正拍照片。';
@@ -608,6 +619,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         ),
       );
       _draftOrderKey = currentKey;
+      await _refreshMerchantHistory();
       await _reloadDraftLines(orderId: orderId, headerKey: currentKey);
       if (exitAfterSave) {
         if (!mounted) {
@@ -642,6 +654,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
           itemId: duplicate.itemId,
           appendBoxes: boxes,
         );
+        await _refreshMerchantHistory();
         await _reloadDraftLines(orderId: mergedOrderId, headerKey: currentKey);
         if (!mounted) {
           return;

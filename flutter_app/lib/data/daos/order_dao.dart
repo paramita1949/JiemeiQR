@@ -297,6 +297,10 @@ class OrderDao {
     return available < 0 ? 0 : available;
   }
 
+  Future<int> availableBoxesForBatch(int batchId) {
+    return _availableBoxesForBatch(batchId);
+  }
+
   Future<int> _availableBoxesForBatchExcludingItem({
     required int batchId,
     required int excludeItemId,

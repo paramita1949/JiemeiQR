@@ -51,6 +51,20 @@ class _LineEntry {
   }
 }
 
+class _InsufficientStockItem {
+  const _InsufficientStockItem({
+    required this.batchId,
+    required this.requestedBoxes,
+    required this.availableBoxes,
+    required this.entries,
+  });
+
+  final int batchId;
+  final int requestedBoxes;
+  final int availableBoxes;
+  final List<_LineEntry> entries;
+}
+
 class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
   bool _saving = false;
   late final TextEditingController _merchantController =
@@ -194,10 +208,40 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
         ? draft.merchantName
         : _merchantController.text.trim();
     final orderDate = widget.matched.orderDate ?? DateTime.now();
-    final selected =
-        _entries.where((entry) => entry.included && entry.line.isMatched);
+    final selected = _entries
+        .where((entry) => entry.included && entry.line.isMatched)
+        .toList(growable: false);
+    final insufficientItems = await _insufficientItemsFor(selected);
+    if (insufficientItems.isNotEmpty) {
+      final insufficientEntries = {
+        for (final item in insufficientItems) ...item.entries,
+      };
+      if (mounted) {
+        setState(() {
+          for (final entry in insufficientEntries) {
+            entry.included = false;
+          }
+        });
+      }
+      final shouldContinue = await _showInsufficientConfirmDialog(
+        insufficientItems,
+      );
+      if (shouldContinue != true) {
+        if (mounted) {
+          setState(() => _saving = false);
+        }
+        return;
+      }
+    }
+    final selectedAfterExclusion = _entries
+        .where((entry) => entry.included && entry.line.isMatched)
+        .toList(growable: false);
+    if (selectedAfterExclusion.isEmpty) {
+      _showError('库存不足条目已移除，暂无可录入明细');
+      return;
+    }
     try {
-      for (final entry in selected) {
+      for (final entry in selectedAfterExclusion) {
         final line = entry.line;
         final product = line.product!;
         final batch = entry.selectedBatch ?? line.batch!;
@@ -234,6 +278,92 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
     } catch (_) {
       _showError('录入失败，请检查识别结果');
     }
+  }
+
+  Future<List<_InsufficientStockItem>> _insufficientItemsFor(
+    List<_LineEntry> selected,
+  ) async {
+    final byBatch = <int, List<_LineEntry>>{};
+    for (final entry in selected) {
+      final batch = entry.selectedBatch ?? entry.line.batch;
+      if (batch == null) {
+        continue;
+      }
+      byBatch.putIfAbsent(batch.id, () => <_LineEntry>[]).add(entry);
+    }
+    final result = <_InsufficientStockItem>[];
+    for (final entry in byBatch.entries) {
+      final requested = entry.value.fold<int>(
+        0,
+        (sum, lineEntry) => sum + lineEntry.line.boxes,
+      );
+      final available = await widget.orderDao.availableBoxesForBatch(entry.key);
+      if (requested > available) {
+        result.add(
+          _InsufficientStockItem(
+            batchId: entry.key,
+            requestedBoxes: requested,
+            availableBoxes: available,
+            entries: entry.value,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  Future<bool?> _showInsufficientConfirmDialog(
+    List<_InsufficientStockItem> items,
+  ) {
+    if (!mounted) {
+      return Future.value(false);
+    }
+    final lines = <String>[];
+    for (final item in items) {
+      final first = item.entries.first;
+      final line = first.line;
+      final productText = line.product == null
+          ? line.sourceRows.first.productCode
+          : '${line.product!.code} ${line.product!.name}';
+      final batch = first.selectedBatch ?? line.batch;
+      final batchText = batch == null ? '' : ' · ${batch.actualBatch}';
+      lines.add(
+        '$productText$batchText：需${item.requestedBoxes}箱，可用${item.availableBoxes}箱',
+      );
+    }
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('以下产品库存不足'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(line),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              '已默认取消库存不足条目的录入，是否继续录入其余明细？',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('继续录入'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
