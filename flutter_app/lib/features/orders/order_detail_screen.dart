@@ -918,12 +918,15 @@ class _LineCard extends StatelessWidget {
                 text:
                     '${line.batch.boxesPerBoard}箱/板 · ${line.product.piecesPerBox}件/箱',
               ),
-              if (isLowStock)
-                _MetricChip(
-                  text: '预占后余量 $remainText',
-                  textColor: const Color(0xFFC2410C),
-                  backgroundColor: const Color(0xFFFFEDD5),
-                ),
+              _MetricChip(
+                text: '预占后余量 $remainText',
+                textColor: isLowStock
+                    ? const Color(0xFFC2410C)
+                    : const Color(0xFF166534),
+                backgroundColor: isLowStock
+                    ? const Color(0xFFFFEDD5)
+                    : const Color(0xFFDCFCE7),
+              ),
               _MetricChip(text: '库位 ${line.batch.location ?? '--'}'),
               if (line.item.isException)
                 const _MetricChip(

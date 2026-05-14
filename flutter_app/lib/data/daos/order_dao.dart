@@ -627,6 +627,7 @@ class OrderDao {
         .customSelect(
           '''
       SELECT
+        b.id AS batch_id,
         p.code AS product_code,
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
@@ -650,22 +651,31 @@ class OrderDao {
         )
         .get();
     final variants = await _batchCodesByProductDate();
-    return rows
-        .map((row) {
-          final productCode = row.data['product_code'] as String? ?? '';
-          final dateBatch = row.data['date_batch'] as String? ?? '';
-          return OrderRestockAggregate(
-            productCode: productCode,
-            actualBatch: row.data['actual_batch'] as String? ?? '',
-            dateBatch: dateBatch,
-            totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
-            boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
-            batchCodeVariants:
-                variants['$productCode|$dateBatch'] ?? const <String>[],
-          );
-        })
-        .where((row) => row.productCode.isNotEmpty)
-        .toList();
+    final result = <OrderRestockAggregate>[];
+    for (final row in rows) {
+      final productCode = row.data['product_code'] as String? ?? '';
+      final dateBatch = row.data['date_batch'] as String? ?? '';
+      final batchId = row.data['batch_id'] as int? ?? 0;
+      if (productCode.isEmpty) {
+        continue;
+      }
+      final availableAfterReserveBoxes =
+          batchId > 0 ? await _availableBoxesForBatch(batchId) : 0;
+      result.add(
+        OrderRestockAggregate(
+          batchId: batchId,
+          productCode: productCode,
+          actualBatch: row.data['actual_batch'] as String? ?? '',
+          dateBatch: dateBatch,
+          totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
+          boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
+          batchCodeVariants:
+              variants['$productCode|$dateBatch'] ?? const <String>[],
+          availableAfterReserveBoxes: availableAfterReserveBoxes,
+        ),
+      );
+    }
+    return result;
   }
 
   Future<List<OrderRestockWaybillLine>> orderRestockWaybillLines({
@@ -1280,20 +1290,24 @@ class OrderStatusCounts {
 
 class OrderRestockAggregate {
   const OrderRestockAggregate({
+    required this.batchId,
     required this.productCode,
     required this.actualBatch,
     required this.dateBatch,
     required this.totalBoxes,
     required this.boxesPerBoard,
     required this.batchCodeVariants,
+    required this.availableAfterReserveBoxes,
   });
 
+  final int batchId;
   final String productCode;
   final String actualBatch;
   final String dateBatch;
   final int totalBoxes;
   final int boxesPerBoard;
   final List<String> batchCodeVariants;
+  final int availableAfterReserveBoxes;
 }
 
 class OrderRestockWaybillLine {
