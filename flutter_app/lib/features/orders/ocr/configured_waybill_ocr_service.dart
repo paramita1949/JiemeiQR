@@ -5,6 +5,7 @@ import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.da
 import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
   const ConfiguredWaybillOcrService({
@@ -16,6 +17,13 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
   @override
   Future<WaybillOcrDraft> recognize(File image) async {
     final config = await configStore.load();
+    final provider = config.usesModelScopeOcr ? 'modelscope' : 'gemini';
+    final model =
+        config.usesModelScopeOcr ? config.modelscopeModel : config.geminiModel;
+    DebugEventLog.add(
+      'AI_OCR',
+      'route provider=$provider model=$model promptPreset=${config.ocrPromptPreset}',
+    );
     if (config.usesModelScopeOcr) {
       return ModelScopeWaybillOcrService(configStore: configStore).recognize(
         image,

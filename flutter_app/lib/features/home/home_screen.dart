@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
-import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_precheckin_guard_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
@@ -529,10 +528,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     buffer.writeln('--- recent_debug_events ---');
     final events = DebugEventLog.dump();
     const allowTags = <String>[
-      '[GEOFENCE_',
-      '[PRECHECKIN]',
-      '[PERMISSION]',
-      '[OUTBOUND]',
+      '[AI_OCR]',
     ];
     final filtered = events.where((e) {
       for (final tag in allowTags) {
@@ -547,18 +543,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         buffer.writeln(e);
       }
     }
-    try {
-      final nativeLogs = await AttendanceGeofenceBridge.nativeLogs();
-      buffer.writeln('--- native_geofence_events ---');
-      if (nativeLogs.trim().isEmpty) {
-        buffer.writeln('native_geofence_events=empty');
-      } else {
-        buffer.writeln(nativeLogs.trim());
-      }
-    } catch (error) {
-      buffer.writeln('native_geofence_events_error=$error');
-    }
-
     return _DebugLogReport(
       dbStatus: dbStatus,
       sqliteSchemaVersion: _database.schemaVersion,
@@ -665,7 +649,7 @@ class _DebugLogSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                '先看这个面板；需要排查时再一键复制完整日志。',
+                '当前仅显示 AI 识别日志；定位/打卡相关日志已暂时屏蔽。',
                 style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 12,
@@ -699,7 +683,7 @@ class _DebugLogSheet extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                '最近系统记录',
+                '最近 AI 识别记录',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 14,
@@ -711,7 +695,7 @@ class _DebugLogSheet extends StatelessWidget {
                 child: report.readableEvents.isEmpty
                     ? const Center(
                         child: Text(
-                          '暂无关键日志',
+                          '暂无 AI 识别日志',
                           style: TextStyle(
                             color: AppTheme.textSecondary,
                             fontWeight: FontWeight.w700,

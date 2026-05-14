@@ -828,6 +828,7 @@ class _RestockAggregateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duplicateKeys = _duplicateProductDateKeys(rows);
+    final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.totalBoxes);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -843,6 +844,15 @@ class _RestockAggregateCard extends StatelessWidget {
               color: AppTheme.textPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '总箱数 $totalBoxes 箱',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),

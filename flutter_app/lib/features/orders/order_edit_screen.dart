@@ -17,6 +17,7 @@ import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dar
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_review_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -409,6 +410,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   }
 
   Future<void> _runWaybillOcr(File image) async {
+    DebugEventLog.add('AI_OCR',
+        'start image=${image.path.split(Platform.pathSeparator).last}');
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -418,12 +421,17 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       var draft = await _effectiveOcrService.recognize(image);
       draft = await _resolveOcrMerchantName(draft);
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
+      DebugEventLog.add(
+        'AI_OCR',
+        'success waybill=${matched.source.waybillNo} merchant=${matched.source.merchantName} lines=${matched.lines.length} warnings=${matched.source.warnings.length}',
+      );
       if (!mounted) {
         return;
       }
       Navigator.of(context, rootNavigator: true).pop();
       await _openOcrReview(matched);
     } on GeminiWaybillOcrException catch (error) {
+      DebugEventLog.add('AI_OCR', 'gemini_failed ${error.message}');
       if (!mounted) {
         return;
       }
@@ -432,6 +440,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         SnackBar(content: Text(error.message)),
       );
     } on ModelScopeWaybillOcrException catch (error) {
+      DebugEventLog.add('AI_OCR', 'modelscope_failed ${error.message}');
       if (!mounted) {
         return;
       }
@@ -447,6 +456,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         duration: const Duration(seconds: 4),
       );
     } catch (_) {
+      DebugEventLog.add('AI_OCR', 'failed unknown_error');
       if (!mounted) {
         return;
       }
