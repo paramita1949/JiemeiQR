@@ -360,6 +360,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   }
 
   Future<void> _recognizeWaybillPhoto() async {
+    DebugEventLog.add('AI_OCR', 'open image source chooser');
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (context) => SafeArea(
@@ -381,6 +382,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       ),
     );
     if (source == null) {
+      DebugEventLog.add('AI_OCR', 'cancel image source chooser');
       return;
     }
     final picked = await _effectiveImagePicker.pickImage(
@@ -389,7 +391,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       maxWidth: 1600,
       maxHeight: 2048,
     );
-    if (!mounted || picked == null) {
+    if (picked == null) {
+      DebugEventLog.add('AI_OCR', 'image not selected');
+      return;
+    }
+    if (!mounted) {
       return;
     }
     await _runWaybillOcr(File(picked.path));

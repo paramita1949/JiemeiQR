@@ -219,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     if (title == 'AI识别') {
+      DebugEventLog.add('AI_OCR', 'open ai_config_screen');
       await pushAndRefresh(
         context,
         route: MaterialPageRoute(
@@ -527,12 +528,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     buffer.writeln('--- recent_debug_events ---');
     final events = DebugEventLog.dump();
-    const allowTags = <String>[
+    const aiKeywords = <String>[
       '[AI_OCR]',
+      'ocr',
+      '识别',
+      'gemini',
+      'modelscope',
+      'prompt',
     ];
     final filtered = events.where((e) {
-      for (final tag in allowTags) {
-        if (e.contains(tag)) return true;
+      final lower = e.toLowerCase();
+      for (final keyword in aiKeywords) {
+        if (keyword.startsWith('[')) {
+          if (e.contains(keyword)) return true;
+        } else if (lower.contains(keyword)) {
+          return true;
+        }
       }
       return false;
     }).toList();
