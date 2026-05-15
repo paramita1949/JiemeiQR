@@ -79,10 +79,29 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     subtitle: _dateRangeText(),
                   ),
                 ),
-                IconButton.filledTonal(
-                  tooltip: '日期筛选',
-                  onPressed: _pickDateRange,
-                  icon: const Icon(Icons.calendar_month_outlined),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton.filled(
+                      key: const Key('newWaybillTopButton'),
+                      tooltip: '新增运单',
+                      onPressed: _openNewWaybill,
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF7A8CA8),
+                        foregroundColor: Colors.white,
+                        hoverColor: const Color(0xFF6E809A),
+                        highlightColor: const Color(0xFF64748E),
+                      ),
+                      icon: const Icon(Icons.playlist_add_rounded),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: '日期筛选',
+                      onPressed: _pickDateRange,
+                      icon: const Icon(Icons.calendar_month_outlined),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -145,12 +164,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
             ],
             const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: _openNewWaybill,
-              icon: const Icon(Icons.add),
-              label: const Text('新增运单'),
-            ),
-            const SizedBox(height: 10),
             if (_loadingInitial)
               const Center(child: CircularProgressIndicator())
             else if (_orders.isEmpty)
@@ -201,10 +214,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       limit: _pageSize,
     );
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
-    final hideRestock =
-        _quickFilter == _OrderQuickFilter.exception ||
-            _status == OrderStatus.picked ||
-            _status == OrderStatus.done;
+    final hideRestock = _quickFilter == _OrderQuickFilter.exception ||
+        _status == OrderStatus.picked ||
+        _status == OrderStatus.done;
     final restockStatus = _status ?? OrderStatus.pending;
     final restockAggregates = hideRestock
         ? const <OrderRestockAggregate>[]
@@ -948,8 +960,7 @@ class _RestockWaybillSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sortedLines = [...lines]
-      ..sort((a, b) {
+    final sortedLines = [...lines]..sort((a, b) {
         final boxDiff = b.totalBoxes.compareTo(a.totalBoxes);
         if (boxDiff != 0) {
           return boxDiff;
@@ -1153,10 +1164,10 @@ class _OrderPickProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = order.itemCount;
-    final picked = (order.status == OrderStatus.done ||
-            order.status == OrderStatus.picked)
-        ? total
-        : order.pickedItemCount.clamp(0, total);
+    final picked =
+        (order.status == OrderStatus.done || order.status == OrderStatus.picked)
+            ? total
+            : order.pickedItemCount.clamp(0, total);
     final progress = total <= 0 ? 0.0 : picked / total;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
