@@ -7,6 +7,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
+import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
@@ -46,6 +47,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final OrderDao _orderDao;
+  final FileAiConfigStore _aiConfigStore = const FileAiConfigStore();
   WaybillPhotoOcrService? _ocrService;
   ImagePicker? _imagePicker;
   late final bool _ownsDatabase;
@@ -58,6 +60,27 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   List<Product> _products = const [];
   List<AvailableBatch> _availableBatches = const [];
   Map<String, List<String>> _batchCodesByProductDate = const {};
+  AiOcrConfig _aiConfig = const AiOcrConfig(
+    provider: AiOcrConfig.defaultProvider,
+    geminiApiKey: '',
+    geminiModel: AiOcrConfig.defaultModel,
+    tencentSecretId: '',
+    tencentSecretKey: '',
+    tencentRegion: AiOcrConfig.defaultTencentRegion,
+    aliyunAccessKeyId: '',
+    aliyunAccessKeySecret: '',
+    aliyunEndpoint: AiOcrConfig.defaultAliyunEndpoint,
+    baiduApiKey: '',
+    baiduSecretKey: '',
+    modelscopeToken: '',
+    modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+    openRouterApiKey: '',
+    openRouterModel: AiOcrConfig.defaultOpenRouterModel,
+    geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
+    modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+    openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+    ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
+  );
   String? _draftOrderKey;
   List<OrderDetailLine> _draftLines = const [];
 
@@ -74,6 +97,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _waybillNoController.addListener(_onOrderHeaderChanged);
     _merchantController.addListener(_onOrderHeaderChanged);
     _stateFuture = _loadState();
+    unawaited(_loadAiConfig());
   }
 
   @override
@@ -262,6 +286,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     return _OrderEditState(merchants: merchants);
   }
 
+  Future<void> _loadAiConfig() async {
+    final config = await _aiConfigStore.load();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _aiConfig = config);
+  }
+
   Future<void> _selectProduct(int? productId) async {
     if (productId == null) {
       return;
@@ -361,32 +393,297 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
 
   Future<void> _recognizeWaybillPhoto() async {
     DebugEventLog.add('AI_OCR', 'open image source chooser');
-    final source = await showModalBottomSheet<ImageSource>(
+    final plan = await showModalBottomSheet<_OcrCapturePlan>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('拍照识别'),
-              onTap: () => Navigator.of(context).pop(ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('从相册选择'),
-              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+      showDragHandle: true,
+      builder: (context) {
+        var provider = _aiConfig.provider;
+        var geminiModel = _aiConfig.geminiModel;
+        var modelscopeModel = _aiConfig.modelscopeModel;
+        var promptPreset = _aiConfig.ocrPromptPreset;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            String shortModelName(String model) {
+              final text = model.trim();
+              if (text.isEmpty) {
+                return '未选择模型';
+              }
+              final slashIndex = text.lastIndexOf('/');
+              return slashIndex >= 0 ? text.substring(slashIndex + 1) : text;
+            }
+
+            List<String> activeModelPresets() {
+              final current = provider == AiOcrConfig.modelscopeProvider
+                  ? modelscopeModel
+                  : geminiModel;
+              final presets = provider == AiOcrConfig.modelscopeProvider
+                  ? _aiConfig.modelScopeModelPresets
+                  : _aiConfig.geminiModelPresets;
+              return <String>{
+                if (current.trim().isNotEmpty) current.trim(),
+                ...presets.where((item) => item.trim().isNotEmpty),
+              }.toList();
+            }
+
+            Widget compactChoice({
+              required String label,
+              required bool selected,
+              required bool enabled,
+              required VoidCallback onTap,
+            }) {
+              return InkWell(
+                onTap: enabled ? onTap : null,
+                borderRadius: BorderRadius.circular(10),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFFE9F1FF)
+                        : const Color(0xFFF7F9FC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected
+                          ? const Color(0xFF8FAEF5)
+                          : const Color(0xFFE1E7F1),
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: enabled
+                          ? selected
+                              ? const Color(0xFF2859CC)
+                              : AppTheme.textSecondary
+                          : const Color(0xFFB6BDCA),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        compactChoice(
+                          label: '增强',
+                          selected: promptPreset ==
+                              AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                          enabled: true,
+                          onTap: () => setModalState(
+                            () => promptPreset =
+                                AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        compactChoice(
+                          label: '通用',
+                          selected: promptPreset ==
+                              AiOcrConfig.ocrPromptPresetGeneral,
+                          enabled: true,
+                          onTap: () => setModalState(
+                            () => promptPreset =
+                                AiOcrConfig.ocrPromptPresetGeneral,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F7FC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFDCE4F0)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0F1E3A8A),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          compactChoice(
+                            label: '谷歌',
+                            selected: provider == AiOcrConfig.defaultProvider,
+                            enabled: _aiConfig.hasGeminiKey,
+                            onTap: () => setModalState(
+                              () => provider = AiOcrConfig.defaultProvider,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          compactChoice(
+                            label: '魔搭',
+                            selected:
+                                provider == AiOcrConfig.modelscopeProvider,
+                            enabled: _aiConfig.hasModelScopeCredential,
+                            onTap: () => setModalState(
+                              () => provider = AiOcrConfig.modelscopeProvider,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: PopupMenuButton<String>(
+                              tooltip: '切换具体模型',
+                              onSelected: (value) => setModalState(() {
+                                if (provider ==
+                                    AiOcrConfig.modelscopeProvider) {
+                                  modelscopeModel = value;
+                                } else {
+                                  geminiModel = value;
+                                }
+                              }),
+                              itemBuilder: (context) => activeModelPresets()
+                                  .map(
+                                    (model) => PopupMenuItem<String>(
+                                      value: model,
+                                      child: Text(
+                                        shortModelName(model),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              child: Container(
+                                height: 33,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFFFF),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFDCE3EE),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        shortModelName(
+                                          provider ==
+                                                  AiOcrConfig.modelscopeProvider
+                                              ? modelscopeModel
+                                              : geminiModel,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppTheme.textSecondary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      size: 16,
+                                      color: Color(0xFF7A8598),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 46),
+                              backgroundColor: const Color(0xFFF8FAFD),
+                              foregroundColor: const Color(0xFF2C5FD1),
+                              side: const BorderSide(color: Color(0xFFD4DEEE)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(
+                              _OcrCapturePlan(
+                                source: ImageSource.gallery,
+                                provider: provider,
+                                geminiModel: geminiModel,
+                                modelscopeModel: modelscopeModel,
+                                promptPreset: promptPreset,
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_library_outlined),
+                            label: const Text('相册识别'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 46),
+                              elevation: 0,
+                              backgroundColor: const Color(0xFF2860E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(
+                              _OcrCapturePlan(
+                                source: ImageSource.camera,
+                                provider: provider,
+                                geminiModel: geminiModel,
+                                modelscopeModel: modelscopeModel,
+                                promptPreset: promptPreset,
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: const Text('拍照识别'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
-    if (source == null) {
+    if (plan == null) {
       DebugEventLog.add('AI_OCR', 'cancel image source chooser');
       return;
     }
+    final nextConfig = _aiConfig.copyWith(
+      provider: plan.provider,
+      geminiModel: plan.geminiModel,
+      modelscopeModel: plan.modelscopeModel,
+      ocrPromptPreset: plan.promptPreset,
+    );
+    await _aiConfigStore.save(nextConfig);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _aiConfig = nextConfig;
+    });
+    _ocrService = const ConfiguredWaybillOcrService();
     final picked = await _effectiveImagePicker.pickImage(
-      source: source,
+      source: plan.source,
       imageQuality: 85,
       maxWidth: 1600,
       maxHeight: 2048,
@@ -1379,6 +1676,22 @@ class _DraftLinesCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OcrCapturePlan {
+  const _OcrCapturePlan({
+    required this.source,
+    required this.provider,
+    required this.geminiModel,
+    required this.modelscopeModel,
+    required this.promptPreset,
+  });
+
+  final ImageSource source;
+  final String provider;
+  final String geminiModel;
+  final String modelscopeModel;
+  final String promptPreset;
 }
 
 class _OrderActionBar extends StatelessWidget {
