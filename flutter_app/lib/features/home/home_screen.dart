@@ -15,6 +15,7 @@ import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_import_intent_service.dart';
+import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
@@ -49,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   ];
   late AppDatabase _database;
   late bool _ownsDatabase;
+  final BackupService _backupService =
+      const BackupService(databaseFileName: 'jiemei.sqlite');
   final BackupImportIntentService _backupImportIntentService =
       const BackupImportIntentService();
   _HomeStats? _stats;
@@ -64,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     unawaited(_refreshStats());
+    unawaited(_runAutoBackupCheck());
     unawaited(_consumePendingImportIntent());
     unawaited(_runAttendanceReminderCheck());
     unawaited(_runPrecheckinGuard(forForeground: true));
@@ -103,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshStats());
+      unawaited(_runAutoBackupCheck());
       unawaited(_consumePendingImportIntent());
       unawaited(_runAttendanceReminderCheck());
       unawaited(_runPrecheckinGuard(forForeground: true));
@@ -300,6 +305,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   AppDatabase get database => _database;
+
+  Future<void> _runAutoBackupCheck() async {
+    try {
+      await _backupService.runAutoBackupIfDue();
+    } catch (_) {
+      // Ignore auto backup errors on home lifecycle hooks.
+    }
+  }
 
   Future<void> _runAttendanceReminderCheck() async {
     try {
