@@ -445,23 +445,28 @@ DateTimeRange _singleDayRange(DateTime date) {
   return DateTimeRange(start: day, end: day);
 }
 
-int? _extractFloorFromLocation(String? location) {
+Set<int> _extractFloorsFromLocation(String? location) {
   if (location == null) {
-    return null;
+    return const <int>{};
   }
   final text = location.trim();
   if (text.isEmpty) {
-    return null;
+    return const <int>{};
   }
-  final digitMatch = RegExp(r'(\d+)\s*[楼层]').firstMatch(text);
-  if (digitMatch != null) {
-    return int.tryParse(digitMatch.group(1) ?? '');
+  final floors = <int>{};
+  for (final match in RegExp(r'(\d+)\s*[楼层]').allMatches(text)) {
+    final value = int.tryParse(match.group(1) ?? '');
+    if (value != null) {
+      floors.add(value);
+    }
   }
-  final chineseMatch = RegExp(r'([一二三四五六七八九十]+)\s*[楼层]').firstMatch(text);
-  if (chineseMatch == null) {
-    return null;
+  for (final match in RegExp(r'([一二三四五六七八九十]+)\s*[楼层]').allMatches(text)) {
+    final value = _parseChineseFloor(match.group(1) ?? '');
+    if (value != null) {
+      floors.add(value);
+    }
   }
-  return _parseChineseFloor(chineseMatch.group(1) ?? '');
+  return floors;
 }
 
 int? _parseChineseFloor(String raw) {
@@ -487,8 +492,7 @@ int? _parseChineseFloor(String raw) {
 
 List<int> _extractAvailableFloors(List<OrderRestockAggregate> rows) {
   final floors = rows
-      .map((row) => _extractFloorFromLocation(row.location))
-      .whereType<int>()
+      .expand((row) => _extractFloorsFromLocation(row.location))
       .toSet()
       .toList()
     ..sort();
@@ -920,7 +924,9 @@ class _RestockAggregateCard extends StatelessWidget {
         ? rows
         : rows
             .where(
-              (row) => _extractFloorFromLocation(row.location) == selectedFloor,
+              (row) => _extractFloorsFromLocation(row.location).contains(
+                selectedFloor,
+              ),
             )
             .toList();
     final duplicateKeys = _duplicateProductDateKeys(visibleRows);
