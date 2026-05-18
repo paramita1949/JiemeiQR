@@ -34,6 +34,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   OrderStatus? _status;
   final List<OrderSummary> _orders = <OrderSummary>[];
   List<OrderRestockAggregate> _restockAggregates = const [];
+  int? _restockFloorFilter;
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
@@ -160,6 +161,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
               const SizedBox(height: 8),
               _RestockAggregateCard(
                 rows: _restockAggregates,
+                selectedFloor: _restockFloorFilter,
+                onSelectFloor: (floor) {
+                  setState(() => _restockFloorFilter = floor);
+                },
                 onTapRow: _showRestockWaybillLines,
               ),
             ],
@@ -228,10 +233,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (!mounted) {
       return;
     }
+    final availableFloors = _extractAvailableFloors(restockAggregates);
     setState(() {
       _orders.addAll(page.orders);
       _counts = counts;
       _restockAggregates = restockAggregates;
+      if (_restockFloorFilter != null &&
+          !availableFloors.contains(_restockFloorFilter)) {
+        _restockFloorFilter = null;
+      }
       _total = page.total;
       _hasMore = _orders.length < _total;
       _loadingInitial = false;
@@ -434,6 +444,68 @@ DateTimeRange _singleDayRange(DateTime date) {
   final day = DateTime(date.year, date.month, date.day);
   return DateTimeRange(start: day, end: day);
 }
+
+int? _extractFloorFromLocation(String? location) {
+  if (location == null) {
+    return null;
+  }
+  final text = location.trim();
+  if (text.isEmpty) {
+    return null;
+  }
+  final digitMatch = RegExp(r'(\d+)\s*[楼层]').firstMatch(text);
+  if (digitMatch != null) {
+    return int.tryParse(digitMatch.group(1) ?? '');
+  }
+  final chineseMatch = RegExp(r'([一二三四五六七八九十]+)\s*[楼层]').firstMatch(text);
+  if (chineseMatch == null) {
+    return null;
+  }
+  return _parseChineseFloor(chineseMatch.group(1) ?? '');
+}
+
+int? _parseChineseFloor(String raw) {
+  if (raw.isEmpty) {
+    return null;
+  }
+  if (raw == '十') {
+    return 10;
+  }
+  if (!raw.contains('十')) {
+    return _chineseDigitMap[raw];
+  }
+  final parts = raw.split('十');
+  final tensRaw = parts.first;
+  final onesRaw = parts.length > 1 ? parts.last : '';
+  final tens = tensRaw.isEmpty ? 1 : (_chineseDigitMap[tensRaw] ?? 0);
+  final ones = onesRaw.isEmpty ? 0 : (_chineseDigitMap[onesRaw] ?? 0);
+  if (tens == 0) {
+    return null;
+  }
+  return tens * 10 + ones;
+}
+
+List<int> _extractAvailableFloors(List<OrderRestockAggregate> rows) {
+  final floors = rows
+      .map((row) => _extractFloorFromLocation(row.location))
+      .whereType<int>()
+      .toSet()
+      .toList()
+    ..sort();
+  return floors;
+}
+
+const Map<String, int> _chineseDigitMap = <String, int>{
+  '一': 1,
+  '二': 2,
+  '三': 3,
+  '四': 4,
+  '五': 5,
+  '六': 6,
+  '七': 7,
+  '八': 8,
+  '九': 9,
+};
 
 enum _OrderQuickFilter {
   today,
@@ -831,16 +903,29 @@ String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 class _RestockAggregateCard extends StatelessWidget {
   const _RestockAggregateCard({
     required this.rows,
+    required this.selectedFloor,
+    required this.onSelectFloor,
     required this.onTapRow,
   });
 
   final List<OrderRestockAggregate> rows;
+  final int? selectedFloor;
+  final ValueChanged<int?> onSelectFloor;
   final ValueChanged<OrderRestockAggregate> onTapRow;
 
   @override
   Widget build(BuildContext context) {
-    final duplicateKeys = _duplicateProductDateKeys(rows);
-    final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.totalBoxes);
+    final floors = _extractAvailableFloors(rows);
+    final visibleRows = selectedFloor == null
+        ? rows
+        : rows
+            .where(
+              (row) => _extractFloorFromLocation(row.location) == selectedFloor,
+            )
+            .toList();
+    final duplicateKeys = _duplicateProductDateKeys(visibleRows);
+    final totalBoxes =
+        visibleRows.fold<int>(0, (sum, row) => sum + row.totalBoxes);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -873,15 +958,38 @@ class _RestockAggregateCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          if (floors.isNotEmpty) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _QuickChip(
+                    label: '全部楼层',
+                    selected: selectedFloor == null,
+                    onTap: () => onSelectFloor(null),
+                  ),
+                  for (final floor in floors) ...[
+                    const SizedBox(width: 8),
+                    _QuickChip(
+                      label: '${floor}楼',
+                      selected: selectedFloor == floor,
+                      onTap: () => onSelectFloor(floor),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 220),
             child: Scrollbar(
-              thumbVisibility: rows.length > 5,
+              thumbVisibility: visibleRows.length > 5,
               child: ListView.separated(
                 shrinkWrap: true,
-                itemCount: rows.length,
+                itemCount: visibleRows.length,
                 itemBuilder: (context, index) {
-                  final row = rows[index];
+                  final row = visibleRows[index];
                   final key = _restockProductDateKey(
                     productCode: row.productCode,
                     dateBatch: row.dateBatch,

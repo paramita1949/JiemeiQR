@@ -631,6 +631,7 @@ class OrderDao {
         p.code AS product_code,
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
+        b.location AS location,
         SUM(oi.boxes) AS total_boxes,
         MAX(oi.boxes_per_board) AS boxes_per_board
       FROM order_items oi
@@ -667,6 +668,7 @@ class OrderDao {
           productCode: productCode,
           actualBatch: row.data['actual_batch'] as String? ?? '',
           dateBatch: dateBatch,
+          location: row.data['location'] as String?,
           totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
           boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
           batchCodeVariants:
@@ -722,8 +724,9 @@ class OrderDao {
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
     }
-    final rows = await _database.customSelect(
-      '''
+    final rows = await _database
+        .customSelect(
+          '''
       SELECT
         o.id AS order_id,
         o.waybill_no,
@@ -742,14 +745,15 @@ class OrderDao {
       GROUP BY o.id, o.waybill_no, o.merchant_name, o.order_date, o.status
       ORDER BY o.order_date DESC, o.created_at DESC
       ''',
-      variables: vars,
-      readsFrom: {
-        _database.orderItems,
-        _database.orders,
-        _database.products,
-        _database.batches,
-      },
-    ).get();
+          variables: vars,
+          readsFrom: {
+            _database.orderItems,
+            _database.orders,
+            _database.products,
+            _database.batches,
+          },
+        )
+        .get();
     return rows
         .map(
           (row) => OrderRestockWaybillLine(
@@ -1096,7 +1100,8 @@ class OrderDao {
           item: item,
           product: product,
           batch: batch,
-          availableAfterReserveBoxes: await _availableBoxesForBatch(item.batchId),
+          availableAfterReserveBoxes:
+              await _availableBoxesForBatch(item.batchId),
         ),
       );
     }
@@ -1294,6 +1299,7 @@ class OrderRestockAggregate {
     required this.productCode,
     required this.actualBatch,
     required this.dateBatch,
+    required this.location,
     required this.totalBoxes,
     required this.boxesPerBoard,
     required this.batchCodeVariants,
@@ -1304,6 +1310,7 @@ class OrderRestockAggregate {
   final String productCode;
   final String actualBatch;
   final String dateBatch;
+  final String? location;
   final int totalBoxes;
   final int boxesPerBoard;
   final List<String> batchCodeVariants;
