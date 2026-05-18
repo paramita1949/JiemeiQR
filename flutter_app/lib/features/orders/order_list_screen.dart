@@ -971,7 +971,7 @@ class _RestockAggregateCard extends StatelessWidget {
                   for (final floor in floors) ...[
                     const SizedBox(width: 8),
                     _QuickChip(
-                      label: '${floor}楼',
+                      label: '$floor楼',
                       selected: selectedFloor == floor,
                       onTap: () => onSelectFloor(floor),
                     ),
