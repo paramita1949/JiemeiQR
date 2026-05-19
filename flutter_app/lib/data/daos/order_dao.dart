@@ -904,8 +904,8 @@ class OrderDao {
       query.orderBy([
         (table) => OrderingTerm.asc(table.status),
         (table) => OrderingTerm.desc(table.orderDate),
-        (table) => OrderingTerm.asc(table.waybillNo),
         (table) => OrderingTerm.desc(table.createdAt),
+        (table) => OrderingTerm.asc(table.waybillNo),
       ]);
       query.limit(limit, offset: offset);
     }
