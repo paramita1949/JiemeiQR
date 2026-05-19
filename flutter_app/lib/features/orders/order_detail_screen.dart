@@ -657,6 +657,8 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = _statusMeta(detail.order.status);
+    final totalBoxes =
+        detail.lines.fold<int>(0, (sum, line) => sum + line.item.boxes);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -696,6 +698,18 @@ class _HeaderCard extends StatelessWidget {
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '总箱数 $totalBoxes箱',
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
