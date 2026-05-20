@@ -4,6 +4,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/broken_box_code_dao.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/services/qr_parser.dart';
+import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 
 import 'scanner_screen.dart';
 
@@ -60,8 +61,11 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
   }
 
   Future<void> _manualAdd() async {
-    final result = await showDialog<_BrokenManualResult>(
+    final result = await showModalBottomSheet<_BrokenManualResult>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => _BrokenManualInputDialog(productDao: _productDao),
     );
     if (result == null || result.fullCode.isEmpty) return;
@@ -69,7 +73,8 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
   }
 
   Future<void> _saveCode(String full, {bool autoPrefix00 = false}) async {
-    final normalized = autoPrefix00 && !full.startsWith('00') ? '00$full' : full;
+    final normalized =
+        autoPrefix00 && !full.startsWith('00') ? '00$full' : full;
     final parsed = QrParser.parse(normalized);
     if (parsed == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,7 +83,8 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
       return;
     }
     final day = DateTime.now();
-    final dayKey = '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    final dayKey =
+        '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
     final productCode = parsed.prefix.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
     await _dao.insert(
       day: dayKey,
@@ -90,8 +96,11 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
   }
 
   Future<void> _generateByRule() async {
-    final result = await showDialog<_BrokenRuleResult>(
+    final result = await showModalBottomSheet<_BrokenRuleResult>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => _BrokenRuleDialog(productDao: _productDao),
     );
     if (result == null) return;
@@ -113,9 +122,17 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
           children: [
             Row(
               children: [
-                Expanded(child: FilledButton.icon(onPressed: _scanAdd, icon: const Icon(Icons.qr_code_scanner), label: const Text('扫码识别'))),
+                Expanded(
+                    child: FilledButton.icon(
+                        onPressed: _scanAdd,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('扫码识别'))),
                 const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: _manualAdd, icon: const Icon(Icons.keyboard), label: const Text('手动录入'))),
+                Expanded(
+                    child: OutlinedButton.icon(
+                        onPressed: _manualAdd,
+                        icon: const Icon(Icons.keyboard),
+                        label: const Text('手动录入'))),
               ],
             ),
             const SizedBox(height: 8),
@@ -135,13 +152,15 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
                   final item = _rows[i];
                   return Card(
                     child: ListTile(
-                      title: Text('${item.day} | ${item.productCode} | ${item.actualBatch}'),
+                      title: Text(
+                          '${item.day} | ${item.productCode} | ${item.actualBatch}'),
                       subtitle: Text(item.fullCode),
                       trailing: Wrap(
                         spacing: 2,
                         children: [
                           IconButton(
-                            onPressed: () => Clipboard.setData(ClipboardData(text: item.fullCode)),
+                            onPressed: () => Clipboard.setData(
+                                ClipboardData(text: item.fullCode)),
                             icon: const Icon(Icons.copy_outlined),
                           ),
                           IconButton(
@@ -149,7 +168,8 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
                               await _dao.deleteById(item.id);
                               _load();
                             },
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.red),
                           ),
                         ],
                       ),
@@ -181,7 +201,8 @@ class _BrokenManualInputDialog extends StatefulWidget {
   final ProductDao productDao;
 
   @override
-  State<_BrokenManualInputDialog> createState() => _BrokenManualInputDialogState();
+  State<_BrokenManualInputDialog> createState() =>
+      _BrokenManualInputDialogState();
 }
 
 class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
@@ -193,6 +214,7 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
   List<AvailableBatch> _batches = const <AvailableBatch>[];
   int? _selectedProductId;
   int? _selectedBatchId;
+  int _modeIndex = 0;
   String? _errorText;
 
   @override
@@ -220,7 +242,8 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
       });
       return;
     }
-    final batches = await widget.productDao.availableBatchesForProduct(productId);
+    final batches =
+        await widget.productDao.availableBatchesForProduct(productId);
     if (!mounted) return;
     setState(() {
       _batches = batches;
@@ -262,7 +285,8 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
       setState(() => _errorText = '请先选择产品和批号');
       return;
     }
-    if (serial.length != QrParser.serialLength || int.tryParse(serial) == null) {
+    if (serial.length != QrParser.serialLength ||
+        int.tryParse(serial) == null) {
       setState(() => _errorText = '流水号需为10位数字');
       return;
     }
@@ -278,149 +302,383 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('手动录入破损箱码'),
-      content: SizedBox(
-        width: 440,
-        child: DefaultTabController(
-          length: 2,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const TabBar(
-                tabs: [
-                  Tab(text: '完全手动输入'),
-                  Tab(text: '按规则录入'),
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Center(child: _SheetHandle()),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '手动录入破损箱码',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _ModeSwitch(
+                    selectedIndex: _modeIndex,
+                    labels: const ['完全手动输入', '按规则录入'],
+                    onChanged: (index) => setState(() {
+                      _modeIndex = index;
+                      _errorText = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: _modeIndex == 0
+                        ? _buildFullManualPanel()
+                        : _buildRuleManualPanel(),
+                  ),
+                  if (_errorText != null) ...[
+                    const SizedBox(height: 12),
+                    _InlineError(text: _errorText!),
+                  ],
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 230,
-                child: TabBarView(
-                  children: [
-                    Column(
-                      children: [
-                        TextField(
-                          key: const Key('brokenManualFullCodeField'),
-                          controller: _fullCodeController,
-                          decoration: const InputDecoration(labelText: '完整码'),
-                        ),
-                        const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            key: const Key('brokenManualFullConfirmButton'),
-                            onPressed: _confirmFullManual,
-                            child: const Text('保存'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        DropdownButtonFormField<int>(
-                          key: const Key('brokenManualProductField'),
-                          initialValue: _selectedProductId,
-                          decoration:
-                              const InputDecoration(labelText: '产品（库存选择）'),
-                          items: _products
-                              .map((p) => DropdownMenuItem<int>(
-                                    value: p.id,
-                                    child: Text(p.code),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedProductId = value;
-                              _selectedBatchId = null;
-                              _errorText = null;
-                            });
-                            _loadBatchesForProduct(value);
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<int>(
-                          key: const Key('brokenManualBatchField'),
-                          initialValue: _selectedBatchId,
-                          decoration:
-                              const InputDecoration(labelText: '批号（库存选择）'),
-                          items: _batches
-                              .map((b) => DropdownMenuItem<int>(
-                                    value: b.batch.id,
-                                    child: Text(
-                                        '${b.batch.actualBatch} · 库存${b.availableBoxes}'),
-                                  ))
-                              .toList(),
-                          onChanged: (value) => setState(() {
-                            _selectedBatchId = value;
-                            _errorText = null;
-                          }),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const Key('brokenManualSerialField'),
-                                controller: _serialController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(
-                                    QrParser.serialLength,
-                                  ),
-                                ],
-                                decoration:
-                                    const InputDecoration(labelText: '流水号10位'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 96,
-                              child: TextField(
-                                key: const Key('brokenManualSuffixField'),
-                                controller: _suffixController,
-                                inputFormatters: [
-                                  LengthLimitingTextInputFormatter(
-                                    QrParser.suffixLength,
-                                  ),
-                                ],
-                                decoration: const InputDecoration(labelText: '后缀'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.tonal(
-                            key: const Key('brokenManualRuleConfirmButton'),
-                            onPressed: _confirmRuleManual,
-                            child: const Text('生成并保存'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _errorText!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+    );
+  }
+
+  Widget _buildFullManualPanel() {
+    return Column(
+      key: const ValueKey('brokenFullManual'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FormSection(
+          title: '完整码',
+          subtitle: '可直接粘贴或输入，缺少开头 00 会自动补齐',
+          child: TextField(
+            key: const Key('brokenManualFullCodeField'),
+            controller: _fullCodeController,
+            decoration: const InputDecoration(
+              labelText: '完整码',
+              hintText: '00720680088454517EL3FJEZ31',
+              prefixIcon: Icon(Icons.qr_code_2_outlined),
+            ),
+            onChanged: (_) {
+              if (_errorText != null) {
+                setState(() => _errorText = null);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            key: const Key('brokenManualFullConfirmButton'),
+            onPressed: _confirmFullManual,
+            child: const Text('保存完整码'),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRuleManualPanel() {
+    return Column(
+      key: const ValueKey('brokenRuleManual'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FormSection(
+          title: '库存信息',
+          subtitle: '产品和批号直接从库存明细选择',
+          child: Column(
+            children: [
+              DropdownButtonFormField<int>(
+                key: const Key('brokenManualProductField'),
+                initialValue: _selectedProductId,
+                decoration: const InputDecoration(
+                  labelText: '产品',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                ),
+                items: _products
+                    .map((p) => DropdownMenuItem<int>(
+                          value: p.id,
+                          child: Text(p.code),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedProductId = value;
+                    _selectedBatchId = null;
+                    _errorText = null;
+                  });
+                  _loadBatchesForProduct(value);
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: const Key('brokenManualBatchField'),
+                initialValue: _selectedBatchId,
+                decoration: const InputDecoration(
+                  labelText: '批号',
+                  prefixIcon: Icon(Icons.confirmation_number_outlined),
+                ),
+                items: _batches
+                    .map((b) => DropdownMenuItem<int>(
+                          value: b.batch.id,
+                          child: Text(
+                            '${b.batch.actualBatch} · 库存${b.availableBoxes}',
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  _selectedBatchId = value;
+                  _errorText = null;
+                }),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _FormSection(
+          title: '箱码参数',
+          subtitle: '流水号输入 10 位数字，后缀默认 31',
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  key: const Key('brokenManualSerialField'),
+                  controller: _serialController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(QrParser.serialLength),
+                  ],
+                  decoration: const InputDecoration(labelText: '流水号'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  key: const Key('brokenManualSuffixField'),
+                  controller: _suffixController,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(QrParser.suffixLength),
+                  ],
+                  decoration: const InputDecoration(labelText: '后缀'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton.tonal(
+            key: const Key('brokenManualRuleConfirmButton'),
+            onPressed: _confirmRuleManual,
+            child: const Text('生成并保存'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 5,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFCBD5E1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({
+    required this.selectedIndex,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  final int selectedIndex;
+  final List<String> labels;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i += 1)
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onChanged(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        selectedIndex == i ? Colors.white : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: selectedIndex == i
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x1A0F172A),
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      color: selectedIndex == i
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormSection extends StatelessWidget {
+  const _FormSection({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, size: 18, color: Color(0xFFDC2626)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFFDC2626),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -454,7 +712,8 @@ class _BrokenRuleDialogState extends State<_BrokenRuleDialog> {
   final TextEditingController _startController = TextEditingController();
   final TextEditingController _suffixController =
       TextEditingController(text: '31');
-  final TextEditingController _countController = TextEditingController(text: '1');
+  final TextEditingController _countController =
+      TextEditingController(text: '1');
   List<Product> _products = const <Product>[];
   List<AvailableBatch> _batches = const <AvailableBatch>[];
   int? _selectedProductId;
@@ -486,7 +745,8 @@ class _BrokenRuleDialogState extends State<_BrokenRuleDialog> {
       });
       return;
     }
-    final batches = await widget.productDao.availableBatchesForProduct(productId);
+    final batches =
+        await widget.productDao.availableBatchesForProduct(productId);
     if (!mounted) return;
     setState(() {
       _batches = batches;
@@ -545,101 +805,183 @@ class _BrokenRuleDialogState extends State<_BrokenRuleDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('规则录入破损码'),
-      content: SizedBox(
-        width: 440,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<int>(
-              key: const Key('brokenRuleProductField'),
-              initialValue: _selectedProductId,
-              decoration: const InputDecoration(labelText: '产品（库存选择）'),
-              items: _products
-                  .map((p) => DropdownMenuItem<int>(value: p.id, child: Text(p.code)))
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedProductId = value;
-                  _selectedBatchId = null;
-                  _errorText = null;
-                });
-                _loadBatchesForProduct(value);
-              },
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
             ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
-              key: const Key('brokenRuleBatchField'),
-              initialValue: _selectedBatchId,
-              decoration: const InputDecoration(labelText: '批号（库存选择）'),
-              items: _batches
-                  .map((b) => DropdownMenuItem<int>(
-                        value: b.batch.id,
-                        child: Text('${b.batch.actualBatch} · 库存${b.availableBoxes}'),
-                      ))
-                  .toList(),
-              onChanged: (value) => setState(() {
-                _selectedBatchId = value;
-                _errorText = null;
-              }),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: const Key('brokenRuleStartSerialField'),
-              controller: _startController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(QrParser.serialLength),
-              ],
-              decoration: const InputDecoration(labelText: '起始流水号10位'),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('brokenRuleSuffixField'),
-                    controller: _suffixController,
-                    inputFormatters: [
-                      LengthLimitingTextInputFormatter(QrParser.suffixLength),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Center(child: _SheetHandle()),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '规则录入破损码',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
                     ],
-                    decoration: const InputDecoration(labelText: '后缀'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    key: const Key('brokenRuleCountField'),
-                    controller: _countController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(labelText: '数量'),
+                  const SizedBox(height: 14),
+                  _FormSection(
+                    title: '库存信息',
+                    subtitle: '产品和批号直接从库存明细选择',
+                    child: Column(
+                      children: [
+                        DropdownButtonFormField<int>(
+                          key: const Key('brokenRuleProductField'),
+                          initialValue: _selectedProductId,
+                          decoration: const InputDecoration(
+                            labelText: '产品',
+                            prefixIcon: Icon(Icons.inventory_2_outlined),
+                          ),
+                          items: _products
+                              .map(
+                                (p) => DropdownMenuItem<int>(
+                                  value: p.id,
+                                  child: Text(p.code),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedProductId = value;
+                              _selectedBatchId = null;
+                              _errorText = null;
+                            });
+                            _loadBatchesForProduct(value);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<int>(
+                          key: const Key('brokenRuleBatchField'),
+                          initialValue: _selectedBatchId,
+                          decoration: const InputDecoration(
+                            labelText: '批号',
+                            prefixIcon:
+                                Icon(Icons.confirmation_number_outlined),
+                          ),
+                          items: _batches
+                              .map(
+                                (b) => DropdownMenuItem<int>(
+                                  value: b.batch.id,
+                                  child: Text(
+                                    '${b.batch.actualBatch} · 库存${b.availableBoxes}',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) => setState(() {
+                            _selectedBatchId = value;
+                            _errorText = null;
+                          }),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorText!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+                  const SizedBox(height: 14),
+                  _FormSection(
+                    title: '箱码参数',
+                    subtitle: '从起始流水号开始连续生成，数量默认 1',
+                    child: Column(
+                      children: [
+                        TextField(
+                          key: const Key('brokenRuleStartSerialField'),
+                          controller: _startController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(
+                              QrParser.serialLength,
+                            ),
+                          ],
+                          decoration: const InputDecoration(labelText: '起始流水号'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const Key('brokenRuleSuffixField'),
+                                controller: _suffixController,
+                                inputFormatters: [
+                                  LengthLimitingTextInputFormatter(
+                                    QrParser.suffixLength,
+                                  ),
+                                ],
+                                decoration:
+                                    const InputDecoration(labelText: '后缀'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                key: const Key('brokenRuleCountField'),
+                                controller: _countController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration:
+                                    const InputDecoration(labelText: '数量'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_errorText != null) ...[
+                    const SizedBox(height: 12),
+                    _InlineError(text: _errorText!),
+                  ],
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      onPressed: _confirm,
+                      child: const Text('生成保存'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _confirm,
-          child: const Text('生成保存'),
-        ),
-      ],
     );
   }
 }
