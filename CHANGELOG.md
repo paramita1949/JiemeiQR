@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.8.6 (2026-05-21)
+
+### Changed
+- OCR 默认 Gemini 模型更新为 `gemini-3.5-flash`，并同步收敛默认可选模型列表。
+- AI 配置读取阶段新增 Gemini 模型归一化：历史已移除模型（如 `gemini-3-flash-preview`、`gemini-2.5-flash`、`gemini-2.5-pro`）会自动回落到当前默认模型。
+- Gemini 模型预设列表解码时新增“保底包含默认项 + 排除已移除模型”规则，避免旧配置残留影响新版本使用。
+- 应用代码版本号更新为 3.8.6。
+
 ## 3.8.5 (2026-05-20)
 
 ### Changed

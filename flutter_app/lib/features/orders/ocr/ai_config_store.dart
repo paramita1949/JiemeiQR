@@ -27,7 +27,7 @@ class AiOcrConfig {
     this.ocrPromptPreset = defaultOcrPromptPreset,
   });
 
-  static const defaultModel = 'gemini-3-flash-preview';
+  static const defaultModel = 'gemini-3.5-flash';
   static const defaultProvider = 'gemini';
   static const tencentProvider = 'tencent';
   static const aliyunProvider = 'aliyun';
@@ -43,8 +43,6 @@ class AiOcrConfig {
   static const defaultOcrPromptPreset = ocrPromptPresetWaybillTemplateV2;
   static const defaultGeminiModelPresets = [
     defaultModel,
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
   ];
   static const defaultModelScopeModelPresets = [
     defaultModelScopeModel,
@@ -125,7 +123,7 @@ class AiOcrConfig {
       provider: provider,
       geminiApiKey: json['geminiApiKey']?.toString() ?? '',
       geminiModel: json['geminiModel']?.toString().trim().isNotEmpty == true
-          ? json['geminiModel'].toString().trim()
+          ? _normalizeGeminiModel(json['geminiModel'].toString())
           : defaultModel,
       tencentSecretId: json['tencentSecretId']?.toString() ?? '',
       tencentSecretKey: json['tencentSecretKey']?.toString() ?? '',
@@ -153,6 +151,8 @@ class AiOcrConfig {
       geminiModelPresets: _decodePresetList(
         json['geminiModelPresets'],
         fallback: defaultGeminiModelPresets,
+        ensureIncludes: defaultGeminiModelPresets,
+        excludeModels: _removedGeminiModels,
       ),
       modelScopeModelPresets: _decodePresetList(
         json['modelScopeModelPresets'],
@@ -326,10 +326,24 @@ const Set<String> _removedModelScopeModels = {
   'baidu-qianfan/Qianfan-OCR',
 };
 
+const Set<String> _removedGeminiModels = {
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+};
+
 String _normalizeModelScopeModel(String raw) {
   final value = raw.trim();
   if (value.isEmpty || _removedModelScopeModels.contains(value)) {
     return AiOcrConfig.defaultModelScopeModel;
+  }
+  return value;
+}
+
+String _normalizeGeminiModel(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || _removedGeminiModels.contains(value)) {
+    return AiOcrConfig.defaultModel;
   }
   return value;
 }
