@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/qr_preview_history_dao.dart';
 import 'package:qrscan_flutter/features/qr/broken_box_code_screen.dart';
 import 'package:qrscan_flutter/features/qr/preview_screen.dart';
@@ -30,6 +31,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   late final AppDatabase _database;
   late final bool _ownsDatabase;
   late final QrPreviewHistoryDao _historyDao;
+  late final ProductDao _productDao;
   String _lastSource = '扫码';
   String _lastRawContent = '';
   final List<QrPreviewHistoryEntry> _history = <QrPreviewHistoryEntry>[];
@@ -40,6 +42,7 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _historyDao = QrPreviewHistoryDao(_database);
+    _productDao = ProductDao(_database);
     _loadHistory();
   }
 
@@ -71,37 +74,18 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
 
   Future<void> _startManualInput() async {
     _lastSource = '手动输入';
-    final controller = TextEditingController();
-    final content = await showDialog<String>(
+    final result = await showDialog<_ManualQrInputResult>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('手动输入箱码'),
-        content: TextField(
-          key: const Key('manualQrContentField'),
-          controller: controller,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(
-            labelText: '箱码内容',
-            hintText: '00720680088454517EL3FJEZ31',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            key: const Key('manualQrConfirmButton'),
-            onPressed: () =>
-                Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('确认'),
-          ),
-        ],
-      ),
+      builder: (context) => _ManualQrInputDialog(productDao: _productDao),
     );
-    if (!mounted || content == null || content.isEmpty) {
+    if (!mounted || result == null) {
       return;
     }
+    final content = result.content.trim();
+    if (content.isEmpty) {
+      return;
+    }
+    _lastSource = result.source;
     _parseAndPreview(content);
   }
 
@@ -552,6 +536,344 @@ class _ScanCard extends StatelessWidget {
             onPressed: onOpenBroken,
             icon: const Icon(Icons.inventory_2_outlined),
             label: const Text('破损箱码'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualQrInputResult {
+  const _ManualQrInputResult({
+    required this.content,
+    required this.source,
+  });
+
+  final String content;
+  final String source;
+}
+
+class _ManualQrInputDialog extends StatefulWidget {
+  const _ManualQrInputDialog({required this.productDao});
+
+  final ProductDao productDao;
+
+  @override
+  State<_ManualQrInputDialog> createState() => _ManualQrInputDialogState();
+}
+
+class _ManualQrInputDialogState extends State<_ManualQrInputDialog> {
+  final TextEditingController _fullCodeController = TextEditingController();
+  final TextEditingController _serialController = TextEditingController();
+  final TextEditingController _suffixController =
+      TextEditingController(text: '31');
+
+  List<Product> _products = const <Product>[];
+  List<AvailableBatch> _batches = const <AvailableBatch>[];
+  int? _selectedProductId;
+  int? _selectedBatchId;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _fullCodeController.dispose();
+    _serialController.dispose();
+    _suffixController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProducts() async {
+    final products = await widget.productDao.allProducts();
+    if (!mounted) {
+      return;
+    }
+    final selectedProductId = products.isEmpty ? null : products.first.id;
+    setState(() {
+      _products = products;
+      _selectedProductId = selectedProductId;
+    });
+    await _loadBatchesForProduct(selectedProductId);
+  }
+
+  Future<void> _loadBatchesForProduct(int? productId) async {
+    if (productId == null) {
+      setState(() {
+        _batches = const <AvailableBatch>[];
+        _selectedBatchId = null;
+      });
+      return;
+    }
+    final batches = await widget.productDao.availableBatchesForProduct(productId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _batches = batches;
+      _selectedBatchId = batches.isEmpty ? null : batches.first.batch.id;
+    });
+  }
+
+  Product? get _selectedProduct {
+    final id = _selectedProductId;
+    if (id == null) {
+      return null;
+    }
+    for (final product in _products) {
+      if (product.id == id) {
+        return product;
+      }
+    }
+    return null;
+  }
+
+  BatchRecord? get _selectedBatch {
+    final id = _selectedBatchId;
+    if (id == null) {
+      return null;
+    }
+    for (final batch in _batches) {
+      if (batch.batch.id == id) {
+        return batch.batch;
+      }
+    }
+    return null;
+  }
+
+  void _confirmFullManual() {
+    final raw = _fullCodeController.text.trim().toUpperCase();
+    final content = raw.startsWith('00') ? raw : '00$raw';
+    if (content.isEmpty) {
+      setState(() => _errorText = '请输入箱码内容');
+      return;
+    }
+    Navigator.of(context).pop(
+      _ManualQrInputResult(content: content, source: '手动输入-完整码'),
+    );
+  }
+
+  void _confirmRule() {
+    final product = _selectedProduct;
+    final batch = _selectedBatch;
+    final serial = _serialController.text.trim();
+    final suffix = _suffixController.text.trim().toUpperCase();
+    if (product == null) {
+      setState(() => _errorText = '请先选择产品');
+      return;
+    }
+    if (batch == null) {
+      setState(() => _errorText = '请先选择批号');
+      return;
+    }
+    if (serial.length != QrParser.serialLength ||
+        int.tryParse(serial) == null) {
+      setState(() => _errorText = '流水号需为10位数字');
+      return;
+    }
+    if (suffix.length != QrParser.suffixLength) {
+      setState(() => _errorText = '后缀需为2位');
+      return;
+    }
+    final content = '${product.code}$serial${batch.actualBatch}$suffix';
+    Navigator.of(context).pop(
+      _ManualQrInputResult(content: content, source: '手动输入-规则生成'),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('手动输入箱码'),
+      content: SizedBox(
+        width: 440,
+        child: DefaultTabController(
+          length: 2,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const TabBar(
+                tabs: [
+                  Tab(text: '完全手动输入'),
+                  Tab(text: '按规则生成'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 230,
+                child: TabBarView(
+                  children: [
+                    _buildFullManualPanel(),
+                    _buildRulePanel(),
+                  ],
+                ),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFullManualPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: const Key('manualQrContentField'),
+          controller: _fullCodeController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: '箱码内容',
+            hintText: '00720680088454517EL3FJEZ31',
+          ),
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+        ),
+        const Spacer(),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const Key('manualQrConfirmButton'),
+            onPressed: _confirmFullManual,
+            child: const Text('确认完整码'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRulePanel() {
+    final hasProducts = _products.isNotEmpty;
+    final hasBatches = _batches.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<int>(
+          key: const Key('manualRuleProductField'),
+          initialValue: _selectedProductId,
+          decoration: const InputDecoration(labelText: '产品（来自库存明细）'),
+          items: _products
+              .map(
+                (product) => DropdownMenuItem<int>(
+                  value: product.id,
+                  child: Text(product.code),
+                ),
+              )
+              .toList(),
+          onChanged: hasProducts
+              ? (value) {
+                  setState(() {
+                    _selectedProductId = value;
+                    _selectedBatchId = null;
+                    _errorText = null;
+                  });
+                  _loadBatchesForProduct(value);
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          key: const Key('manualRuleBatchField'),
+          initialValue: _selectedBatchId,
+          decoration: const InputDecoration(labelText: '批号（来自库存明细）'),
+          items: _batches
+              .map(
+                (row) => DropdownMenuItem<int>(
+                  value: row.batch.id,
+                  child: Text('${row.batch.actualBatch} · 库存${row.availableBoxes}'),
+                ),
+              )
+              .toList(),
+          onChanged: hasBatches
+              ? (value) => setState(() {
+                    _selectedBatchId = value;
+                    _errorText = null;
+                  })
+              : null,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('manualRuleSerialField'),
+                controller: _serialController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '流水号（10位）'),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(QrParser.serialLength),
+                ],
+                onChanged: (_) {
+                  if (_errorText != null) {
+                    setState(() => _errorText = null);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 96,
+              child: TextField(
+                key: const Key('manualRuleSuffixField'),
+                controller: _suffixController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: '后缀'),
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(QrParser.suffixLength),
+                ],
+                onChanged: (_) {
+                  if (_errorText != null) {
+                    setState(() => _errorText = null);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (!hasProducts)
+          const Text(
+            '暂无库存产品，请先在库存明细录入基础信息。',
+            style: TextStyle(color: Colors.orange, fontSize: 12),
+          )
+        else if (!hasBatches)
+          const Text(
+            '当前产品暂无可用批号（库存为0或未建批次）。',
+            style: TextStyle(color: Colors.orange, fontSize: 12),
+          ),
+        const Spacer(),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonal(
+            key: const Key('manualRuleConfirmButton'),
+            onPressed: _confirmRule,
+            child: const Text('按规则生成并确认'),
           ),
         ),
       ],
