@@ -136,7 +136,13 @@ Future<String> _defaultHttpPost(Uri uri, Map<String, Object?> body) async {
     final response = await request.close();
     final responseText = await response.transform(utf8.decoder).join();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw GeminiWaybillOcrException('Gemini 请求失败：${response.statusCode}');
+      final compactBody = responseText.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final snippet = compactBody.length > 800
+          ? '${compactBody.substring(0, 800)}...'
+          : compactBody;
+      throw GeminiWaybillOcrException(
+        'Gemini 请求失败：${response.statusCode}，响应：$snippet',
+      );
     }
     return responseText;
   } finally {
