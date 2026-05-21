@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.8.7 (2026-05-21)
+
+### Changed
+- OCR 路由服务新增可注入工厂，统一 Gemini 与 ModelScope 服务构建入口，便于后续测试与扩展。
+- 配置路由默认走 Gemini；当 Gemini 识别失败且已配置 ModelScope 凭据时，自动回退到 ModelScope 并记录 `AI_OCR` 回退日志。
+- ModelScope 识别新增“模型候选重试”机制：遇到 429/限流时自动切换到下一个候选模型（最多 2 个）继续识别。
+- 应用代码版本号更新为 3.8.7。
+
 ## 3.8.6 (2026-05-21)
 
 ### Changed

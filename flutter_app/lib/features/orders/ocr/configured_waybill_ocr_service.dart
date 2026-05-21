@@ -7,12 +7,38 @@ import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
+typedef OcrServiceFactory = WaybillPhotoOcrService Function(
+  FileAiConfigStore configStore,
+  AiOcrConfig config,
+);
+
 class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
   const ConfiguredWaybillOcrService({
     this.configStore = const FileAiConfigStore(),
-  });
+    OcrServiceFactory? geminiServiceFactory,
+    OcrServiceFactory? modelScopeServiceFactory,
+  })  : _geminiServiceFactory =
+            geminiServiceFactory ?? _defaultGeminiServiceFactory,
+        _modelScopeServiceFactory =
+            modelScopeServiceFactory ?? _defaultModelScopeServiceFactory;
+
+  static WaybillPhotoOcrService _defaultGeminiServiceFactory(
+    FileAiConfigStore configStore,
+    AiOcrConfig config,
+  ) {
+    return GeminiWaybillOcrService(configStore: configStore);
+  }
+
+  static WaybillPhotoOcrService _defaultModelScopeServiceFactory(
+    FileAiConfigStore configStore,
+    AiOcrConfig config,
+  ) {
+    return ModelScopeWaybillOcrService(configStore: configStore);
+  }
 
   final FileAiConfigStore configStore;
+  final OcrServiceFactory _geminiServiceFactory;
+  final OcrServiceFactory _modelScopeServiceFactory;
 
   @override
   Future<WaybillOcrDraft> recognize(File image) async {
@@ -25,10 +51,19 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
       'route provider=$provider model=$model promptPreset=${config.ocrPromptPreset}',
     );
     if (config.usesModelScopeOcr) {
-      return ModelScopeWaybillOcrService(configStore: configStore).recognize(
-        image,
-      );
+      return _modelScopeServiceFactory(configStore, config).recognize(image);
     }
-    return GeminiWaybillOcrService(configStore: configStore).recognize(image);
+    try {
+      return await _geminiServiceFactory(configStore, config).recognize(image);
+    } catch (error) {
+      DebugEventLog.add(
+        'AI_OCR',
+        'fallback gemini_to_modelscope $error',
+      );
+      if (!config.hasModelScopeCredential) {
+        rethrow;
+      }
+      return _modelScopeServiceFactory(configStore, config).recognize(image);
+    }
   }
 }

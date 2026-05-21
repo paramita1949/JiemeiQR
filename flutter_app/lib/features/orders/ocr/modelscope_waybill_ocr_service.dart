@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef ModelScopeHttpPost = Future<String> Function(
   Uri uri,
@@ -77,6 +78,10 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
         : config.modelscopeModel.trim().isNotEmpty
             ? config.modelscopeModel.trim()
             : AiOcrConfig.defaultModelScopeModel;
+    final modelAttempts = _modelAttempts(
+      effectiveModel,
+      config.modelScopeModelPresets,
+    );
     final promptPreset = config.ocrPromptPreset;
     if (normalizedApiKey.isEmpty) {
       throw const ModelScopeWaybillOcrException('缺少魔搭 API KEY');
@@ -87,34 +92,48 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final uri = Uri.parse(_completionUrl);
     final primaryPrompt = _promptByPreset(promptPreset);
     const fallbackPrompt = _ocrPromptGeneral;
-    final attempts = <String>[
+    final promptAttempts = <String>[
       primaryPrompt,
       primaryPrompt,
       fallbackPrompt,
     ];
     ModelScopeWaybillOcrException? lastError;
-    for (var i = 0; i < attempts.length; i += 1) {
-      final body = _buildBody(
-        model: effectiveModel,
-        prompt: attempts[i],
-        base64Image: base64Image,
-      );
-      try {
-        final responseText = await _httpPost(uri, body, normalizedApiKey);
-        final draft = _parseResponse(responseText);
-        if (_isRecognizedDraftEmpty(draft)) {
-          lastError = ModelScopeWaybillOcrException(
-            '魔搭返回空结果（第${i + 1}次）',
-          );
-          continue;
+    for (var modelIndex = 0; modelIndex < modelAttempts.length; modelIndex++) {
+      final currentModel = modelAttempts[modelIndex];
+      final attemptsForModel =
+          modelIndex == 0 ? promptAttempts : <String>[primaryPrompt];
+      for (var i = 0; i < attemptsForModel.length; i += 1) {
+        final body = _buildBody(
+          model: currentModel,
+          prompt: attemptsForModel[i],
+          base64Image: base64Image,
+        );
+        try {
+          final responseText = await _httpPost(uri, body, normalizedApiKey);
+          final draft = _parseResponse(responseText);
+          if (_isRecognizedDraftEmpty(draft)) {
+            lastError = ModelScopeWaybillOcrException(
+              '魔搭返回空结果（第${i + 1}次）',
+            );
+            continue;
+          }
+          return draft;
+        } on ModelScopeWaybillOcrException catch (error) {
+          lastError = error;
+          if (_isRateLimitError(error.message) &&
+              modelIndex < modelAttempts.length - 1) {
+            DebugEventLog.add(
+              'AI_OCR',
+              'fallback modelscope_429 model=$currentModel next=${modelAttempts[modelIndex + 1]}',
+            );
+            break;
+          }
+          if (_isRetryableEmptyError(error.message) &&
+              i < attemptsForModel.length - 1) {
+            continue;
+          }
+          rethrow;
         }
-        return draft;
-      } on ModelScopeWaybillOcrException catch (error) {
-        lastError = error;
-        if (_isRetryableEmptyError(error.message) && i < attempts.length - 1) {
-          continue;
-        }
-        rethrow;
       }
     }
     throw ModelScopeWaybillOcrException(
@@ -255,6 +274,21 @@ bool _isRetryableEmptyError(String message) {
       message.contains('返回内容为空') ||
       message.contains('返回文本为空') ||
       message.contains('返回空结果');
+}
+
+bool _isRateLimitError(String message) {
+  return message.contains('429') || message.contains('限流');
+}
+
+List<String> _modelAttempts(String primary, List<String> presets) {
+  final values = <String>[
+    primary.trim(),
+    ...presets.map((item) => item.trim()),
+  ].where((item) => item.isNotEmpty).toSet().toList();
+  if (values.isEmpty) {
+    return [AiOcrConfig.defaultModelScopeModel];
+  }
+  return values.take(2).toList();
 }
 
 String _promptByPreset(String preset) {
