@@ -95,23 +95,6 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
     await _load();
   }
 
-  Future<void> _generateByRule() async {
-    final result = await showModalBottomSheet<_BrokenRuleResult>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _BrokenRuleDialog(productDao: _productDao),
-    );
-    if (result == null) return;
-    for (var i = 0; i < result.count; i++) {
-      final serial = (result.startSerial + i).toString().padLeft(10, '0');
-      final full =
-          '${result.productCode}$serial${result.actualBatch}${result.suffix}';
-      await _saveCode(full);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,15 +117,6 @@ class _BrokenBoxCodeScreenState extends State<BrokenBoxCodeScreen> {
                         icon: const Icon(Icons.keyboard),
                         label: const Text('手动录入'))),
               ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _generateByRule,
-                icon: const Icon(Icons.auto_fix_high_outlined),
-                label: const Text('规则录入'),
-              ),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -224,7 +198,7 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
   }
 
   Future<void> _loadProducts() async {
-    final products = await widget.productDao.allProducts();
+    final products = await widget.productDao.tsRequiredProducts();
     if (!mounted) return;
     final selectedProductId = products.isEmpty ? null : products.first.id;
     setState(() {
@@ -242,8 +216,10 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
       });
       return;
     }
-    final batches =
-        await widget.productDao.availableBatchesForProduct(productId);
+    final batches = await widget.productDao.availableBatchesForProduct(
+      productId,
+      includeZeroAvailable: true,
+    );
     if (!mounted) return;
     setState(() {
       _batches = batches;
@@ -294,7 +270,8 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
       setState(() => _errorText = '后缀需为2位');
       return;
     }
-    final fullCode = '${product.code}$serial${batch.actualBatch}$suffix';
+    final raw = '${product.code}$serial${batch.actualBatch}$suffix';
+    final fullCode = raw.startsWith('00') ? raw : '00$raw';
     Navigator.of(context).pop(
       _BrokenManualResult(fullCode: fullCode, autoPrefix00: false),
     );
@@ -461,7 +438,7 @@ class _BrokenManualInputDialogState extends State<_BrokenManualInputDialog> {
                     .map((b) => DropdownMenuItem<int>(
                           value: b.batch.id,
                           child: Text(
-                            '${b.batch.actualBatch} · 库存${b.availableBoxes}',
+                            '${b.batch.actualBatch} · ${b.batch.dateBatch} · 可用${b.availableBoxes}',
                           ),
                         ))
                     .toList(),
@@ -678,309 +655,6 @@ class _InlineError extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BrokenRuleResult {
-  const _BrokenRuleResult({
-    required this.productCode,
-    required this.actualBatch,
-    required this.startSerial,
-    required this.suffix,
-    required this.count,
-  });
-
-  final String productCode;
-  final String actualBatch;
-  final int startSerial;
-  final String suffix;
-  final int count;
-}
-
-class _BrokenRuleDialog extends StatefulWidget {
-  const _BrokenRuleDialog({required this.productDao});
-
-  final ProductDao productDao;
-
-  @override
-  State<_BrokenRuleDialog> createState() => _BrokenRuleDialogState();
-}
-
-class _BrokenRuleDialogState extends State<_BrokenRuleDialog> {
-  final TextEditingController _startController = TextEditingController();
-  final TextEditingController _suffixController =
-      TextEditingController(text: '31');
-  final TextEditingController _countController =
-      TextEditingController(text: '1');
-  List<Product> _products = const <Product>[];
-  List<AvailableBatch> _batches = const <AvailableBatch>[];
-  int? _selectedProductId;
-  int? _selectedBatchId;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProducts();
-  }
-
-  Future<void> _loadProducts() async {
-    final products = await widget.productDao.allProducts();
-    if (!mounted) return;
-    final selectedProductId = products.isEmpty ? null : products.first.id;
-    setState(() {
-      _products = products;
-      _selectedProductId = selectedProductId;
-    });
-    await _loadBatchesForProduct(selectedProductId);
-  }
-
-  Future<void> _loadBatchesForProduct(int? productId) async {
-    if (productId == null) {
-      setState(() {
-        _batches = const <AvailableBatch>[];
-        _selectedBatchId = null;
-      });
-      return;
-    }
-    final batches =
-        await widget.productDao.availableBatchesForProduct(productId);
-    if (!mounted) return;
-    setState(() {
-      _batches = batches;
-      _selectedBatchId = batches.isEmpty ? null : batches.first.batch.id;
-    });
-  }
-
-  Product? get _selectedProduct {
-    for (final p in _products) {
-      if (p.id == _selectedProductId) return p;
-    }
-    return null;
-  }
-
-  BatchRecord? get _selectedBatch {
-    for (final b in _batches) {
-      if (b.batch.id == _selectedBatchId) return b.batch;
-    }
-    return null;
-  }
-
-  void _confirm() {
-    final product = _selectedProduct;
-    final batch = _selectedBatch;
-    final start = _startController.text.trim();
-    final suffix = _suffixController.text.trim().toUpperCase();
-    final count = _countController.text.trim();
-    final startNum = int.tryParse(start);
-    final countNum = int.tryParse(count);
-    if (product == null || batch == null) {
-      setState(() => _errorText = '请先选择产品和批号');
-      return;
-    }
-    if (startNum == null || start.length != QrParser.serialLength) {
-      setState(() => _errorText = '起始流水号需为10位数字');
-      return;
-    }
-    if (suffix.length != QrParser.suffixLength) {
-      setState(() => _errorText = '后缀需为2位');
-      return;
-    }
-    if (countNum == null || countNum <= 0) {
-      setState(() => _errorText = '数量需大于0');
-      return;
-    }
-    Navigator.of(context).pop(
-      _BrokenRuleResult(
-        productCode: product.code,
-        actualBatch: batch.actualBatch,
-        startSerial: startNum,
-        suffix: suffix,
-        count: countNum,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Center(child: _SheetHandle()),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          '规则录入破损码',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '关闭',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _FormSection(
-                    title: '库存信息',
-                    subtitle: '产品和批号直接从库存明细选择',
-                    child: Column(
-                      children: [
-                        DropdownButtonFormField<int>(
-                          key: const Key('brokenRuleProductField'),
-                          initialValue: _selectedProductId,
-                          decoration: const InputDecoration(
-                            labelText: '产品',
-                            prefixIcon: Icon(Icons.inventory_2_outlined),
-                          ),
-                          items: _products
-                              .map(
-                                (p) => DropdownMenuItem<int>(
-                                  value: p.id,
-                                  child: Text(p.code),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedProductId = value;
-                              _selectedBatchId = null;
-                              _errorText = null;
-                            });
-                            _loadBatchesForProduct(value);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<int>(
-                          key: const Key('brokenRuleBatchField'),
-                          initialValue: _selectedBatchId,
-                          decoration: const InputDecoration(
-                            labelText: '批号',
-                            prefixIcon:
-                                Icon(Icons.confirmation_number_outlined),
-                          ),
-                          items: _batches
-                              .map(
-                                (b) => DropdownMenuItem<int>(
-                                  value: b.batch.id,
-                                  child: Text(
-                                    '${b.batch.actualBatch} · 库存${b.availableBoxes}',
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) => setState(() {
-                            _selectedBatchId = value;
-                            _errorText = null;
-                          }),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _FormSection(
-                    title: '箱码参数',
-                    subtitle: '从起始流水号开始连续生成，数量默认 1',
-                    child: Column(
-                      children: [
-                        TextField(
-                          key: const Key('brokenRuleStartSerialField'),
-                          controller: _startController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(
-                              QrParser.serialLength,
-                            ),
-                          ],
-                          decoration: const InputDecoration(labelText: '起始流水号'),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const Key('brokenRuleSuffixField'),
-                                controller: _suffixController,
-                                inputFormatters: [
-                                  LengthLimitingTextInputFormatter(
-                                    QrParser.suffixLength,
-                                  ),
-                                ],
-                                decoration:
-                                    const InputDecoration(labelText: '后缀'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                key: const Key('brokenRuleCountField'),
-                                controller: _countController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration:
-                                    const InputDecoration(labelText: '数量'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_errorText != null) ...[
-                    const SizedBox(height: 12),
-                    _InlineError(text: _errorText!),
-                  ],
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: _confirm,
-                      child: const Text('生成保存'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('取消'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

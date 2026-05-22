@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:qrscan_flutter/models/qr_record.dart';
@@ -403,6 +404,102 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _pageController.jumpToPage(0);
   }
 
+  Future<void> _editCurrentSerialTail() async {
+    if (_records.isEmpty) {
+      return;
+    }
+    final current = _records[_currentIndex];
+    final serial = current.serial;
+    if (serial.length != QrParser.serialLength) {
+      return;
+    }
+    final head = serial.substring(0, serial.length - 4);
+    final tailController = TextEditingController();
+    String? errorText;
+    final nextTail = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '修改流水号末4位',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '前6位固定: $head',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    '只需输入最后4位',
+                    style: TextStyle(color: Colors.black45, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tailController,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: '末4位',
+                      hintText: '例如 0905',
+                      errorText: errorText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        final tail = tailController.text.trim();
+                        if (tail.length != 4) {
+                          setSheetState(() => errorText = '请输入4位数字');
+                          return;
+                        }
+                        Navigator.of(context).pop(tail);
+                      },
+                      child: const Text('应用到当前码'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (nextTail == null) {
+      return;
+    }
+    final nextSerial = '$head$nextTail';
+    if (_records.any((r) => r.serial == nextSerial)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该流水号已存在于当前组，请换一个末4位')),
+      );
+      return;
+    }
+    final nextContent =
+        '${_group.prefix}$nextSerial${_group.batch}${_group.suffix}';
+    setState(() {
+      _records[_currentIndex] =
+          QrRecord(content: nextContent, serial: nextSerial);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -430,41 +527,57 @@ class _PreviewScreenState extends State<PreviewScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '每组 ${_group.count} 张 | 自动 ${_autoSlideSeconds}s | ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: _generateNextGroup,
-                      child: const Text('下一组'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE1E6FF)),
+                  ),
+                  child: Row(
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
+                      Expanded(
                         child: Text(
-                          '自动滑动',
-                          style: TextStyle(
-                            color: Colors.white70,
+                          '每组 ${_group.count} 张  |  ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
+                          style: const TextStyle(
+                            color: Color(0xFF1F2A44),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
+                      FilledButton.tonal(
+                        onPressed: _generateNextGroup,
+                        child: const Text('下一组'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '自动滑动',
+                        style: TextStyle(
+                          color: Color(0xFF334155),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       ...[0.5, 1.0, 2.0].map((value) {
                         final selected =
                             (_autoSlideSeconds - value).abs() < 0.01;
@@ -491,34 +604,44 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     '继续时从当前页开始，不会回到第一张',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 112,
-                      child: Text(
-                        '二维码大小 ${_qrSize.round()}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w700,
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 112,
+                        child: Text(
+                          '二维码大小 ${_qrSize.round()}',
+                          style: const TextStyle(
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: Slider(
-                        key: const Key('qrSizeSlider'),
-                        min: FileQrSizeStore.minSize,
-                        max: FileQrSizeStore.maxSize,
-                        divisions: 18,
-                        value: _qrSize,
-                        label: _qrSize.round().toString(),
-                        onChanged: _setQrSize,
+                      Expanded(
+                        child: Slider(
+                          key: const Key('qrSizeSlider'),
+                          min: FileQrSizeStore.minSize,
+                          max: FileQrSizeStore.maxSize,
+                          divisions: 18,
+                          value: _qrSize,
+                          label: _qrSize.round().toString(),
+                          onChanged: _setQrSize,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -562,20 +685,35 @@ class _PreviewScreenState extends State<PreviewScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          Text(
-                            item.serial,
-                            style: const TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  item.serial,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                key: const Key('editSerialTailButton'),
+                                tooltip: '修改末4位',
+                                onPressed: _editCurrentSerialTail,
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           SelectableText(
                             item.content,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: Colors.greenAccent,
+                              color: Color(0xFF22C55E),
                               fontSize: 14,
                             ),
                           ),

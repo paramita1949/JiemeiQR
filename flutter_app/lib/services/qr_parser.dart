@@ -88,13 +88,30 @@ class QrParser {
       final rng = random ?? Random();
       final serialHead =
           serialSeed.substring(0, serialLength - randomTailDigits);
-      final pool = List<int>.generate(combinations, (i) => i)..shuffle(rng);
+      final seedTail = int.parse(
+        serialSeed.substring(serialLength - randomTailDigits),
+      );
+      final pool = List<int>.generate(combinations, (i) => i)
+        ..remove(seedTail)
+        ..shuffle(rng);
 
-      records = List<QrRecord>.generate(count, (index) {
-        final tail = pool[index].toString().padLeft(randomTailDigits, '0');
-        final serial = '$serialHead$tail';
-        return QrRecord(content: '$prefix$serial$batch$suffix', serial: serial);
-      });
+      final seededRecord = QrRecord(
+        content: '$prefix$serialSeed$batch$suffix',
+        serial: serialSeed,
+      );
+      if (count == 1) {
+        records = <QrRecord>[seededRecord];
+      } else {
+        final randomRecords = List<QrRecord>.generate(count - 1, (index) {
+          final tail = pool[index].toString().padLeft(randomTailDigits, '0');
+          final serial = '$serialHead$tail';
+          return QrRecord(
+            content: '$prefix$serial$batch$suffix',
+            serial: serial,
+          );
+        });
+        records = <QrRecord>[seededRecord, ...randomRecords];
+      }
       resolvedStart = serialInt;
     } else {
       final start = startSerial ?? serialInt;

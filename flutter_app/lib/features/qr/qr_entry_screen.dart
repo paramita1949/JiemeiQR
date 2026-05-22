@@ -594,7 +594,7 @@ class _ManualQrInputDialogState extends State<_ManualQrInputDialog> {
   }
 
   Future<void> _loadProducts() async {
-    final products = await widget.productDao.allProducts();
+    final products = await widget.productDao.tsRequiredProducts();
     if (!mounted) {
       return;
     }
@@ -614,8 +614,10 @@ class _ManualQrInputDialogState extends State<_ManualQrInputDialog> {
       });
       return;
     }
-    final batches =
-        await widget.productDao.availableBatchesForProduct(productId);
+    final batches = await widget.productDao.availableBatchesForProduct(
+      productId,
+      includeZeroAvailable: true,
+    );
     if (!mounted) {
       return;
     }
@@ -685,7 +687,8 @@ class _ManualQrInputDialogState extends State<_ManualQrInputDialog> {
       setState(() => _errorText = '后缀需为2位');
       return;
     }
-    final content = '${product.code}$serial${batch.actualBatch}$suffix';
+    final raw = '${product.code}$serial${batch.actualBatch}$suffix';
+    final content = raw.startsWith('00') ? raw : '00$raw';
     Navigator.of(context).pop(
       _ManualQrInputResult(content: content, source: '手动输入-规则生成'),
     );
@@ -860,7 +863,7 @@ class _ManualQrInputDialogState extends State<_ManualQrInputDialog> {
                       (row) => DropdownMenuItem<int>(
                         value: row.batch.id,
                         child: Text(
-                          '${row.batch.actualBatch} · 库存${row.availableBoxes}',
+                          '${row.batch.actualBatch} · ${row.batch.dateBatch} · 可用${row.availableBoxes}',
                         ),
                       ),
                     )

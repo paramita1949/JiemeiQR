@@ -84,6 +84,35 @@ class ProductDao {
         .get();
   }
 
+  Future<List<Product>> tsRequiredProducts() async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT DISTINCT p.id, p.code, p.name, p.boxes_per_board, p.pieces_per_box, p.created_at, p.updated_at
+      FROM products p
+      INNER JOIN batches b ON b.product_id = p.id
+      WHERE b.ts_required = 1
+      ORDER BY p.code ASC
+      ''',
+      readsFrom: {
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    return rows
+        .map(
+          (row) => Product(
+            id: row.read<int>('id'),
+            code: row.read<String>('code'),
+            name: row.read<String>('name'),
+            boxesPerBoard: row.read<int>('boxes_per_board'),
+            piecesPerBox: row.read<int>('pieces_per_box'),
+            createdAt: row.read<DateTime>('created_at'),
+            updatedAt: row.read<DateTime>('updated_at'),
+          ),
+        )
+        .toList();
+  }
+
   Future<List<ProductInventoryOption>> productsForOrderEntry() async {
     final products = await allProducts();
     final options = <ProductInventoryOption>[];
@@ -208,6 +237,7 @@ class ProductDao {
   Future<List<AvailableBatch>> availableBatchesForProduct(
     int productId, {
     int? excludeOrderId,
+    bool includeZeroAvailable = false,
   }) async {
     final batches = await batchesForProduct(productId);
     if (batches.isEmpty) {
@@ -235,7 +265,7 @@ class ProductDao {
       final currentBoxes = batch.initialBoxes + (deltasByBatch[batch.id] ?? 0);
       final reserved = pendingReservedByBatch[batch.id] ?? 0;
       final availableBoxes = currentBoxes - reserved;
-      if (availableBoxes > 0) {
+      if (availableBoxes > 0 || includeZeroAvailable) {
         rows.add(
           AvailableBatch(
             batch: batch,
