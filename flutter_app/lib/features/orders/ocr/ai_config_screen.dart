@@ -135,12 +135,11 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   _SectionShell(
                     title: '默认使用',
                     subtitle: '',
-                    child: SingleChildScrollView(
+                    child: Row(
                       key: const Key('providerHorizontalList'),
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _ProviderCard(
+                      children: [
+                        Expanded(
+                          child: _ProviderCard(
                             key: const Key('providerCard-gemini'),
                             meta: _providerMeta(AiOcrConfig.defaultProvider),
                             selected: _provider == AiOcrConfig.defaultProvider,
@@ -148,8 +147,10 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                               AiOcrConfig.defaultProvider,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          _ProviderCard(
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
                             key: const Key('providerCard-modelscope'),
                             meta: _providerMeta(AiOcrConfig.modelscopeProvider),
                             selected:
@@ -158,35 +159,37 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                               AiOcrConfig.modelscopeProvider,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 14),
                   _SectionShell(
                     title: '识别策略',
-                    subtitle: '默认推荐模板增强；版式变化大时切换通用识别。',
-                    child: Column(
+                    subtitle: '',
+                    child: Row(
                       children: [
-                        _PromptPresetCard(
-                          key: const Key('promptPreset-waybill-v2'),
-                          title: '发货单模板（增强）',
-                          subtitle: '标准发货单优先，结构化提取更稳',
-                          selected: _ocrPromptPreset ==
+                        Expanded(
+                          child: _PromptPresetCard(
+                            key: const Key('promptPreset-waybill-v2'),
+                            title: '增强(识别优化)',
+                            selected: _ocrPromptPreset ==
+                                AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                            onTap: () => _selectPromptPreset(
                               AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
-                          onTap: () => _selectPromptPreset(
-                            AiOcrConfig.ocrPromptPresetWaybillTemplateV2,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        _PromptPresetCard(
-                          key: const Key('promptPreset-general'),
-                          title: '通用识别（稳定）',
-                          subtitle: '版式变化大时使用，优先保证识别兼容',
-                          selected: _ocrPromptPreset ==
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _PromptPresetCard(
+                            key: const Key('promptPreset-general'),
+                            title: '通用',
+                            selected: _ocrPromptPreset ==
+                                AiOcrConfig.ocrPromptPresetGeneral,
+                            onTap: () => _selectPromptPreset(
                               AiOcrConfig.ocrPromptPresetGeneral,
-                          onTap: () => _selectPromptPreset(
-                            AiOcrConfig.ocrPromptPresetGeneral,
+                            ),
                           ),
                         ),
                       ],
@@ -568,60 +571,36 @@ class _ProviderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? meta.color.withValues(alpha: 0.08)
-          : const Color(0xFFF7F9FC),
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 132,
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          duration: const Duration(milliseconds: 140),
+          height: 40,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            color: selected
+                ? meta.color.withValues(alpha: 0.12)
+                : const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? meta.color : const Color(0xFFE1E7F0),
-              width: selected ? 1.6 : 1,
+              width: selected ? 1.4 : 1,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: selected ? meta.color : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      meta.icon,
-                      color: selected ? Colors.white : meta.color,
-                      size: 21,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (selected)
-                    Icon(Icons.check_circle, color: meta.color, size: 20),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                meta.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? meta.color : AppTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
+          child: Text(
+            meta.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? meta.color : AppTheme.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              height: 1.15,
+            ),
           ),
         ),
       ),
@@ -633,13 +612,11 @@ class _PromptPresetCard extends StatelessWidget {
   const _PromptPresetCard({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.selected,
     required this.onTap,
   });
 
   final String title;
-  final String subtitle;
   final bool selected;
   final VoidCallback onTap;
 
@@ -650,57 +627,27 @@ class _PromptPresetCard extends StatelessWidget {
         selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
+        duration: const Duration(milliseconds: 140),
+        height: 38,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
-                      height: 1.25,
-                    ),
-                  ),
-                ),
-                if (selected) ...[
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.check_circle,
-                    size: 18,
-                    color: AppTheme.primary,
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-          ],
+        child: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: selected ? AppTheme.primary : AppTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
+            height: 1.15,
+          ),
         ),
       ),
     );

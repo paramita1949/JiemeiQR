@@ -22,12 +22,8 @@ class QrEntryScreen extends StatefulWidget {
 }
 
 class _QrEntryScreenState extends State<QrEntryScreen> {
-  int _groupCount = 100;
-  double _autoSlideSeconds = 1.0;
-  bool _randomTailEnabled = true;
-  int _randomTailDigits = 3;
+  final double _autoSlideSeconds = 1.0;
   ParsedQr? _lastParsed;
-  QrBuildResult? _lastBuildResult;
   late final AppDatabase _database;
   late final bool _ownsDatabase;
   late final QrPreviewHistoryDao _historyDao;
@@ -52,24 +48,6 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
       _database.close();
     }
     super.dispose();
-  }
-
-  Future<void> _startScan() => _openScannerAndPreview(startFromGallery: false);
-
-  Future<void> _startFromGallery() =>
-      _openScannerAndPreview(startFromGallery: true);
-
-  Future<void> _openScannerAndPreview({required bool startFromGallery}) async {
-    _lastSource = startFromGallery ? '导入图片' : '开始扫码';
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
-      ),
-    );
-    if (!mounted || result == null) {
-      return;
-    }
-    _parseAndPreview(result);
   }
 
   Future<void> _startManualInput() async {
@@ -105,6 +83,24 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
     _openPreview();
   }
 
+  Future<void> _startScan() => _openScannerAndPreview(startFromGallery: false);
+
+  Future<void> _startFromGallery() =>
+      _openScannerAndPreview(startFromGallery: true);
+
+  Future<void> _openScannerAndPreview({required bool startFromGallery}) async {
+    _lastSource = startFromGallery ? '导入图片' : '开始扫码';
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
+      ),
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    _parseAndPreview(result);
+  }
+
   void _openPreview({int? startSerial}) {
     final parsed = _lastParsed;
     if (parsed == null) {
@@ -115,12 +111,10 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
       serialSeed: parsed.serial,
       batch: parsed.batch,
       suffix: parsed.suffix,
-      count: _groupCount,
-      randomTailEnabled: _randomTailEnabled,
-      randomTailDigits: _randomTailDigits,
+      count: 1,
+      randomTailEnabled: false,
       startSerial: startSerial,
     );
-    setState(() => _lastBuildResult = buildResult);
     _saveHistory(buildResult);
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -212,136 +206,8 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
     );
   }
 
-  void _openNextGroup() {
-    final lastGroup = _lastBuildResult?.group;
-    if (lastGroup == null) {
-      return;
-    }
-    final startSerial =
-        _randomTailEnabled ? null : lastGroup.startSerial + lastGroup.count;
-    _openPreview(startSerial: startSerial);
-  }
-
-  Future<void> _setGroupCount() async {
-    final controller = TextEditingController(text: _groupCount.toString());
-    final value = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('设置生成数量'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: '每组张数'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final count = int.tryParse(controller.text.trim());
-              if (count == null || count <= 0) {
-                return;
-              }
-              Navigator.of(context).pop(count);
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-    if (value == null) {
-      return;
-    }
-    setState(() {
-      _groupCount = value;
-      _lastBuildResult = null;
-    });
-  }
-
-  Future<void> _setAutoSlideSeconds() async {
-    var draft = _autoSlideSeconds.clamp(0.1, 2.0).toDouble();
-    final value = await showModalBottomSheet<double>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '自动滑动间隔',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Text(
-                      '${draft.toStringAsFixed(1)}s',
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  Slider(
-                    key: const Key('qrEntryAutoSlideSlider'),
-                    min: 0.1,
-                    max: 2.0,
-                    divisions: 19,
-                    value: draft,
-                    label: '${draft.toStringAsFixed(1)}s',
-                    onChanged: (value) {
-                      setSheetState(() {
-                        draft = (value * 10).round() / 10;
-                      });
-                    },
-                  ),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('0.1s'),
-                      Text('2.0s'),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(draft),
-                      child: const Text('确定'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-    if (value == null) {
-      return;
-    }
-    setState(() {
-      _autoSlideSeconds = value;
-      _lastBuildResult = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final canGenerate = _lastParsed != null;
-    final canContinue = _lastBuildResult != null;
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -372,60 +238,9 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 12),
-              _GenerateParamCard(
-                groupCount: _groupCount,
-                autoSlideSeconds: _autoSlideSeconds,
-                randomTailEnabled: _randomTailEnabled,
-                randomTailDigits: _randomTailDigits,
-                onSetGroupCount: _setGroupCount,
-                onSetAutoSlideSeconds: _setAutoSlideSeconds,
-                onSetSequential: () => setState(() {
-                  _randomTailEnabled = false;
-                  _lastBuildResult = null;
-                }),
-                onSetRandom: () => setState(() {
-                  _randomTailEnabled = true;
-                  _lastBuildResult = null;
-                }),
-                onSetRandomDigits: (digits) => setState(() {
-                  _randomTailEnabled = true;
-                  _randomTailDigits = digits;
-                  _lastBuildResult = null;
-                }),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: canGenerate ? () => _openPreview() : null,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('生成并预览'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: canContinue ? _openNextGroup : null,
-                      icon: const Icon(Icons.skip_next),
-                      label: const Text('下一组继续'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _lastParsed == null ? '当前预览: 未扫描' : '当前预览: 1/$_groupCount',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
               const SizedBox(height: 8),
               const Text(
-                '提示: 请先扫描箱贴码或导入图片，再生成预览',
+                '提示: 扫码、导图或手动输入后，将自动进入预览页，可直接查看并修改完整参数',
                 style: TextStyle(color: Color(0xFF9A3412), fontSize: 11),
               ),
               if (_history.isNotEmpty) ...[
@@ -529,13 +344,8 @@ class _ScanCard extends StatelessWidget {
     return _Panel(
       color: const Color(0xFFEAF7FF),
       children: [
-        const _PanelTitle('扫码 / 本地图片识别'),
+        const _PanelTitle('箱码工具'),
         const SizedBox(height: 4),
-        const Text(
-          '支持相机与本地图片导入',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -555,7 +365,7 @@ class _ScanCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
           child: FilledButton.tonalIcon(
@@ -1182,212 +992,6 @@ class _StatusPill extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _GenerateParamCard extends StatelessWidget {
-  const _GenerateParamCard({
-    required this.groupCount,
-    required this.autoSlideSeconds,
-    required this.randomTailEnabled,
-    required this.randomTailDigits,
-    required this.onSetGroupCount,
-    required this.onSetAutoSlideSeconds,
-    required this.onSetSequential,
-    required this.onSetRandom,
-    required this.onSetRandomDigits,
-  });
-
-  final int groupCount;
-  final double autoSlideSeconds;
-  final bool randomTailEnabled;
-  final int randomTailDigits;
-  final VoidCallback onSetGroupCount;
-  final VoidCallback onSetAutoSlideSeconds;
-  final VoidCallback onSetSequential;
-  final VoidCallback onSetRandom;
-  final ValueChanged<int> onSetRandomDigits;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget paramButton({
-      required Key key,
-      required IconData icon,
-      required String label,
-      required String value,
-      required VoidCallback onPressed,
-    }) {
-      return OutlinedButton(
-        key: key,
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          alignment: Alignment.centerLeft,
-          foregroundColor: const Color(0xFF0F172A),
-          side: const BorderSide(color: Color(0xFFD8DEE9)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: AppTheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                value,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppTheme.primary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    ChoiceChip modeChip({
-      required Key key,
-      required String label,
-      required bool selected,
-      required VoidCallback onSelected,
-    }) {
-      return ChoiceChip(
-        key: key,
-        label: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.fade,
-          softWrap: false,
-        ),
-        selected: selected,
-        showCheckmark: false,
-        selectedColor: const Color(0xFFDCE7FF),
-        backgroundColor: Colors.white,
-        labelStyle: TextStyle(
-          color: selected ? AppTheme.primary : const Color(0xFF334155),
-          fontWeight: FontWeight.w800,
-        ),
-        side: BorderSide(
-          color: selected ? AppTheme.primary : const Color(0xFFD8DEE9),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        onSelected: (_) => onSelected(),
-      );
-    }
-
-    Widget modeCell({
-      required Key key,
-      required String label,
-      required bool selected,
-      required VoidCallback onSelected,
-    }) {
-      return Expanded(
-        child: SizedBox(
-          height: 48,
-          child: modeChip(
-            key: key,
-            label: label,
-            selected: selected,
-            onSelected: onSelected,
-          ),
-        ),
-      );
-    }
-
-    return _Panel(
-      color: const Color(0xFFF3EEFF),
-      children: [
-        const Row(
-          children: [
-            Icon(Icons.tune, color: AppTheme.primary, size: 20),
-            SizedBox(width: 8),
-            _PanelTitle('生成参数'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: paramButton(
-                key: const Key('qrEntryGroupCountButton'),
-                icon: Icons.layers_outlined,
-                label: '每组',
-                value: '$groupCount 张',
-                onPressed: onSetGroupCount,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: paramButton(
-                key: const Key('qrEntryAutoSlideButton'),
-                icon: Icons.timer_outlined,
-                label: '自动',
-                value: '${autoSlideSeconds}s',
-                onPressed: onSetAutoSlideSeconds,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '生成方式',
-          style: TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Column(
-          children: [
-            Row(
-              children: [
-                modeCell(
-                  key: const Key('qrEntrySequentialButton'),
-                  label: '顺序',
-                  selected: !randomTailEnabled,
-                  onSelected: onSetSequential,
-                ),
-                const SizedBox(width: 10),
-                modeCell(
-                  key: const Key('qrEntryRandomButton'),
-                  label: '随机',
-                  selected: randomTailEnabled,
-                  onSelected: onSetRandom,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                modeCell(
-                  key: const Key('qrEntryRandom3Button'),
-                  label: '随机3位',
-                  selected: randomTailEnabled && randomTailDigits == 3,
-                  onSelected: () => onSetRandomDigits(3),
-                ),
-                const SizedBox(width: 10),
-                modeCell(
-                  key: const Key('qrEntryRandom4Button'),
-                  label: '随机4位',
-                  selected: randomTailEnabled && randomTailDigits == 4,
-                  onSelected: () => onSetRandomDigits(4),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

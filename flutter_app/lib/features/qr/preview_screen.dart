@@ -136,14 +136,30 @@ class _PreviewScreenState extends State<PreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _records = List<QrRecord>.from(widget.records);
-    _group = widget.group;
+    _records = widget.records
+        .map(
+          (record) => QrRecord(
+            content: QrParser.ensureLeading00(record.content),
+            serial: record.serial,
+          ),
+        )
+        .toList(growable: true);
+    _group = QrGroup(
+      prefix: QrParser.ensureLeading00(widget.group.prefix),
+      batch: widget.group.batch,
+      suffix: widget.group.suffix,
+      sourceSerial: widget.group.sourceSerial,
+      startSerial: widget.group.startSerial,
+      count: widget.group.count,
+      randomTailEnabled: widget.group.randomTailEnabled,
+      randomTailDigits: widget.group.randomTailDigits,
+    );
     _scanIndex = widget.scanIndex;
     _autoSlideSeconds = widget.initialAutoSlideSeconds;
     _qrSizeStore = widget.qrSizeStore ?? const FileQrSizeStore();
     _progressStore = widget.progressStore ?? const FilePreviewProgressStore();
     _progressKey =
-        '${widget.group.prefix}|${widget.group.batch}|${widget.group.suffix}|${widget.group.startSerial}|${widget.group.count}';
+        '${_group.prefix}|${_group.batch}|${_group.suffix}|${_group.startSerial}|${_group.count}';
     _currentIndex =
         _records.isEmpty ? 0 : _scanIndex.clamp(0, _records.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
@@ -275,6 +291,128 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _goTo(page);
   }
 
+  void _setQrSize(double size) {
+    final next = FileQrSizeStore._clampSize(size);
+    setState(() {
+      _qrSize = next;
+    });
+    unawaited(_qrSizeStore.saveQrSize(next));
+  }
+
+  Future<void> _setAutoSlideSeconds() async {
+    var draft = _autoSlideSeconds.clamp(0.1, 2.0).toDouble();
+    final value = await showModalBottomSheet<double>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '自动滑动间隔',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      '${draft.toStringAsFixed(1)}s',
+                      style: const TextStyle(
+                        color: Color(0xFF0B6BFF),
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Slider(
+                    key: const Key('previewAutoSlideSlider'),
+                    min: 0.1,
+                    max: 2.0,
+                    divisions: 19,
+                    value: draft,
+                    label: '${draft.toStringAsFixed(1)}s',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draft = (value * 10).round() / 10;
+                      });
+                    },
+                  ),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('0.1s'),
+                      Text('2.0s'),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(draft),
+                      child: const Text('确定'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (value == null) {
+      return;
+    }
+    final wasRunning = _autoSliding;
+    _autoSlideTimer?.cancel();
+    setState(() {
+      _autoSlideSeconds = value;
+      _autoSliding = false;
+    });
+    if (wasRunning) {
+      _toggleAutoSlide();
+    }
+  }
+
+  void _generateNextGroup() {
+    final next = _group.randomTailEnabled
+        ? QrParser.buildRecords(
+            prefix: _group.prefix,
+            serialSeed: _group.sourceSerial,
+            batch: _group.batch,
+            suffix: _group.suffix,
+            count: _group.count,
+            randomTailEnabled: true,
+            randomTailDigits: _group.randomTailDigits,
+          )
+        : () {
+            final nextStart = _group.startSerial + _group.count;
+            return QrParser.buildRecords(
+              prefix: _group.prefix,
+              serialSeed:
+                  nextStart.toString().padLeft(QrParser.serialLength, '0'),
+              batch: _group.batch,
+              suffix: _group.suffix,
+              count: _group.count,
+              startSerial: nextStart,
+            );
+          }();
+
+    _autoSlideTimer?.cancel();
+    setState(() {
+      _records = next.records;
+      _group = next.group;
+      _scanIndex = next.scanIndex;
+      _currentIndex = 0;
+      _autoSliding = false;
+    });
+    _pageController.jumpToPage(0);
+  }
+
   Future<void> _editCurrentSerialTail() async {
     if (_records.isEmpty) {
       return;
@@ -363,12 +501,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
       );
       return;
     }
-    final nextContent =
-        '${_group.prefix}$nextSerial${_group.batch}${_group.suffix}';
+    final nextContent = QrParser.ensureLeading00(
+      '${_group.prefix}$nextSerial${_group.batch}${_group.suffix}',
+    );
     setState(() {
       _records[_currentIndex] =
           QrRecord(content: nextContent, serial: nextSerial);
     });
+  }
+
+  String _contentForDisplay(QrRecord record) {
+    return QrParser.ensureLeading00(record.content);
   }
 
   @override
@@ -393,6 +536,69 @@ class _PreviewScreenState extends State<PreviewScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          key: const Key('previewAutoSlideButton'),
+                          onPressed: _setAutoSlideSeconds,
+                          icon: const Icon(Icons.timer_outlined, size: 18),
+                          label: Text(
+                              '自动 ${_autoSlideSeconds.toStringAsFixed(1)}s'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          key: const Key('previewNextGroupButton'),
+                          onPressed:
+                              _records.isEmpty ? null : _generateNextGroup,
+                          icon: const Icon(Icons.skip_next, size: 18),
+                          label: const Text('下一组'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 104,
+                        child: Text(
+                          '二维码 ${_qrSize.round()}',
+                          style: const TextStyle(
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          key: const Key('qrSizeSlider'),
+                          min: FileQrSizeStore.minSize,
+                          max: FileQrSizeStore.maxSize,
+                          divisions: 18,
+                          value: _qrSize,
+                          label: _qrSize.round().toString(),
+                          onChanged: _setQrSize,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (_records.isEmpty)
             const Expanded(
               child: Center(
@@ -412,6 +618,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 },
                 itemBuilder: (context, index) {
                   final item = _records[index];
+                  final content = _contentForDisplay(item);
                   final isScanned = index == _scanIndex;
                   return Padding(
                     padding: const EdgeInsets.all(24),
@@ -419,20 +626,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: Colors.white,
+                          QrImageView(
+                            data: content,
+                            size: math.min(
+                              _qrSize,
+                              MediaQuery.sizeOf(context).shortestSide - 88,
                             ),
-                            child: QrImageView(
-                              data: item.content,
-                              size: math.min(
-                                _qrSize,
-                                MediaQuery.sizeOf(context).shortestSide - 88,
-                              ),
-                              backgroundColor: Colors.white,
-                            ),
+                            backgroundColor: Colors.white,
                           ),
                           const SizedBox(height: 20),
                           Row(
@@ -460,7 +660,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           ),
                           const SizedBox(height: 8),
                           SelectableText(
-                            item.content,
+                            content,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Color(0xFF22C55E),

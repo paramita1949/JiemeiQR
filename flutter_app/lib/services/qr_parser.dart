@@ -8,23 +8,34 @@ class QrParser {
   static const int suffixLength = 2;
   static const int defaultCount = 20;
 
+  static String ensureLeading00(String content) {
+    final trimmed = content.trim();
+    return trimmed.startsWith('00') ? trimmed : '00$trimmed';
+  }
+
   static ParsedQr? parse(String content) {
+    final normalizedContent = ensureLeading00(content);
     const tailLength = batchLength + suffixLength;
     const variableLength = serialLength + tailLength;
-    if (content.length < variableLength + 1) {
+    if (normalizedContent.length < variableLength + 1) {
       return null;
     }
 
-    final suffix = content.substring(content.length - suffixLength);
-    final batch = content.substring(
-      content.length - tailLength,
-      content.length - suffixLength,
+    final suffix = normalizedContent.substring(
+      normalizedContent.length - suffixLength,
     );
-    final serial = content.substring(
-      content.length - variableLength,
-      content.length - tailLength,
+    final batch = normalizedContent.substring(
+      normalizedContent.length - tailLength,
+      normalizedContent.length - suffixLength,
     );
-    final prefix = content.substring(0, content.length - variableLength);
+    final serial = normalizedContent.substring(
+      normalizedContent.length - variableLength,
+      normalizedContent.length - tailLength,
+    );
+    final prefix = normalizedContent.substring(
+      0,
+      normalizedContent.length - variableLength,
+    );
 
     final serialInt = int.tryParse(serial);
     if (serialInt == null) {
@@ -64,6 +75,7 @@ class QrParser {
       );
     }
 
+    final normalizedPrefix = prefix.startsWith('00') ? prefix : '00$prefix';
     late final List<QrRecord> records;
     late final int resolvedStart;
 
@@ -96,7 +108,7 @@ class QrParser {
         ..shuffle(rng);
 
       final seededRecord = QrRecord(
-        content: '$prefix$serialSeed$batch$suffix',
+        content: '$normalizedPrefix$serialSeed$batch$suffix',
         serial: serialSeed,
       );
       if (count == 1) {
@@ -106,7 +118,7 @@ class QrParser {
           final tail = pool[index].toString().padLeft(randomTailDigits, '0');
           final serial = '$serialHead$tail';
           return QrRecord(
-            content: '$prefix$serial$batch$suffix',
+            content: '$normalizedPrefix$serial$batch$suffix',
             serial: serial,
           );
         });
@@ -119,7 +131,10 @@ class QrParser {
       records = List<QrRecord>.generate(count, (index) {
         final value = start + index;
         final serial = value.toString().padLeft(serialLength, '0');
-        return QrRecord(content: '$prefix$serial$batch$suffix', serial: serial);
+        return QrRecord(
+          content: '$normalizedPrefix$serial$batch$suffix',
+          serial: serial,
+        );
       });
     }
 
@@ -127,7 +142,7 @@ class QrParser {
       records: records,
       scanIndex: 0,
       group: QrGroup(
-        prefix: prefix,
+        prefix: normalizedPrefix,
         batch: batch,
         suffix: suffix,
         sourceSerial: serialSeed,
