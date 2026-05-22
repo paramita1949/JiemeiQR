@@ -95,14 +95,26 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
       return;
     }
     if (content == null) {
+      _closeIfInitialScanFailed();
       return;
     }
     final parsed = QrParser.parse(content.trim());
     if (parsed == null) {
+      _closeIfInitialScanFailed();
+      if (!mounted) {
+        return;
+      }
       _showMessage('格式不匹配，请扫箱贴码');
     } else {
       _appendScan(parsed);
     }
+  }
+
+  void _closeIfInitialScanFailed() {
+    if (_scans.isNotEmpty) {
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   bool _acceptsDuringScan(String value) {
@@ -127,7 +139,8 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _importMultipleImagesAndParse() async {
@@ -526,225 +539,227 @@ class _QrRangeScreenState extends State<QrRangeScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const PageTitle(
-                icon: Icons.qr_code_scanner_outlined,
-                title: '箱码范围',
-                subtitle: '单次扫码后确认结果，手动继续',
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      key: const Key('rangePrimaryActionButton'),
-                      onPressed: canPrimaryAction && !_scanningNow
-                          ? _handlePrimaryAction
-                          : null,
-                      icon: Icon(
-                        _scanStageActive
-                            ? Icons.qr_code_scanner_outlined
-                            : Icons.refresh_outlined,
-                      ),
-                      label: Text(_primaryActionLabel()),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const Key('rangeMultiImportButton'),
-                      onPressed: _scanStageActive
-                          ? _importMultipleImagesAndParse
-                          : null,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('相册识别'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonalIcon(
-                  key: const Key('rangePreviewButton'),
-                  onPressed: _latestBuildResult == null ? null : _openPreview,
-                  icon: const Icon(Icons.grid_view_rounded),
-                  label: const Text('生成预览'),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const PageTitle(
+                  icon: Icons.qr_code_scanner_outlined,
+                  title: '箱码范围',
+                  subtitle: '单次扫码后确认结果，手动继续',
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  key: const Key('rangeBulkPreviewButton'),
-                  onPressed: _scans.isEmpty ? null : _openBulkPreviewDialog,
-                  icon: const Icon(Icons.view_carousel_outlined),
-                  label: const Text('批量预览生成'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_matchedBaseInfo != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAF7FF),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '已匹配基础资料',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontWeight: FontWeight.w700,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        key: const Key('rangePrimaryActionButton'),
+                        onPressed: canPrimaryAction && !_scanningNow
+                            ? _handlePrimaryAction
+                            : null,
+                        icon: Icon(
+                          _scanStageActive
+                              ? Icons.qr_code_scanner_outlined
+                              : Icons.refresh_outlined,
                         ),
+                        label: Text(_primaryActionLabel()),
                       ),
-                      const SizedBox(height: 8),
-                      _buildInfoRow(
-                        '产品编号',
-                        _matchedBaseInfo!.productCode,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const Key('rangeMultiImportButton'),
+                        onPressed: _scanStageActive
+                            ? _importMultipleImagesAndParse
+                            : null,
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('相册识别'),
                       ),
-                      _buildInfoRow('批号', _matchedBaseInfo!.actualBatch),
-                      _buildInfoRow('日期', _matchedBaseInfo!.dateBatch),
-                      _buildInfoRow('每板箱数', '${_matchedBaseInfo!.boxesPerBoard} 箱'),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    key: const Key('rangePreviewButton'),
+                    onPressed: _latestBuildResult == null ? null : _openPreview,
+                    icon: const Icon(Icons.grid_view_rounded),
+                    label: const Text('生成预览'),
                   ),
-                )
-              else
-                const Text(
-                  '扫描后自动匹配基础资料',
-                  style: TextStyle(color: AppTheme.textSecondary),
                 ),
-              const SizedBox(height: 8),
-              Text(
-                '已扫 ${_scans.length} 箱'
-                '${first == null ? '' : ' | 批号 ${first.batch}'}'
-                '${_scanningNow ? ' | 扫码中' : (_scanStageActive ? ' | 待继续扫描' : ' | 扫描已结束')}',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w800,
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const Key('rangeBulkPreviewButton'),
+                    onPressed: _scans.isEmpty ? null : _openBulkPreviewDialog,
+                    icon: const Icon(Icons.view_carousel_outlined),
+                    label: const Text('批量预览生成'),
+                  ),
                 ),
-              ),
-              if (_latestBuildResult != null) ...[
+                const SizedBox(height: 12),
+                if (_matchedBaseInfo != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF7FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '已匹配基础资料',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildInfoRow(
+                          '产品编号',
+                          _matchedBaseInfo!.productCode,
+                        ),
+                        _buildInfoRow('批号', _matchedBaseInfo!.actualBatch),
+                        _buildInfoRow('日期', _matchedBaseInfo!.dateBatch),
+                        _buildInfoRow(
+                            '每板箱数', '${_matchedBaseInfo!.boxesPerBoard} 箱'),
+                      ],
+                    ),
+                  )
+                else
+                  const Text(
+                    '扫描后自动匹配基础资料',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
                 const SizedBox(height: 8),
                 Text(
-                  '范围跨度：${_rangeSpan ?? "-"}',
+                  '已扫 ${_scans.length} 箱'
+                  '${first == null ? '' : ' | 批号 ${first.batch}'}'
+                  '${_scanningNow ? ' | 扫码中' : (_scanStageActive ? ' | 待继续扫描' : ' | 扫描已结束')}',
                   style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (_ignoredOutlierCount > 0) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '已自动忽略偏差样本：$_ignoredOutlierCount',
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  '流水号末3位范围：${_lastSerialTail3Range ?? "-"}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '流水号末4位范围：${_lastSerialTail4Range ?? "-"}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-              if (_scans.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _scans.reversed.take(10).map((item) {
-                    final ignored = _ignoredSerials.contains(item.serial);
-                    return Chip(
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor:
-                          ignored ? const Color(0xFFFFEBEE) : null,
-                      label: Text(item.serial),
-                      labelStyle: TextStyle(
-                        color: ignored ? Colors.red : AppTheme.textPrimary,
-                        fontWeight: ignored ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-              if (_history.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  '历史记录',
-                  style: TextStyle(
                     color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 8),
-                ..._history.map((item) {
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      onTap: () => _openRangeHistoryPreview(item),
-                      dense: true,
-                      title: Text(
-                        '${item.productCode} | ${item.actualBatch} | ${item.startSerial}~${item.endSerial}',
-                      ),
-                      subtitle: Text(
-                        '生成${item.generatedCount}张 | 扫描${item.scannedCount}箱 | 忽略${item.ignoredCount}',
-                      ),
-                      trailing: Wrap(
-                        spacing: 2,
-                        children: [
-                          IconButton(
-                            tooltip: '复制完整码',
-                            onPressed: item.scannedCodes.isEmpty
-                                ? null
-                                : () {
-                                    Clipboard.setData(
-                                      ClipboardData(
-                                        text: item.scannedCodes.join('\n'),
-                                      ),
-                                    );
-                                    _showMessage('已复制完整码');
-                                  },
-                            icon: const Icon(Icons.copy_outlined),
-                          ),
-                          IconButton(
-                            tooltip: '删除',
-                            onPressed: item.id == null
-                                ? null
-                                : () => _deleteHistory(item.id!),
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ],
+                if (_latestBuildResult != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '范围跨度：${_rangeSpan ?? "-"}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (_ignoredOutlierCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '已自动忽略偏差样本：$_ignoredOutlierCount',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  );
-                }),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    '流水号末3位范围：${_lastSerialTail3Range ?? "-"}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '流水号末4位范围：${_lastSerialTail4Range ?? "-"}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (_scans.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _scans.reversed.take(10).map((item) {
+                      final ignored = _ignoredSerials.contains(item.serial);
+                      return Chip(
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor:
+                            ignored ? const Color(0xFFFFEBEE) : null,
+                        label: Text(item.serial),
+                        labelStyle: TextStyle(
+                          color: ignored ? Colors.red : AppTheme.textPrimary,
+                          fontWeight:
+                              ignored ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_history.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    '历史记录',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._history.map((item) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        onTap: () => _openRangeHistoryPreview(item),
+                        dense: true,
+                        title: Text(
+                          '${item.productCode} | ${item.actualBatch} | ${item.startSerial}~${item.endSerial}',
+                        ),
+                        subtitle: Text(
+                          '生成${item.generatedCount}张 | 扫描${item.scannedCount}箱 | 忽略${item.ignoredCount}',
+                        ),
+                        trailing: Wrap(
+                          spacing: 2,
+                          children: [
+                            IconButton(
+                              tooltip: '复制完整码',
+                              onPressed: item.scannedCodes.isEmpty
+                                  ? null
+                                  : () {
+                                      Clipboard.setData(
+                                        ClipboardData(
+                                          text: item.scannedCodes.join('\n'),
+                                        ),
+                                      );
+                                      _showMessage('已复制完整码');
+                                    },
+                              icon: const Icon(Icons.copy_outlined),
+                            ),
+                            IconButton(
+                              tooltip: '删除',
+                              onPressed: item.id == null
+                                  ? null
+                                  : () => _deleteHistory(item.id!),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ],
-            ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

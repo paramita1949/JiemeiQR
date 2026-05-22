@@ -15,3 +15,6 @@ desktop_sync_tool/**/obj/
 
 # Local tests only (do not upload)
 flutter_app/test/
+
+# Local runtime logs (auto-generated)
+flutter_app/flutter_*.log
