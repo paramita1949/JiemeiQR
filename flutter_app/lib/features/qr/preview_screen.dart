@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -91,6 +92,73 @@ class FilePreviewProgressStore implements PreviewProgressStore {
   Future<File> _file() async {
     final directory = await getApplicationSupportDirectory();
     return File('${directory.path}/qr_preview_progress.json');
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF334155),
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _ControlSummaryTile extends StatelessWidget {
+  const _ControlSummaryTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -298,77 +366,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
     unawaited(_qrSizeStore.saveQrSize(next));
   }
 
-  Future<void> _setAutoSlideSeconds() async {
-    final presets = <double>[0.5, 1.0, 2.0];
-    final controller =
-        TextEditingController(text: _autoSlideSeconds.toString());
-    final value = await showDialog<double>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('设置自动滑动间隔'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                children: presets
-                    .map(
-                      (item) => ActionChip(
-                        label: Text('${item}s'),
-                        onPressed: () => Navigator.of(context).pop(item),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '自定义秒数'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final seconds = double.tryParse(controller.text.trim());
-                if (seconds == null || seconds <= 0) {
-                  return;
-                }
-                Navigator.of(context).pop(seconds);
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (value == null) {
-      return;
-    }
-
-    final wasRunning = _autoSliding;
-    if (_autoSliding) {
-      _toggleAutoSlide();
-    }
-
-    setState(() {
-      _autoSlideSeconds = value;
-    });
-
-    if (wasRunning) {
-      _toggleAutoSlide();
-    }
-  }
-
   void _generateNextGroup() {
     final next = _group.randomTailEnabled
         ? QrParser.buildRecords(
@@ -500,17 +497,160 @@ class _PreviewScreenState extends State<PreviewScreen> {
     });
   }
 
+  Future<void> _openControlsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '显示与播放',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ControlSummaryTile(
+                            label: '每组',
+                            value: '${_group.count} 张',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ControlSummaryTile(
+                            label: '模式',
+                            value: _group.randomTailEnabled
+                                ? '末${_group.randomTailDigits}位随机'
+                                : '顺序递增',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _generateNextGroup();
+                        },
+                        icon: const Icon(Icons.skip_next),
+                        label: const Text('下一组'),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '自动滑动',
+                      style: TextStyle(
+                        color: Color(0xFF334155),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final value in <double>[0.5, 1.0, 2.0])
+                          ChoiceChip(
+                            label: Text('${value}s'),
+                            selected: (_autoSlideSeconds - value).abs() < 0.01,
+                            onSelected: (_) {
+                              _setAutoSlideSecondsDirect(value);
+                              setSheetState(() {});
+                            },
+                          ),
+                        FilledButton.tonalIcon(
+                          onPressed: () {
+                            _toggleAutoSlide();
+                            setSheetState(() {});
+                          },
+                          icon: Icon(
+                            _autoSliding
+                                ? Icons.pause_circle_outline
+                                : Icons.play_circle_outline,
+                          ),
+                          label: Text(_autoSliding ? '暂停' : '继续'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Text(
+                          '二维码大小 ${_qrSize.round()}',
+                          style: const TextStyle(
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Text(
+                          '拖动调整',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      key: const Key('qrSizeSlider'),
+                      min: FileQrSizeStore.minSize,
+                      max: FileQrSizeStore.maxSize,
+                      divisions: 18,
+                      value: _qrSize,
+                      label: _qrSize.round().toString(),
+                      onChanged: (value) {
+                        _setQrSize(value);
+                        setSheetState(() {});
+                      },
+                    ),
+                    const Text(
+                      '继续时从当前页开始，不会回到第一张',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final modeText =
+        _group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增';
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: Text(
             '第 ${_records.isEmpty ? 0 : _currentIndex + 1} / ${_records.length} 张'),
         actions: [
           IconButton(
-            tooltip: '设置自动滑动',
-            onPressed: _setAutoSlideSeconds,
-            icon: const Icon(Icons.timer_outlined),
+            key: const Key('previewControlsButton'),
+            tooltip: '显示与播放',
+            onPressed: _openControlsSheet,
+            icon: const Icon(Icons.tune),
           ),
           IconButton(
             tooltip: _autoSliding ? '停止自动滑动' : '开始自动滑动',
@@ -527,123 +667,46 @@ class _PreviewScreenState extends State<PreviewScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FF),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE1E6FF)),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Container(
+              height: 54,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0D0F172A),
+                    blurRadius: 14,
+                    offset: Offset(0, 6),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '每组 ${_group.count} 张  |  ${_group.randomTailEnabled ? '末${_group.randomTailDigits}位随机' : '顺序递增'}',
-                          style: const TextStyle(
-                            color: Color(0xFF1F2A44),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      FilledButton.tonal(
-                        onPressed: _generateNextGroup,
-                        child: const Text('下一组'),
-                      ),
-                    ],
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        _InfoPill(text: '每组 ${_group.count} 张'),
+                        _InfoPill(text: modeText),
+                        _InfoPill(text: '自动 ${_autoSlideSeconds}s'),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 40,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _generateNextGroup,
+                      icon: const Icon(Icons.skip_next, size: 18),
+                      label: const Text('下一组'),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '自动滑动',
-                        style: TextStyle(
-                          color: Color(0xFF334155),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...[0.5, 1.0, 2.0].map((value) {
-                        final selected =
-                            (_autoSlideSeconds - value).abs() < 0.01;
-                        return ChoiceChip(
-                          label: Text('${value}s'),
-                          selected: selected,
-                          onSelected: (_) => _setAutoSlideSecondsDirect(value),
-                        );
-                      }),
-                      FilledButton.tonalIcon(
-                        onPressed: _toggleAutoSlide,
-                        icon: Icon(
-                          _autoSliding
-                              ? Icons.pause_circle_outline
-                              : Icons.play_circle_outline,
-                        ),
-                        label: Text(_autoSliding ? '暂停' : '继续'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '继续时从当前页开始，不会回到第一张',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 112,
-                        child: Text(
-                          '二维码大小 ${_qrSize.round()}',
-                          style: const TextStyle(
-                            color: Color(0xFF334155),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          key: const Key('qrSizeSlider'),
-                          min: FileQrSizeStore.minSize,
-                          max: FileQrSizeStore.maxSize,
-                          divisions: 18,
-                          value: _qrSize,
-                          label: _qrSize.round().toString(),
-                          onChanged: _setQrSize,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           if (_records.isEmpty)
@@ -680,7 +743,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
                             ),
                             child: QrImageView(
                               data: item.content,
-                              size: _qrSize,
+                              size: math.min(
+                                _qrSize,
+                                MediaQuery.sizeOf(context).shortestSide - 88,
+                              ),
                               backgroundColor: Colors.white,
                             ),
                           ),
@@ -700,7 +766,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              IconButton(
+                              IconButton.filledTonal(
                                 key: const Key('editSerialTailButton'),
                                 tooltip: '修改末4位',
                                 onPressed: _editCurrentSerialTail,
