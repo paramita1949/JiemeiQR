@@ -1169,52 +1169,137 @@ class _GenerateParamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(
-      color: const Color(0xFFF3EEFF),
-      children: [
-        const _PanelTitle('生成参数'),
-        const SizedBox(height: 6),
-        Row(
+    Widget paramButton({
+      required Key key,
+      required IconData icon,
+      required String label,
+      required String value,
+      required VoidCallback onPressed,
+    }) {
+      return OutlinedButton(
+        key: key,
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          foregroundColor: const Color(0xFF0F172A),
+          side: const BorderSide(color: Color(0xFFD8DEE9)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onSetGroupCount,
-                child: Text('数量: $groupCount'),
-              ),
-            ),
+            Icon(icon, size: 18, color: AppTheme.primary),
             const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onSetAutoSlideSeconds,
-                child: Text('自动滑动: ${autoSlideSeconds}s'),
+            Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                value,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+      );
+    }
+
+    ChoiceChip modeChip({
+      required Key key,
+      required String label,
+      required bool selected,
+      required VoidCallback onSelected,
+    }) {
+      return ChoiceChip(
+        key: key,
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        selectedColor: const Color(0xFFDCE7FF),
+        backgroundColor: Colors.white,
+        labelStyle: TextStyle(
+          color: selected ? AppTheme.primary : const Color(0xFF334155),
+          fontWeight: FontWeight.w800,
+        ),
+        side: BorderSide(
+          color: selected ? AppTheme.primary : const Color(0xFFD8DEE9),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: (_) => onSelected(),
+      );
+    }
+
+    return _Panel(
+      color: const Color(0xFFF3EEFF),
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.tune, color: AppTheme.primary, size: 20),
+            SizedBox(width: 8),
+            _PanelTitle('生成参数'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: paramButton(
+                key: const Key('qrEntryGroupCountButton'),
+                icon: Icons.layers_outlined,
+                label: '每组',
+                value: '$groupCount 张',
+                onPressed: onSetGroupCount,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: paramButton(
+                key: const Key('qrEntryAutoSlideButton'),
+                icon: Icons.timer_outlined,
+                label: '自动',
+                value: '${autoSlideSeconds}s',
+                onPressed: onSetAutoSlideSeconds,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         Wrap(
-          spacing: 8,
+          spacing: 6,
           runSpacing: 8,
           children: [
-            ChoiceChip(
-              label: const Text('顺序'),
+            modeChip(
+              key: const Key('qrEntrySequentialButton'),
+              label: '顺序',
               selected: !randomTailEnabled,
-              onSelected: (_) => onSetSequential(),
+              onSelected: onSetSequential,
             ),
-            ChoiceChip(
-              label: const Text('随机'),
+            modeChip(
+              key: const Key('qrEntryRandomButton'),
+              label: '随机',
               selected: randomTailEnabled,
-              onSelected: (_) => onSetRandom(),
+              onSelected: onSetRandom,
             ),
-            ChoiceChip(
-              label: const Text('末3位随机'),
+            modeChip(
+              key: const Key('qrEntryRandom3Button'),
+              label: '末3位随机',
               selected: randomTailEnabled && randomTailDigits == 3,
-              onSelected: (_) => onSetRandomDigits(3),
+              onSelected: () => onSetRandomDigits(3),
             ),
-            ChoiceChip(
-              label: const Text('末4位随机'),
+            modeChip(
+              key: const Key('qrEntryRandom4Button'),
+              label: '末4位随机',
               selected: randomTailEnabled && randomTailDigits == 4,
-              onSelected: (_) => onSetRandomDigits(4),
+              onSelected: () => onSetRandomDigits(4),
             ),
           ],
         ),
