@@ -747,11 +747,20 @@ class _OrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: '删除订单',
+                onPressed: onDelete,
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Color(0xFFDC2626),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Row(
+                  children: [
                       Expanded(
                         child: Text(
                           order.waybillNo,
@@ -799,12 +808,6 @@ class _OrderCard extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: '删除订单',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
                 ),
               ],
             ),

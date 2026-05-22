@@ -261,39 +261,81 @@ class _QrEntryScreenState extends State<QrEntryScreen> {
   }
 
   Future<void> _setAutoSlideSeconds() async {
-    final controller =
-        TextEditingController(text: _autoSlideSeconds.toString());
-    final value = await showDialog<double>(
+    var draft = _autoSlideSeconds.clamp(0.1, 2.0).toDouble();
+    final value = await showModalBottomSheet<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('设置自动滑动间隔'),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: '秒数'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final seconds = double.tryParse(controller.text.trim());
-              if (seconds == null || seconds <= 0) {
-                return;
-              }
-              Navigator.of(context).pop(seconds);
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '自动滑动间隔',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      '${draft.toStringAsFixed(1)}s',
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Slider(
+                    key: const Key('qrEntryAutoSlideSlider'),
+                    min: 0.1,
+                    max: 2.0,
+                    divisions: 19,
+                    value: draft,
+                    label: '${draft.toStringAsFixed(1)}s',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draft = (value * 10).round() / 10;
+                      });
+                    },
+                  ),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('0.1s'),
+                      Text('2.0s'),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(draft),
+                      child: const Text('确定'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
     if (value == null) {
       return;
     }
-    setState(() => _autoSlideSeconds = value);
+    setState(() {
+      _autoSlideSeconds = value;
+      _lastBuildResult = null;
+    });
   }
 
   @override
@@ -1221,7 +1263,12 @@ class _GenerateParamCard extends StatelessWidget {
     }) {
       return ChoiceChip(
         key: key,
-        label: Text(label),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+        ),
         selected: selected,
         showCheckmark: false,
         selectedColor: const Color(0xFFDCE7FF),
@@ -1291,13 +1338,13 @@ class _GenerateParamCard extends StatelessWidget {
             ),
             modeChip(
               key: const Key('qrEntryRandom3Button'),
-              label: '末3位随机',
+              label: '随机3位',
               selected: randomTailEnabled && randomTailDigits == 3,
               onSelected: () => onSetRandomDigits(3),
             ),
             modeChip(
               key: const Key('qrEntryRandom4Button'),
-              label: '末4位随机',
+              label: '随机4位',
               selected: randomTailEnabled && randomTailDigits == 4,
               onSelected: () => onSetRandomDigits(4),
             ),
