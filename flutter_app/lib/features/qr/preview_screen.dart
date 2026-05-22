@@ -324,6 +324,87 @@ class _PreviewScreenState extends State<PreviewScreen> {
     unawaited(_qrSizeStore.saveQrSize(next));
   }
 
+  Future<void> _setGroupCount() async {
+    final controller = TextEditingController(text: _group.count.toString());
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设置每组张数'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: '每组张数'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final count = int.tryParse(controller.text.trim());
+              if (count == null || count <= 0) {
+                return;
+              }
+              Navigator.of(context).pop(count);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (value == null || value == _group.count) {
+      return;
+    }
+    _rebuildCurrentGroup(count: value);
+  }
+
+  void _setGenerationMode({required bool randomTailEnabled, int? digits}) {
+    final nextDigits = digits ?? _group.randomTailDigits;
+    if (_group.randomTailEnabled == randomTailEnabled &&
+        _group.randomTailDigits == nextDigits) {
+      return;
+    }
+    _rebuildCurrentGroup(
+      randomTailEnabled: randomTailEnabled,
+      randomTailDigits: nextDigits,
+    );
+  }
+
+  void _rebuildCurrentGroup({
+    int? count,
+    bool? randomTailEnabled,
+    int? randomTailDigits,
+  }) {
+    final nextCount = count ?? _group.count;
+    final nextRandom = randomTailEnabled ?? _group.randomTailEnabled;
+    final nextDigits = randomTailDigits ?? _group.randomTailDigits;
+    final serialSeed = nextRandom
+        ? _group.sourceSerial
+        : _group.startSerial.toString().padLeft(QrParser.serialLength, '0');
+    final next = QrParser.buildRecords(
+      prefix: _group.prefix,
+      serialSeed: serialSeed,
+      batch: _group.batch,
+      suffix: _group.suffix,
+      count: nextCount,
+      startSerial: nextRandom ? null : _group.startSerial,
+      randomTailEnabled: nextRandom,
+      randomTailDigits: nextDigits,
+    );
+
+    _autoSlideTimer?.cancel();
+    setState(() {
+      _records = next.records;
+      _group = next.group;
+      _scanIndex = next.scanIndex;
+      _currentIndex = 0;
+      _autoSliding = false;
+    });
+    _pageController.jumpToPage(0);
+  }
+
   void _generateNextGroup() {
     final next = _group.randomTailEnabled
         ? QrParser.buildRecords(
@@ -505,7 +586,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           spacing: 8,
                           runSpacing: 6,
                           children: [
-                            _InfoPill(text: '每组 ${_group.count} 张'),
+                            InkWell(
+                              key: const Key('previewGroupCountButton'),
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: _setGroupCount,
+                              child: _InfoPill(text: '每组 ${_group.count} 张'),
+                            ),
                             _InfoPill(text: modeText),
                           ],
                         ),
@@ -522,6 +608,69 @@ class _PreviewScreenState extends State<PreviewScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 46,
+                        child: Text(
+                          '模式',
+                          style: TextStyle(
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            ChoiceChip(
+                              key: const Key('previewSequentialButton'),
+                              label: const Text('顺序'),
+                              selected: !_group.randomTailEnabled,
+                              showCheckmark: false,
+                              onSelected: (_) => _setGenerationMode(
+                                randomTailEnabled: false,
+                              ),
+                            ),
+                            ChoiceChip(
+                              key: const Key('previewRandomButton'),
+                              label: const Text('随机'),
+                              selected: _group.randomTailEnabled,
+                              showCheckmark: false,
+                              onSelected: (_) => _setGenerationMode(
+                                randomTailEnabled: true,
+                              ),
+                            ),
+                            ChoiceChip(
+                              key: const Key('previewRandom3Button'),
+                              label: const Text('末3'),
+                              selected: _group.randomTailEnabled &&
+                                  _group.randomTailDigits == 3,
+                              showCheckmark: false,
+                              onSelected: (_) => _setGenerationMode(
+                                randomTailEnabled: true,
+                                digits: 3,
+                              ),
+                            ),
+                            ChoiceChip(
+                              key: const Key('previewRandom4Button'),
+                              label: const Text('末4'),
+                              selected: _group.randomTailEnabled &&
+                                  _group.randomTailDigits == 4,
+                              showCheckmark: false,
+                              onSelected: (_) => _setGenerationMode(
+                                randomTailEnabled: true,
+                                digits: 4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       const SizedBox(
@@ -544,17 +693,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 label: Text('${value}s'),
                                 selected:
                                     (_autoSlideSeconds - value).abs() < 0.01,
+                                showCheckmark: false,
                                 onSelected: (_) =>
                                     _setAutoSlideSecondsDirect(value),
                               ),
                           ],
-                        ),
-                      ),
-                      IconButton.filled(
-                        tooltip: _autoSliding ? '暂停' : '继续',
-                        onPressed: _toggleAutoSlide,
-                        icon: Icon(
-                          _autoSliding ? Icons.pause : Icons.play_arrow,
                         ),
                       ),
                     ],
