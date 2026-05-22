@@ -1285,6 +1285,25 @@ class _GenerateParamCard extends StatelessWidget {
       );
     }
 
+    Widget modeCell({
+      required Key key,
+      required String label,
+      required bool selected,
+      required VoidCallback onSelected,
+    }) {
+      return Expanded(
+        child: SizedBox(
+          height: 48,
+          child: modeChip(
+            key: key,
+            label: label,
+            selected: selected,
+            onSelected: onSelected,
+          ),
+        ),
+      );
+    }
+
     return _Panel(
       color: const Color(0xFFF3EEFF),
       children: [
@@ -1320,33 +1339,51 @@ class _GenerateParamCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 6,
-          runSpacing: 8,
+        const Text(
+          '生成方式',
+          style: TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Column(
           children: [
-            modeChip(
-              key: const Key('qrEntrySequentialButton'),
-              label: '顺序',
-              selected: !randomTailEnabled,
-              onSelected: onSetSequential,
+            Row(
+              children: [
+                modeCell(
+                  key: const Key('qrEntrySequentialButton'),
+                  label: '顺序',
+                  selected: !randomTailEnabled,
+                  onSelected: onSetSequential,
+                ),
+                const SizedBox(width: 10),
+                modeCell(
+                  key: const Key('qrEntryRandomButton'),
+                  label: '随机',
+                  selected: randomTailEnabled,
+                  onSelected: onSetRandom,
+                ),
+              ],
             ),
-            modeChip(
-              key: const Key('qrEntryRandomButton'),
-              label: '随机',
-              selected: randomTailEnabled,
-              onSelected: onSetRandom,
-            ),
-            modeChip(
-              key: const Key('qrEntryRandom3Button'),
-              label: '随机3位',
-              selected: randomTailEnabled && randomTailDigits == 3,
-              onSelected: () => onSetRandomDigits(3),
-            ),
-            modeChip(
-              key: const Key('qrEntryRandom4Button'),
-              label: '随机4位',
-              selected: randomTailEnabled && randomTailDigits == 4,
-              onSelected: () => onSetRandomDigits(4),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                modeCell(
+                  key: const Key('qrEntryRandom3Button'),
+                  label: '随机3位',
+                  selected: randomTailEnabled && randomTailDigits == 3,
+                  onSelected: () => onSetRandomDigits(3),
+                ),
+                const SizedBox(width: 10),
+                modeCell(
+                  key: const Key('qrEntryRandom4Button'),
+                  label: '随机4位',
+                  selected: randomTailEnabled && randomTailDigits == 4,
+                  onSelected: () => onSetRandomDigits(4),
+                ),
+              ],
             ),
           ],
         ),
