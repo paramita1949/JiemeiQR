@@ -633,7 +633,7 @@ class OrderDao {
         b.date_batch AS date_batch,
         b.location AS location,
         SUM(oi.boxes) AS total_boxes,
-        MAX(oi.boxes_per_board) AS boxes_per_board
+        MAX(b.boxes_per_board) AS boxes_per_board
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
       INNER JOIN products p ON p.id = oi.product_id
@@ -734,7 +734,7 @@ class OrderDao {
         o.order_date,
         o.status,
         SUM(oi.boxes) AS total_boxes,
-        MAX(oi.boxes_per_board) AS boxes_per_board,
+        MAX(b.boxes_per_board) AS boxes_per_board,
         SUM(CASE WHEN oi.is_picked = 1 THEN 1 ELSE 0 END) AS picked_line_count,
         COUNT(*) AS line_count
       FROM order_items oi
