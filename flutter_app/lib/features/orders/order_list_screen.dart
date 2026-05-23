@@ -178,6 +178,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 (order) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _OrderCard(
+                    key: ValueKey<int>(order.id),
                     order: order,
                     onTap: () => _openOrderDetail(order),
                     onDelete: () => _deleteOrder(order.id),
@@ -721,8 +722,9 @@ class _StatusButton extends StatelessWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
+class _OrderCard extends StatefulWidget {
   const _OrderCard({
+    super.key,
     required this.order,
     required this.onTap,
     required this.onDelete,
@@ -731,6 +733,99 @@ class _OrderCard extends StatelessWidget {
   final OrderSummary order;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+
+  @override
+  State<_OrderCard> createState() => _OrderCardState();
+}
+
+class _OrderCardState extends State<_OrderCard> {
+  static const double _actionWidth = 88;
+  double _offsetX = 0;
+
+  void _openActions() => setState(() => _offsetX = -_actionWidth);
+  void _closeActions() => setState(() => _offsetX = 0);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragUpdate: (details) {
+        final next = (_offsetX + details.delta.dx).clamp(-_actionWidth, 0.0);
+        if (next != _offsetX) {
+          setState(() => _offsetX = next);
+        }
+      },
+      onHorizontalDragEnd: (details) {
+        final shouldOpen = details.primaryVelocity == null
+            ? _offsetX.abs() > _actionWidth * 0.5
+            : details.primaryVelocity! < -150 || _offsetX.abs() > 44;
+        if (shouldOpen) {
+          _openActions();
+        } else {
+          _closeActions();
+        }
+      },
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                width: _actionWidth,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: TextButton(
+                  onPressed: () {
+                    _closeActions();
+                    widget.onDelete();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  child: const Text(
+                    '删除',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            transform: Matrix4.translationValues(_offsetX, 0, 0),
+            child: _OrderCardContent(
+              order: widget.order,
+              onTap: () {
+                if (_offsetX != 0) {
+                  _closeActions();
+                  return;
+                }
+                widget.onTap();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderCardContent extends StatelessWidget {
+  const _OrderCardContent({
+    required this.order,
+    required this.onTap,
+  });
+
+  final OrderSummary order;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -747,20 +842,11 @@ class _OrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Row(
-            children: [
-              IconButton(
-                tooltip: '删除订单',
-                onPressed: onDelete,
-                icon: const Icon(
-                  Icons.delete_outline,
-                  color: Color(0xFFDC2626),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Row(
-                  children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
                       Expanded(
                         child: Text(
                           order.waybillNo,
