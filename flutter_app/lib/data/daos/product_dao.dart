@@ -264,12 +264,13 @@ class ProductDao {
     for (final batch in batches) {
       final currentBoxes = batch.initialBoxes + (deltasByBatch[batch.id] ?? 0);
       final reserved = pendingReservedByBatch[batch.id] ?? 0;
-      final availableBoxes = currentBoxes - reserved;
+      final availableBoxes = currentBoxes - batch.frozenBoxes - reserved;
       if (availableBoxes > 0 || includeZeroAvailable) {
         rows.add(
           AvailableBatch(
             batch: batch,
             currentBoxes: currentBoxes,
+            frozenBoxes: batch.frozenBoxes,
             reservedBoxes: reserved,
           ),
         );
@@ -602,14 +603,19 @@ class AvailableBatch {
   const AvailableBatch({
     required this.batch,
     required this.currentBoxes,
+    required this.frozenBoxes,
     required this.reservedBoxes,
   });
 
   final BatchRecord batch;
   final int currentBoxes;
+  final int frozenBoxes;
   final int reservedBoxes;
 
-  int get availableBoxes => currentBoxes - reservedBoxes;
+  int get availableBoxes {
+    final value = currentBoxes - frozenBoxes - reservedBoxes;
+    return value < 0 ? 0 : value;
+  }
 }
 
 class ProductInventoryOption {

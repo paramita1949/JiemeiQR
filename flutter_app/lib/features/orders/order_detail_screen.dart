@@ -397,6 +397,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         AvailableBatch(
           batch: line.batch,
           currentBoxes: line.item.boxes,
+          frozenBoxes: line.batch.frozenBoxes,
           reservedBoxes: 0,
         ),
       );

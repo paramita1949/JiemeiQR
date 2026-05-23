@@ -65,6 +65,21 @@ class StockDao {
     );
   }
 
+  Future<void> updateFrozenBoxes({
+    required int batchId,
+    required int frozenBoxes,
+  }) async {
+    _validateNonNegativeBoxes(frozenBoxes);
+    await (_database.update(_database.batches)
+          ..where((table) => table.id.equals(batchId)))
+        .write(
+      BatchesCompanion(
+        frozenBoxes: Value(frozenBoxes),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<int> totalInventoryPieces() async {
     return totalInventoryPiecesAt(DateTime.now());
   }
@@ -73,7 +88,7 @@ class StockDao {
     final rows = await _database.customSelect(
       '''
       SELECT
-        COALESCE(SUM((b.initial_boxes + COALESCE(m.delta_boxes, 0) - COALESCE(p.pending_boxes, 0)) * pr.pieces_per_box), 0) AS total_pieces
+        COALESCE(SUM(MAX(b.initial_boxes + COALESCE(m.delta_boxes, 0) - b.frozen_boxes - COALESCE(p.pending_boxes, 0), 0) * pr.pieces_per_box), 0) AS total_pieces
       FROM batches b
       INNER JOIN products pr ON pr.id = b.product_id
       LEFT JOIN (
@@ -114,7 +129,7 @@ class StockDao {
     ''';
     final row = await _database.customSelect(
       '''
-      SELECT COALESCE(SUM((b.initial_boxes + COALESCE(m.delta_boxes, 0)) * p.pieces_per_box), 0) AS total_pieces
+      SELECT COALESCE(SUM(MAX(b.initial_boxes + COALESCE(m.delta_boxes, 0) - b.frozen_boxes, 0) * p.pieces_per_box), 0) AS total_pieces
       FROM batches b
       INNER JOIN products p ON p.id = b.product_id
       LEFT JOIN (
@@ -171,6 +186,7 @@ class StockDao {
           product: product,
           batch: batch,
           currentBoxes: currentBoxes,
+          frozenBoxes: batch.frozenBoxes,
           reservedBoxes: reservedBoxes,
         ),
       );
@@ -211,6 +227,7 @@ class StockDao {
       END), 0)
     ''';
     final currentBoxesSql = '(b.initial_boxes + $movementDeltaSql)';
+    final availableBoxesSql = 'MAX($currentBoxesSql - b.frozen_boxes, 0)';
     const dateRestSql = "substr(b.date_batch, instr(b.date_batch, '.') + 1)";
     const dateYearSql = '''
       CASE
@@ -238,10 +255,10 @@ class StockDao {
       case InventoryStockFilter.all:
         break;
       case InventoryStockFilter.inStock:
-        havingParts.add('$currentBoxesSql > 0');
+        havingParts.add('$availableBoxesSql > 0');
         break;
       case InventoryStockFilter.zero:
-        havingParts.add('$currentBoxesSql = 0');
+        havingParts.add('$availableBoxesSql <= 0');
         break;
     }
 
@@ -260,7 +277,7 @@ class StockDao {
         INNER JOIN products p ON p.id = b.product_id
         LEFT JOIN stock_movements m ON m.batch_id = b.id
         $whereSql
-        GROUP BY b.id, b.initial_boxes, b.created_at, p.code, b.date_batch
+        GROUP BY b.id, b.initial_boxes, b.frozen_boxes, b.created_at, p.code, b.date_batch
         $havingSql
       ) t
       ''',
@@ -290,7 +307,7 @@ class StockDao {
       INNER JOIN products p ON p.id = b.product_id
       LEFT JOIN stock_movements m ON m.batch_id = b.id
       $whereSql
-      GROUP BY b.id, b.initial_boxes, b.created_at, p.code, b.date_batch
+      GROUP BY b.id, b.initial_boxes, b.frozen_boxes, b.created_at, p.code, b.date_batch
       $havingSql
       ORDER BY
         p.code ASC,
@@ -348,6 +365,7 @@ class StockDao {
           product: product,
           batch: batch,
           currentBoxes: currentBoxesByBatchId[batchId] ?? 0,
+          frozenBoxes: batch.frozenBoxes,
           reservedBoxes: reservedByBatch[batchId] ?? 0,
         ),
       );
@@ -383,15 +401,16 @@ class StockDao {
       END), 0)
     ''';
     final currentBoxesSql = '(b.initial_boxes + $movementDeltaSql)';
+    final availableBoxesSql = 'MAX($currentBoxesSql - b.frozen_boxes, 0)';
 
     switch (stockFilter) {
       case InventoryStockFilter.all:
         break;
       case InventoryStockFilter.inStock:
-        havingParts.add('$currentBoxesSql > 0');
+        havingParts.add('$availableBoxesSql > 0');
         break;
       case InventoryStockFilter.zero:
-        havingParts.add('$currentBoxesSql = 0');
+        havingParts.add('$availableBoxesSql <= 0');
         break;
     }
 
@@ -405,19 +424,19 @@ class StockDao {
           '''
       SELECT
         t.code AS product_code,
-        SUM(t.current_boxes) AS total_boxes,
-        SUM(t.current_boxes * t.pieces_per_box) AS total_pieces
+        SUM(t.available_boxes) AS total_boxes,
+        SUM(t.available_boxes * t.pieces_per_box) AS total_pieces
       FROM (
         SELECT
           b.id AS batch_id,
           p.code AS code,
           p.pieces_per_box AS pieces_per_box,
-          $currentBoxesSql AS current_boxes
+          $availableBoxesSql AS available_boxes
         FROM batches b
         INNER JOIN products p ON p.id = b.product_id
         LEFT JOIN stock_movements m ON m.batch_id = b.id
         $whereSql
-        GROUP BY b.id, b.initial_boxes, p.code, p.pieces_per_box
+        GROUP BY b.id, b.initial_boxes, b.frozen_boxes, p.code, p.pieces_per_box
         $havingSql
       ) t
       GROUP BY t.code
@@ -549,6 +568,12 @@ class StockDao {
       throw InvalidStockQuantityException(boxes);
     }
   }
+
+  void _validateNonNegativeBoxes(int boxes) {
+    if (boxes < 0 || boxes > 1000000000) {
+      throw InvalidStockQuantityException(boxes);
+    }
+  }
 }
 
 class InventoryDetailRow {
@@ -556,16 +581,18 @@ class InventoryDetailRow {
     required this.product,
     required this.batch,
     required this.currentBoxes,
+    required this.frozenBoxes,
     required this.reservedBoxes,
   });
 
   final Product product;
   final BatchRecord batch;
   final int currentBoxes;
+  final int frozenBoxes;
   final int reservedBoxes;
 
   int get availableBoxes {
-    final value = currentBoxes - reservedBoxes;
+    final value = currentBoxes - frozenBoxes - reservedBoxes;
     return value < 0 ? 0 : value;
   }
 

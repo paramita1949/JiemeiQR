@@ -62,19 +62,23 @@ class OrderCompletionService {
           ..where((table) => table.orderId.equals(orderId)))
         .get();
     final stockDao = StockDao(_database);
-    final orderDao = OrderDao(_database);
 
     for (final item in items) {
       final currentBoxes = await stockDao.currentBoxesForBatch(item.batchId);
-      if (currentBoxes < item.boxes) {
+      final batch = await (_database.select(_database.batches)
+            ..where((table) => table.id.equals(item.batchId)))
+          .getSingle();
+      final availableBoxes = currentBoxes - batch.frozenBoxes;
+      if (availableBoxes < item.boxes) {
         throw InsufficientStockException(
           batchId: item.batchId,
           requestedBoxes: item.boxes,
-          availableBoxes: currentBoxes,
+          availableBoxes: availableBoxes,
         );
       }
     }
 
+    final orderDao = OrderDao(_database);
     for (final item in items) {
       await stockDao.addMovement(
         batchId: item.batchId,

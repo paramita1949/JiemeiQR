@@ -348,6 +348,53 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     await _refreshRows(refreshTotals: true);
   }
 
+  Future<void> _editFrozenBoxes(InventoryDetailRow row) async {
+    final controller = TextEditingController(text: row.frozenBoxes.toString());
+    final frozenBoxes = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('编辑冻结数量'),
+        content: TextField(
+          key: const Key('inventoryFrozenBoxesField'),
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '冻结箱数',
+            helperText: '损坏、破损或暂不可用的箱数',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value == null || value < 0) {
+                return;
+              }
+              Navigator.of(context).pop(value);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (frozenBoxes == null) {
+      return;
+    }
+    await _stockDao.updateFrozenBoxes(
+      batchId: row.batch.id,
+      frozenBoxes: frozenBoxes,
+    );
+    if (!mounted) {
+      return;
+    }
+    await _refreshRows(refreshTotals: true);
+  }
+
   Future<void> _editBaseInfo(InventoryDetailRow row) async {
     final updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -457,6 +504,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                 batchCodesByKey['${row.product.code}|${row.batch.dateBatch}'] ??
                     const <String>[],
             onEditRemark: () => _editRemark(row),
+            onEditFrozenBoxes: () => _editFrozenBoxes(row),
             onEditBaseInfo: () => _editBaseInfo(row),
             onDeleteBatch: () => _deleteBatch(row),
           ),
@@ -468,7 +516,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
 
   bool _isLowStockRow(InventoryDetailRow row) {
     return !row.isZeroStock &&
-        row.currentBoxes < row.batch.boxesPerBoard * 10;
+        row.availableBoxes < row.batch.boxesPerBoard * 10;
   }
 
   List<InventoryDetailRow> _sortRowsByGroupRanking(
@@ -738,6 +786,7 @@ class _InventoryRowCard extends StatelessWidget {
     required this.highlightBatch,
     required this.batchCodeVariants,
     required this.onEditRemark,
+    required this.onEditFrozenBoxes,
     required this.onEditBaseInfo,
     required this.onDeleteBatch,
   });
@@ -746,6 +795,7 @@ class _InventoryRowCard extends StatelessWidget {
   final bool highlightBatch;
   final List<String> batchCodeVariants;
   final VoidCallback onEditRemark;
+  final VoidCallback onEditFrozenBoxes;
   final VoidCallback onEditBaseInfo;
   final VoidCallback onDeleteBatch;
 
@@ -757,7 +807,7 @@ class _InventoryRowCard extends StatelessWidget {
     );
     final lowStockThreshold = row.batch.boxesPerBoard * 10;
     final isLowStock =
-        !row.isZeroStock && row.currentBoxes < lowStockThreshold;
+        !row.isZeroStock && row.availableBoxes < lowStockThreshold;
     final statusColor =
         (row.isZeroStock || isLowStock) ? Colors.red.shade700 : Colors.green.shade700;
 
@@ -833,7 +883,7 @@ class _InventoryRowCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MetricChip(
-                text: '${row.currentBoxes}箱',
+                text: '可用 ${row.availableBoxes}箱',
                 textColor: isLowStock || row.isZeroStock
                     ? const Color(0xFFB91C1C)
                     : AppTheme.primary,
@@ -847,7 +897,12 @@ class _InventoryRowCard extends StatelessWidget {
                   textColor: const Color(0xFF92400E),
                   backgroundColor: const Color(0xFFFFF7ED),
                 ),
-              _MetricChip(text: '可用 ${row.availableBoxes}箱'),
+              if (row.frozenBoxes > 0)
+                _MetricChip(
+                  text: '冻结 ${row.frozenBoxes}箱',
+                  textColor: const Color(0xFF92400E),
+                  backgroundColor: const Color(0xFFFFF7ED),
+                ),
               _MetricChip(text: boardText),
               _MetricChip(
                 text:
@@ -895,6 +950,11 @@ class _InventoryRowCard extends StatelessWidget {
                 tooltip: '编辑备注',
                 onPressed: onEditRemark,
                 icon: const Icon(Icons.edit_note_outlined),
+              ),
+              IconButton(
+                tooltip: '编辑冻结',
+                onPressed: onEditFrozenBoxes,
+                icon: const Icon(Icons.ac_unit_outlined),
               ),
               IconButton(
                 tooltip: '删除批号',

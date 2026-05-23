@@ -9,6 +9,7 @@ class Batches extends Table {
   TextColumn get actualBatch => text()();
   TextColumn get dateBatch => text()();
   IntColumn get initialBoxes => integer()();
+  IntColumn get frozenBoxes => integer().withDefault(const Constant(0))();
   IntColumn get boxesPerBoard => integer()();
   TextColumn get stackingPattern => text().nullable()();
   TextColumn get location => text().nullable()();

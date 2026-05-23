@@ -579,9 +579,12 @@ class BackupService {
   void _copyBusinessRows(sqlite.Database db) {
     for (final table in _businessTables) {
       final columns = _businessTableColumns[table]!;
+      final selectColumns = columns
+          .map((column) => _incomingColumnExpression(db, table, column))
+          .toList();
       db.execute(
         'INSERT INTO main.$table (${columns.join(', ')}) '
-        'SELECT ${columns.join(', ')} FROM incoming.$table;',
+        'SELECT ${selectColumns.join(', ')} FROM incoming.$table;',
       );
     }
     db.execute(
@@ -593,6 +596,30 @@ class BackupService {
         "SELECT '$table', COALESCE(MAX(id), 0) FROM main.$table;",
       );
     }
+  }
+
+  String _incomingColumnExpression(
+    sqlite.Database db,
+    String table,
+    String column,
+  ) {
+    if (_hasSqliteColumn(db, schema: 'incoming', table: table, column: column)) {
+      return column;
+    }
+    if (table == 'batches' && column == 'frozen_boxes') {
+      return '0 AS frozen_boxes';
+    }
+    return column;
+  }
+
+  bool _hasSqliteColumn(
+    sqlite.Database db, {
+    required String schema,
+    required String table,
+    required String column,
+  }) {
+    final rows = db.select('PRAGMA $schema.table_info($table);');
+    return rows.any((row) => row['name'] == column);
   }
 
   String _escapeSqlString(String value) => value.replaceAll("'", "''");
@@ -748,6 +775,7 @@ const _businessTableColumns = <String, List<String>>{
     'actual_batch',
     'date_batch',
     'initial_boxes',
+    'frozen_boxes',
     'boxes_per_board',
     'stacking_pattern',
     'location',

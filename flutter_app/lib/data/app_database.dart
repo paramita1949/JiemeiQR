@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -131,6 +131,12 @@ class AppDatabase extends _$AppDatabase {
             final exists = await _hasColumn('order_items', 'is_picked');
             if (!exists) {
               await m.addColumn(orderItems, orderItems.isPicked);
+            }
+          }
+          if (from < 17) {
+            final exists = await _hasColumn('batches', 'frozen_boxes');
+            if (!exists) {
+              await m.addColumn(batches, batches.frozenBoxes);
             }
           }
         },

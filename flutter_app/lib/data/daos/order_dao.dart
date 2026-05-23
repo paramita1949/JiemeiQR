@@ -279,6 +279,10 @@ class OrderDao {
   Future<int> _availableBoxesForBatch(int batchId) async {
     final stockDao = StockDao(_database);
     final currentBoxes = await stockDao.currentBoxesForBatch(batchId);
+    final batch = await (_database.select(_database.batches)
+          ..where((table) => table.id.equals(batchId)))
+        .getSingleOrNull();
+    final frozenBoxes = batch?.frozenBoxes ?? 0;
     final pendingRow = await _database.customSelect(
       '''
       SELECT COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
@@ -293,7 +297,7 @@ class OrderDao {
       readsFrom: {_database.orderItems, _database.orders},
     ).getSingleOrNull();
     final reserved = (pendingRow?.data['reserved_boxes'] as int?) ?? 0;
-    final available = currentBoxes - reserved;
+    final available = currentBoxes - frozenBoxes - reserved;
     return available < 0 ? 0 : available;
   }
 
@@ -307,6 +311,10 @@ class OrderDao {
   }) async {
     final stockDao = StockDao(_database);
     final currentBoxes = await stockDao.currentBoxesForBatch(batchId);
+    final batch = await (_database.select(_database.batches)
+          ..where((table) => table.id.equals(batchId)))
+        .getSingleOrNull();
+    final frozenBoxes = batch?.frozenBoxes ?? 0;
     final pendingRow = await _database.customSelect(
       '''
       SELECT COALESCE(SUM(oi.boxes), 0) AS reserved_boxes
@@ -322,7 +330,7 @@ class OrderDao {
       readsFrom: {_database.orderItems, _database.orders},
     ).getSingleOrNull();
     final reserved = (pendingRow?.data['reserved_boxes'] as int?) ?? 0;
-    final available = currentBoxes - reserved;
+    final available = currentBoxes - frozenBoxes - reserved;
     return available < 0 ? 0 : available;
   }
 

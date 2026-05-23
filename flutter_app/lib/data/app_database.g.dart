@@ -425,6 +425,14 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
   late final GeneratedColumn<int> initialBoxes = GeneratedColumn<int>(
       'initial_boxes', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _frozenBoxesMeta =
+      const VerificationMeta('frozenBoxes');
+  @override
+  late final GeneratedColumn<int> frozenBoxes = GeneratedColumn<int>(
+      'frozen_boxes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _boxesPerBoardMeta =
       const VerificationMeta('boxesPerBoard');
   @override
@@ -489,6 +497,7 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
         actualBatch,
         dateBatch,
         initialBoxes,
+        frozenBoxes,
         boxesPerBoard,
         stackingPattern,
         location,
@@ -538,6 +547,12 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
               data['initial_boxes']!, _initialBoxesMeta));
     } else if (isInserting) {
       context.missing(_initialBoxesMeta);
+    }
+    if (data.containsKey('frozen_boxes')) {
+      context.handle(
+          _frozenBoxesMeta,
+          frozenBoxes.isAcceptableOrUnknown(
+              data['frozen_boxes']!, _frozenBoxesMeta));
     }
     if (data.containsKey('boxes_per_board')) {
       context.handle(
@@ -600,6 +615,8 @@ class $BatchesTable extends Batches with TableInfo<$BatchesTable, BatchRecord> {
           .read(DriftSqlType.string, data['${effectivePrefix}date_batch'])!,
       initialBoxes: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}initial_boxes'])!,
+      frozenBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}frozen_boxes'])!,
       boxesPerBoard: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}boxes_per_board'])!,
       stackingPattern: attachedDatabase.typeMapping.read(
@@ -631,6 +648,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
   final String actualBatch;
   final String dateBatch;
   final int initialBoxes;
+  final int frozenBoxes;
   final int boxesPerBoard;
   final String? stackingPattern;
   final String? location;
@@ -645,6 +663,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       required this.actualBatch,
       required this.dateBatch,
       required this.initialBoxes,
+      required this.frozenBoxes,
       required this.boxesPerBoard,
       this.stackingPattern,
       this.location,
@@ -661,6 +680,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
     map['actual_batch'] = Variable<String>(actualBatch);
     map['date_batch'] = Variable<String>(dateBatch);
     map['initial_boxes'] = Variable<int>(initialBoxes);
+    map['frozen_boxes'] = Variable<int>(frozenBoxes);
     map['boxes_per_board'] = Variable<int>(boxesPerBoard);
     if (!nullToAbsent || stackingPattern != null) {
       map['stacking_pattern'] = Variable<String>(stackingPattern);
@@ -687,6 +707,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       actualBatch: Value(actualBatch),
       dateBatch: Value(dateBatch),
       initialBoxes: Value(initialBoxes),
+      frozenBoxes: Value(frozenBoxes),
       boxesPerBoard: Value(boxesPerBoard),
       stackingPattern: stackingPattern == null && nullToAbsent
           ? const Value.absent()
@@ -714,6 +735,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       actualBatch: serializer.fromJson<String>(json['actualBatch']),
       dateBatch: serializer.fromJson<String>(json['dateBatch']),
       initialBoxes: serializer.fromJson<int>(json['initialBoxes']),
+      frozenBoxes: serializer.fromJson<int>(json['frozenBoxes']),
       boxesPerBoard: serializer.fromJson<int>(json['boxesPerBoard']),
       stackingPattern: serializer.fromJson<String?>(json['stackingPattern']),
       location: serializer.fromJson<String?>(json['location']),
@@ -733,6 +755,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       'actualBatch': serializer.toJson<String>(actualBatch),
       'dateBatch': serializer.toJson<String>(dateBatch),
       'initialBoxes': serializer.toJson<int>(initialBoxes),
+      'frozenBoxes': serializer.toJson<int>(frozenBoxes),
       'boxesPerBoard': serializer.toJson<int>(boxesPerBoard),
       'stackingPattern': serializer.toJson<String?>(stackingPattern),
       'location': serializer.toJson<String?>(location),
@@ -750,6 +773,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           String? actualBatch,
           String? dateBatch,
           int? initialBoxes,
+          int? frozenBoxes,
           int? boxesPerBoard,
           Value<String?> stackingPattern = const Value.absent(),
           Value<String?> location = const Value.absent(),
@@ -764,6 +788,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
         actualBatch: actualBatch ?? this.actualBatch,
         dateBatch: dateBatch ?? this.dateBatch,
         initialBoxes: initialBoxes ?? this.initialBoxes,
+        frozenBoxes: frozenBoxes ?? this.frozenBoxes,
         boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
         stackingPattern: stackingPattern.present
             ? stackingPattern.value
@@ -785,6 +810,8 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       initialBoxes: data.initialBoxes.present
           ? data.initialBoxes.value
           : this.initialBoxes,
+      frozenBoxes:
+          data.frozenBoxes.present ? data.frozenBoxes.value : this.frozenBoxes,
       boxesPerBoard: data.boxesPerBoard.present
           ? data.boxesPerBoard.value
           : this.boxesPerBoard,
@@ -810,6 +837,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           ..write('actualBatch: $actualBatch, ')
           ..write('dateBatch: $dateBatch, ')
           ..write('initialBoxes: $initialBoxes, ')
+          ..write('frozenBoxes: $frozenBoxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('stackingPattern: $stackingPattern, ')
           ..write('location: $location, ')
@@ -829,6 +857,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
       actualBatch,
       dateBatch,
       initialBoxes,
+      frozenBoxes,
       boxesPerBoard,
       stackingPattern,
       location,
@@ -846,6 +875,7 @@ class BatchRecord extends DataClass implements Insertable<BatchRecord> {
           other.actualBatch == this.actualBatch &&
           other.dateBatch == this.dateBatch &&
           other.initialBoxes == this.initialBoxes &&
+          other.frozenBoxes == this.frozenBoxes &&
           other.boxesPerBoard == this.boxesPerBoard &&
           other.stackingPattern == this.stackingPattern &&
           other.location == this.location &&
@@ -862,6 +892,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
   final Value<String> actualBatch;
   final Value<String> dateBatch;
   final Value<int> initialBoxes;
+  final Value<int> frozenBoxes;
   final Value<int> boxesPerBoard;
   final Value<String?> stackingPattern;
   final Value<String?> location;
@@ -876,6 +907,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     this.actualBatch = const Value.absent(),
     this.dateBatch = const Value.absent(),
     this.initialBoxes = const Value.absent(),
+    this.frozenBoxes = const Value.absent(),
     this.boxesPerBoard = const Value.absent(),
     this.stackingPattern = const Value.absent(),
     this.location = const Value.absent(),
@@ -891,6 +923,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     required String actualBatch,
     required String dateBatch,
     required int initialBoxes,
+    this.frozenBoxes = const Value.absent(),
     required int boxesPerBoard,
     this.stackingPattern = const Value.absent(),
     this.location = const Value.absent(),
@@ -910,6 +943,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     Expression<String>? actualBatch,
     Expression<String>? dateBatch,
     Expression<int>? initialBoxes,
+    Expression<int>? frozenBoxes,
     Expression<int>? boxesPerBoard,
     Expression<String>? stackingPattern,
     Expression<String>? location,
@@ -925,6 +959,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       if (actualBatch != null) 'actual_batch': actualBatch,
       if (dateBatch != null) 'date_batch': dateBatch,
       if (initialBoxes != null) 'initial_boxes': initialBoxes,
+      if (frozenBoxes != null) 'frozen_boxes': frozenBoxes,
       if (boxesPerBoard != null) 'boxes_per_board': boxesPerBoard,
       if (stackingPattern != null) 'stacking_pattern': stackingPattern,
       if (location != null) 'location': location,
@@ -942,6 +977,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       Value<String>? actualBatch,
       Value<String>? dateBatch,
       Value<int>? initialBoxes,
+      Value<int>? frozenBoxes,
       Value<int>? boxesPerBoard,
       Value<String?>? stackingPattern,
       Value<String?>? location,
@@ -956,6 +992,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
       actualBatch: actualBatch ?? this.actualBatch,
       dateBatch: dateBatch ?? this.dateBatch,
       initialBoxes: initialBoxes ?? this.initialBoxes,
+      frozenBoxes: frozenBoxes ?? this.frozenBoxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       stackingPattern: stackingPattern ?? this.stackingPattern,
       location: location ?? this.location,
@@ -984,6 +1021,9 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
     }
     if (initialBoxes.present) {
       map['initial_boxes'] = Variable<int>(initialBoxes.value);
+    }
+    if (frozenBoxes.present) {
+      map['frozen_boxes'] = Variable<int>(frozenBoxes.value);
     }
     if (boxesPerBoard.present) {
       map['boxes_per_board'] = Variable<int>(boxesPerBoard.value);
@@ -1020,6 +1060,7 @@ class BatchesCompanion extends UpdateCompanion<BatchRecord> {
           ..write('actualBatch: $actualBatch, ')
           ..write('dateBatch: $dateBatch, ')
           ..write('initialBoxes: $initialBoxes, ')
+          ..write('frozenBoxes: $frozenBoxes, ')
           ..write('boxesPerBoard: $boxesPerBoard, ')
           ..write('stackingPattern: $stackingPattern, ')
           ..write('location: $location, ')
@@ -6320,6 +6361,7 @@ typedef $$BatchesTableCreateCompanionBuilder = BatchesCompanion Function({
   required String actualBatch,
   required String dateBatch,
   required int initialBoxes,
+  Value<int> frozenBoxes,
   required int boxesPerBoard,
   Value<String?> stackingPattern,
   Value<String?> location,
@@ -6335,6 +6377,7 @@ typedef $$BatchesTableUpdateCompanionBuilder = BatchesCompanion Function({
   Value<String> actualBatch,
   Value<String> dateBatch,
   Value<int> initialBoxes,
+  Value<int> frozenBoxes,
   Value<int> boxesPerBoard,
   Value<String?> stackingPattern,
   Value<String?> location,
@@ -6429,6 +6472,9 @@ class $$BatchesTableFilterComposer
 
   ColumnFilters<int> get initialBoxes => $composableBuilder(
       column: $table.initialBoxes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get frozenBoxes => $composableBuilder(
+      column: $table.frozenBoxes, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard, builder: (column) => ColumnFilters(column));
@@ -6561,6 +6607,9 @@ class $$BatchesTableOrderingComposer
       column: $table.initialBoxes,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get frozenBoxes => $composableBuilder(
+      column: $table.frozenBoxes, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard,
       builder: (column) => ColumnOrderings(column));
@@ -6628,6 +6677,9 @@ class $$BatchesTableAnnotationComposer
 
   GeneratedColumn<int> get initialBoxes => $composableBuilder(
       column: $table.initialBoxes, builder: (column) => column);
+
+  GeneratedColumn<int> get frozenBoxes => $composableBuilder(
+      column: $table.frozenBoxes, builder: (column) => column);
 
   GeneratedColumn<int> get boxesPerBoard => $composableBuilder(
       column: $table.boxesPerBoard, builder: (column) => column);
@@ -6769,6 +6821,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             Value<String> actualBatch = const Value.absent(),
             Value<String> dateBatch = const Value.absent(),
             Value<int> initialBoxes = const Value.absent(),
+            Value<int> frozenBoxes = const Value.absent(),
             Value<int> boxesPerBoard = const Value.absent(),
             Value<String?> stackingPattern = const Value.absent(),
             Value<String?> location = const Value.absent(),
@@ -6784,6 +6837,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             initialBoxes: initialBoxes,
+            frozenBoxes: frozenBoxes,
             boxesPerBoard: boxesPerBoard,
             stackingPattern: stackingPattern,
             location: location,
@@ -6799,6 +6853,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             required String actualBatch,
             required String dateBatch,
             required int initialBoxes,
+            Value<int> frozenBoxes = const Value.absent(),
             required int boxesPerBoard,
             Value<String?> stackingPattern = const Value.absent(),
             Value<String?> location = const Value.absent(),
@@ -6814,6 +6869,7 @@ class $$BatchesTableTableManager extends RootTableManager<
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             initialBoxes: initialBoxes,
+            frozenBoxes: frozenBoxes,
             boxesPerBoard: boxesPerBoard,
             stackingPattern: stackingPattern,
             location: location,
