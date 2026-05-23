@@ -1174,6 +1174,10 @@ class _RestockWaybillSheet extends StatelessWidget {
       0,
       (sum, item) => sum + item.totalBoxes,
     );
+    final location = aggregate.location?.trim();
+    final summaryText =
+        '合计 ${aggregate.totalBoxes}箱 · ${BoardCalculator.format(boxes: aggregate.totalBoxes, boxesPerBoard: aggregate.boxesPerBoard)}'
+        '${location == null || location.isEmpty ? '' : ' · 库位 $location'}';
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFF3F6FB),
@@ -1207,7 +1211,7 @@ class _RestockWaybillSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '合计 ${aggregate.totalBoxes}箱 · ${BoardCalculator.format(boxes: aggregate.totalBoxes, boxesPerBoard: aggregate.boxesPerBoard)}',
+            summaryText,
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontSize: 12,
