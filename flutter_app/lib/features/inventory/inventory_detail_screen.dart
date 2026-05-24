@@ -41,6 +41,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   Map<String, List<String>> _batchCodesByProductDate = const {};
   List<String> _quickProductCodes = const [];
   final Set<String> _collapsedProductCodes = <String>{};
+  String? _selectedZeroProductCode;
   bool _collapseInitialized = false;
   bool _loading = true;
   bool _loadingMore = false;
@@ -166,6 +167,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               controller: _filterController,
               selected: _stockFilter,
               quickProductCodes: _quickProductCodes,
+              showQuickProductCodes: _stockFilter != _StockFilter.zero,
               onTextChanged: _onFilterTextChanged,
               onFilterChanged: _onStockFilterChanged,
               onClearTap: () {
@@ -187,6 +189,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               const Center(child: CircularProgressIndicator())
             else if (_rows.isEmpty)
               const _EmptyState()
+            else if (_stockFilter == _StockFilter.zero)
+              ..._buildZeroStockView(_rows)
             else
               ..._buildGroupedRows(_rows),
             if (!_loading && _rows.length < _total)
@@ -234,10 +238,22 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     }
     final sortedRows = _sortRowsByGroupRanking(result.rows, groupSummaries);
     final rankedCodes = groupSummaries.map((item) => item.productCode).toList();
+    var selectedZeroProductCode = _selectedZeroProductCode;
+    if (_stockFilter == _StockFilter.zero) {
+      if (rankedCodes.isEmpty) {
+        selectedZeroProductCode = null;
+      } else if (selectedZeroProductCode == null ||
+          !rankedCodes.contains(selectedZeroProductCode)) {
+        selectedZeroProductCode = rankedCodes.first;
+      }
+    } else {
+      selectedZeroProductCode = null;
+    }
     setState(() {
       _rows = sortedRows;
       _total = result.total;
       _totalPieces = totalPieces;
+      _selectedZeroProductCode = selectedZeroProductCode;
       _quickProductCodes = rankedCodes;
       _batchCodesByProductDate = batchCodesByProductDate;
       _groupSummaries = {
@@ -304,6 +320,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
       _StockFilter.all => InventoryStockFilter.all,
       _StockFilter.inStock => InventoryStockFilter.inStock,
       _StockFilter.zero => InventoryStockFilter.zero,
+      _StockFilter.frozen => InventoryStockFilter.frozen,
     };
   }
 
@@ -464,6 +481,39 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     return widgets;
   }
 
+  List<Widget> _buildZeroStockView(List<InventoryDetailRow> rows) {
+    final productCodes = _quickProductCodes;
+    if (productCodes.isEmpty) {
+      return const [_EmptyState()];
+    }
+    final selectedCode = _selectedZeroProductCode ?? productCodes.first;
+    final selectedRows =
+        rows.where((row) => row.product.code == selectedCode).toList();
+    final duplicateDateKeys = _duplicateBatchDateKeys(_batchCodesByProductDate);
+    final batchCodesByKey = _batchCodesByProductDate;
+    return [
+      _ZeroStockProductWall(
+        productCodes: productCodes,
+        selectedCode: selectedCode,
+        onProductTap: (code) {
+          setState(() => _selectedZeroProductCode = code);
+        },
+      ),
+      const SizedBox(height: 10),
+      _ZeroStockDetailPanel(
+        key: Key('inventoryZeroDetail-$selectedCode'),
+        productCode: selectedCode,
+        rows: selectedRows,
+        totalBatches: selectedRows.length,
+        duplicateDateKeys: duplicateDateKeys,
+        batchCodesByProductDate: batchCodesByKey,
+        onEditRemark: _editRemark,
+        onEditBaseInfo: _editBaseInfo,
+        onDeleteBatch: _deleteBatch,
+      ),
+    ];
+  }
+
   bool _isLowStockRow(InventoryDetailRow row) {
     return !row.isZeroStock &&
         row.availableBoxes < row.batch.boxesPerBoard * 10;
@@ -513,7 +563,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
   }
 }
 
-enum _StockFilter { all, inStock, zero }
+enum _StockFilter { all, inStock, zero, frozen }
 
 class _TotalCard extends StatelessWidget {
   const _TotalCard({required this.totalPieces});
@@ -560,6 +610,7 @@ class _FilterBar extends StatelessWidget {
     required this.controller,
     required this.selected,
     required this.quickProductCodes,
+    required this.showQuickProductCodes,
     required this.onTextChanged,
     required this.onFilterChanged,
     required this.onQuickProductTap,
@@ -569,6 +620,7 @@ class _FilterBar extends StatelessWidget {
   final TextEditingController controller;
   final _StockFilter selected;
   final List<String> quickProductCodes;
+  final bool showQuickProductCodes;
   final ValueChanged<String> onTextChanged;
   final ValueChanged<_StockFilter> onFilterChanged;
   final ValueChanged<String> onQuickProductTap;
@@ -606,7 +658,7 @@ class _FilterBar extends StatelessWidget {
               ),
             ),
           ),
-          if (quickProductCodes.isNotEmpty) ...[
+          if (showQuickProductCodes && quickProductCodes.isNotEmpty) ...[
             const SizedBox(height: 10),
             SizedBox(
               height: 32,
@@ -658,6 +710,7 @@ class _FilterBar extends StatelessWidget {
               ButtonSegment(value: _StockFilter.all, label: Text('全部')),
               ButtonSegment(value: _StockFilter.inStock, label: Text('有库存')),
               ButtonSegment(value: _StockFilter.zero, label: Text('零库存')),
+              ButtonSegment(value: _StockFilter.frozen, label: Text('有冻结')),
             ],
             selected: {selected},
             onSelectionChanged: (value) => onFilterChanged(value.single),
@@ -666,6 +719,343 @@ class _FilterBar extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ZeroStockProductWall extends StatelessWidget {
+  const _ZeroStockProductWall({
+    required this.productCodes,
+    required this.selectedCode,
+    required this.onProductTap,
+  });
+
+  final List<String> productCodes;
+  final String selectedCode;
+  final ValueChanged<String> onProductTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('inventoryZeroProductWall'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${productCodes.length} 个零库存产品',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '点击产品编号，下面直接展开该产品批号明细。',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = (constraints.maxWidth - 16) / 3;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final code in productCodes)
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ZeroStockProductTag(
+                        code: code,
+                        selected: code == selectedCode,
+                        onTap: () => onProductTap(code),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZeroStockProductTag extends StatelessWidget {
+  const _ZeroStockProductTag({
+    required this.code,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String code;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFFEFF5FF) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(13),
+        side: BorderSide(
+          color: selected ? const Color(0xFF8DB2FF) : const Color(0xFFD5DDEB),
+          width: selected ? 1.4 : 1,
+        ),
+      ),
+      child: InkWell(
+        key: Key('inventoryZeroProduct-$code'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+          child: Center(
+            child: Text(
+              code,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color:
+                    selected ? const Color(0xFF0F4ED7) : AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ZeroStockDetailPanel extends StatelessWidget {
+  const _ZeroStockDetailPanel({
+    super.key,
+    required this.productCode,
+    required this.rows,
+    required this.totalBatches,
+    required this.duplicateDateKeys,
+    required this.batchCodesByProductDate,
+    required this.onEditRemark,
+    required this.onEditBaseInfo,
+    required this.onDeleteBatch,
+  });
+
+  final String productCode;
+  final List<InventoryDetailRow> rows;
+  final int totalBatches;
+  final Set<String> duplicateDateKeys;
+  final Map<String, List<String>> batchCodesByProductDate;
+  final ValueChanged<InventoryDetailRow> onEditRemark;
+  final ValueChanged<InventoryDetailRow> onEditBaseInfo;
+  final ValueChanged<InventoryDetailRow> onDeleteBatch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$productCode · 批号明细',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '零库存，$totalBatches 条批号记录',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const _MetricChip(
+                text: '可用 0箱',
+                textColor: AppTheme.textSecondary,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                '该产品批号还未加载，请点下方加载更多。',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            ...rows.map(
+              (row) {
+                final key = '${row.product.code}|${row.batch.dateBatch}';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ZeroStockBatchTile(
+                    row: row,
+                    highlightBatch: duplicateDateKeys.contains(key),
+                    batchCodeVariants:
+                        batchCodesByProductDate[key] ?? const <String>[],
+                    onEditRemark: () => onEditRemark(row),
+                    onEditBaseInfo: () => onEditBaseInfo(row),
+                    onDeleteBatch: () => onDeleteBatch(row),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZeroStockBatchTile extends StatelessWidget {
+  const _ZeroStockBatchTile({
+    required this.row,
+    required this.highlightBatch,
+    required this.batchCodeVariants,
+    required this.onEditRemark,
+    required this.onEditBaseInfo,
+    required this.onDeleteBatch,
+  });
+
+  final InventoryDetailRow row;
+  final bool highlightBatch;
+  final List<String> batchCodeVariants;
+  final VoidCallback onEditRemark;
+  final VoidCallback onEditBaseInfo;
+  final VoidCallback onDeleteBatch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFDFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                    children: [
+                      TextSpan(text: '${row.product.code} · '),
+                      TextSpan(
+                        children: _batchCodeSpans(
+                          row.batch.actualBatch,
+                          variants: batchCodeVariants,
+                          highlightDifferences: highlightBatch,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${row.batch.dateBatch} · 库位 ${row.batch.location ?? '--'}',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _zeroStockNote(row),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: '编辑资料',
+                visualDensity: VisualDensity.compact,
+                onPressed: onEditBaseInfo,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多操作',
+                onSelected: (value) {
+                  if (value == 'remark') {
+                    onEditRemark();
+                  } else if (value == 'delete') {
+                    onDeleteBatch();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'remark', child: Text('编辑备注')),
+                  PopupMenuItem(value: 'delete', child: Text('删除批号')),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _zeroStockNote(InventoryDetailRow row) {
+    if (row.frozenBoxes > 0) {
+      return '冻结 ${row.frozenBoxes}箱';
+    }
+    final remark = row.batch.remark;
+    if (remark != null && remark.isNotEmpty) {
+      return remark;
+    }
+    return '已空';
   }
 }
 

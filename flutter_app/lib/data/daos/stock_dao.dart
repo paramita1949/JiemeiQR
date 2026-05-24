@@ -259,6 +259,9 @@ class StockDao {
       case InventoryStockFilter.zero:
         havingParts.add('$currentBoxesSql <= 0');
         break;
+      case InventoryStockFilter.frozen:
+        havingParts.add('b.frozen_boxes > 0');
+        break;
     }
 
     final whereSql =
@@ -410,6 +413,9 @@ class StockDao {
         break;
       case InventoryStockFilter.zero:
         havingParts.add('$currentBoxesSql <= 0');
+        break;
+      case InventoryStockFilter.frozen:
+        havingParts.add('b.frozen_boxes > 0');
         break;
     }
 
@@ -621,7 +627,7 @@ class InventoryGroupSummary {
   final int totalPieces;
 }
 
-enum InventoryStockFilter { all, inStock, zero }
+enum InventoryStockFilter { all, inStock, zero, frozen }
 
 class InvalidStockQuantityException implements Exception {
   const InvalidStockQuantityException(this.boxes);
