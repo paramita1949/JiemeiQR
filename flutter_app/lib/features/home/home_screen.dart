@@ -424,6 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final stockDao = StockDao(_database);
     final totalPieces = await stockDao.totalInventoryPieces();
     final nonRestrictedPieces = await stockDao.nonRestrictedInventoryPieces();
+    final frozenBoxes = await stockDao.totalFrozenBoxes();
     final projectedPieces = await stockDao.projectedInventoryPieces();
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
@@ -471,6 +472,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _HomeStats(
       totalPieces: totalPieces,
       nonRestrictedPieces: nonRestrictedPieces,
+      frozenBoxes: frozenBoxes,
       projectedPieces: projectedPieces,
       todayOrders: todayOrders,
       yesterdayOrders: yesterdayOrders,
@@ -857,6 +859,9 @@ class _InventoryStatsSection extends StatelessWidget {
         stats == null ? '--' : _formatNumber(stats!.nonRestrictedPieces);
     final projectedText =
         stats == null ? '--' : _formatNumber(stats!.projectedPieces);
+    final frozenText = loading || stats == null
+        ? null
+        : '冻结箱数 ${_formatNumber(stats!.frozenBoxes)}箱';
     final todayText = loading || stats == null ? '--' : '${stats!.todayOrders}';
     final yesterdayText =
         loading || stats == null ? '--' : '${stats!.yesterdayOrders}';
@@ -912,6 +917,8 @@ class _InventoryStatsSection extends StatelessWidget {
                       titleColor: const Color(0xFF064E3B),
                       valueColor: const Color(0xFF064E3B),
                       backgroundColor: const Color(0xFFDDF8EC),
+                      subValue: frozenText,
+                      subValueColor: const Color(0xFF047857),
                     ),
                   ),
                 ],
@@ -1115,6 +1122,7 @@ class _HomeStats {
   const _HomeStats({
     required this.totalPieces,
     required this.nonRestrictedPieces,
+    required this.frozenBoxes,
     required this.projectedPieces,
     required this.todayOrders,
     required this.yesterdayOrders,
@@ -1124,6 +1132,7 @@ class _HomeStats {
 
   final int totalPieces;
   final int nonRestrictedPieces;
+  final int frozenBoxes;
   final int projectedPieces;
   final int todayOrders;
   final int yesterdayOrders;

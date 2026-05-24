@@ -110,6 +110,17 @@ class StockDao {
     return (rows?.data['total_pieces'] as int?) ?? 0;
   }
 
+  Future<int> totalFrozenBoxes() async {
+    final row = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM(frozen_boxes), 0) AS frozen_boxes
+      FROM batches
+      ''',
+      readsFrom: {_database.batches},
+    ).getSingleOrNull();
+    return (row?.data['frozen_boxes'] as int?) ?? 0;
+  }
+
   Future<int> projectedInventoryPieces() async {
     final rows = await _database.customSelect(
       '''
