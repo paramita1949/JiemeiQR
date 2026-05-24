@@ -927,6 +927,20 @@ class _InventoryRowCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onEditFrozenBoxes,
+              icon: const Icon(Icons.ac_unit_outlined, size: 16),
+              label: const Text('冻结'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF92400E),
+                side: const BorderSide(color: Color(0xFFF59E0B)),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -950,11 +964,6 @@ class _InventoryRowCard extends StatelessWidget {
                 tooltip: '编辑备注',
                 onPressed: onEditRemark,
                 icon: const Icon(Icons.edit_note_outlined),
-              ),
-              IconButton(
-                tooltip: '编辑冻结',
-                onPressed: onEditFrozenBoxes,
-                icon: const Icon(Icons.ac_unit_outlined),
               ),
               IconButton(
                 tooltip: '删除批号',
