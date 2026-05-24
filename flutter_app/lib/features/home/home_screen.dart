@@ -423,6 +423,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<_HomeStats> _loadStats() async {
     final stockDao = StockDao(_database);
     final totalPieces = await stockDao.totalInventoryPieces();
+    final nonRestrictedPieces = await stockDao.nonRestrictedInventoryPieces();
     final projectedPieces = await stockDao.projectedInventoryPieces();
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
@@ -469,6 +470,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return _HomeStats(
       totalPieces: totalPieces,
+      nonRestrictedPieces: nonRestrictedPieces,
       projectedPieces: projectedPieces,
       todayOrders: todayOrders,
       yesterdayOrders: yesterdayOrders,
@@ -851,6 +853,8 @@ class _InventoryStatsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalText = stats == null ? '--' : _formatNumber(stats!.totalPieces);
+    final nonRestrictedText =
+        stats == null ? '--' : _formatNumber(stats!.nonRestrictedPieces);
     final projectedText =
         stats == null ? '--' : _formatNumber(stats!.projectedPieces);
     final todayText = loading || stats == null ? '--' : '${stats!.todayOrders}';
@@ -864,32 +868,56 @@ class _InventoryStatsSection extends StatelessWidget {
 
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _InventoryStatCard(
-                title: '实时库存',
-                value: totalText,
-                icon: Icons.inventory_2_outlined,
-                titleColor: const Color(0xFFEAF1FF),
-                valueColor: Colors.white,
-                backgroundColor: const Color(0xFF1D68F2),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = (constraints.maxWidth - 8) / 2;
+            return SingleChildScrollView(
+              key: const Key('homeInventoryStatsCarousel'),
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: _InventoryStatCard(
+                      title: '实时库存',
+                      value: totalText,
+                      icon: Icons.inventory_2_outlined,
+                      titleColor: const Color(0xFFEAF1FF),
+                      valueColor: Colors.white,
+                      backgroundColor: const Color(0xFF1D68F2),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _InventoryStatCard(
+                      title: '在途货物',
+                      value: projectedText,
+                      icon: Icons.local_shipping_outlined,
+                      titleColor: const Color(0xFF7C2D12),
+                      valueColor: const Color(0xFF7C2D12),
+                      backgroundColor: const Color(0xFFF7C488),
+                      subValue: outboundText,
+                      subValueColor: const Color(0xFFA04018),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _InventoryStatCard(
+                      title: '非限制库存',
+                      value: nonRestrictedText,
+                      icon: Icons.lock_open_outlined,
+                      titleColor: const Color(0xFF064E3B),
+                      valueColor: const Color(0xFF064E3B),
+                      backgroundColor: const Color(0xFFDDF8EC),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _InventoryStatCard(
-                title: '在途货物',
-                value: projectedText,
-                icon: Icons.local_shipping_outlined,
-                titleColor: const Color(0xFF7C2D12),
-                valueColor: const Color(0xFF7C2D12),
-                backgroundColor: const Color(0xFFF7C488),
-                subValue: outboundText,
-                subValueColor: const Color(0xFFA04018),
-              ),
-            ),
-          ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         Container(
@@ -1086,6 +1114,7 @@ class _OrderCountChip extends StatelessWidget {
 class _HomeStats {
   const _HomeStats({
     required this.totalPieces,
+    required this.nonRestrictedPieces,
     required this.projectedPieces,
     required this.todayOrders,
     required this.yesterdayOrders,
@@ -1094,6 +1123,7 @@ class _HomeStats {
   });
 
   final int totalPieces;
+  final int nonRestrictedPieces;
   final int projectedPieces;
   final int todayOrders;
   final int yesterdayOrders;
