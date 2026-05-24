@@ -227,7 +227,6 @@ class StockDao {
       END), 0)
     ''';
     final currentBoxesSql = '(b.initial_boxes + $movementDeltaSql)';
-    final availableBoxesSql = 'MAX($currentBoxesSql - b.frozen_boxes, 0)';
     const dateRestSql = "substr(b.date_batch, instr(b.date_batch, '.') + 1)";
     const dateYearSql = '''
       CASE
@@ -255,10 +254,10 @@ class StockDao {
       case InventoryStockFilter.all:
         break;
       case InventoryStockFilter.inStock:
-        havingParts.add('$availableBoxesSql > 0');
+        havingParts.add('$currentBoxesSql > 0');
         break;
       case InventoryStockFilter.zero:
-        havingParts.add('$availableBoxesSql <= 0');
+        havingParts.add('$currentBoxesSql <= 0');
         break;
     }
 
@@ -407,10 +406,10 @@ class StockDao {
       case InventoryStockFilter.all:
         break;
       case InventoryStockFilter.inStock:
-        havingParts.add('$availableBoxesSql > 0');
+        havingParts.add('$currentBoxesSql > 0');
         break;
       case InventoryStockFilter.zero:
-        havingParts.add('$availableBoxesSql <= 0');
+        havingParts.add('$currentBoxesSql <= 0');
         break;
     }
 
