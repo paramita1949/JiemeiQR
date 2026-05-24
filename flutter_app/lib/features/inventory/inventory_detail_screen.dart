@@ -348,53 +348,6 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     await _refreshRows(refreshTotals: true);
   }
 
-  Future<void> _editFrozenBoxes(InventoryDetailRow row) async {
-    final controller = TextEditingController(text: row.frozenBoxes.toString());
-    final frozenBoxes = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('编辑冻结数量'),
-        content: TextField(
-          key: const Key('inventoryFrozenBoxesField'),
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: '冻结箱数',
-            helperText: '损坏、破损或暂不可用的箱数',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = int.tryParse(controller.text.trim());
-              if (value == null || value < 0) {
-                return;
-              }
-              Navigator.of(context).pop(value);
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (frozenBoxes == null) {
-      return;
-    }
-    await _stockDao.updateFrozenBoxes(
-      batchId: row.batch.id,
-      frozenBoxes: frozenBoxes,
-    );
-    if (!mounted) {
-      return;
-    }
-    await _refreshRows(refreshTotals: true);
-  }
-
   Future<void> _editBaseInfo(InventoryDetailRow row) async {
     final updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -456,10 +409,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     final widgets = <Widget>[];
     final duplicateDateKeys = _duplicateBatchDateKeys(_batchCodesByProductDate);
     final batchCodesByKey = _batchCodesByProductDate;
-    final lowStockProductCodes = rows
-        .where(_isLowStockRow)
-        .map((row) => row.product.code)
-        .toSet();
+    final lowStockProductCodes =
+        rows.where(_isLowStockRow).map((row) => row.product.code).toSet();
     String? currentProductCode;
     var currentGroupCollapsed = false;
     for (final row in rows) {
@@ -504,7 +455,6 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                 batchCodesByKey['${row.product.code}|${row.batch.dateBatch}'] ??
                     const <String>[],
             onEditRemark: () => _editRemark(row),
-            onEditFrozenBoxes: () => _editFrozenBoxes(row),
             onEditBaseInfo: () => _editBaseInfo(row),
             onDeleteBatch: () => _deleteBatch(row),
           ),
@@ -786,7 +736,6 @@ class _InventoryRowCard extends StatelessWidget {
     required this.highlightBatch,
     required this.batchCodeVariants,
     required this.onEditRemark,
-    required this.onEditFrozenBoxes,
     required this.onEditBaseInfo,
     required this.onDeleteBatch,
   });
@@ -795,7 +744,6 @@ class _InventoryRowCard extends StatelessWidget {
   final bool highlightBatch;
   final List<String> batchCodeVariants;
   final VoidCallback onEditRemark;
-  final VoidCallback onEditFrozenBoxes;
   final VoidCallback onEditBaseInfo;
   final VoidCallback onDeleteBatch;
 
@@ -808,16 +756,21 @@ class _InventoryRowCard extends StatelessWidget {
     final lowStockThreshold = row.batch.boxesPerBoard * 10;
     final isLowStock =
         !row.isZeroStock && row.availableBoxes < lowStockThreshold;
-    final statusColor =
-        (row.isZeroStock || isLowStock) ? Colors.red.shade700 : Colors.green.shade700;
+    final statusColor = (row.isZeroStock || isLowStock)
+        ? Colors.red.shade700
+        : Colors.green.shade700;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: row.isZeroStock || isLowStock ? const Color(0xFFFFF1F2) : Colors.white,
+        color: row.isZeroStock || isLowStock
+            ? const Color(0xFFFFF1F2)
+            : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: row.isZeroStock || isLowStock ? const Color(0xFFFECACA) : Colors.transparent,
+          color: row.isZeroStock || isLowStock
+              ? const Color(0xFFFECACA)
+              : Colors.transparent,
         ),
       ),
       child: Column(
@@ -925,20 +878,6 @@ class _InventoryRowCard extends StatelessWidget {
                     : const Color(0xFFF3F6FB),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: onEditFrozenBoxes,
-              icon: const Icon(Icons.ac_unit_outlined, size: 16),
-              label: const Text('冻结'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF92400E),
-                side: const BorderSide(color: Color(0xFFF59E0B)),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1057,12 +996,10 @@ class _HeaderActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = primary ? Colors.white : const Color(0xFF1D4ED8);
-    final backgroundTop = primary
-        ? const Color(0xFF2D6BFF)
-        : const Color(0xFFF1F6FF);
-    final backgroundBottom = primary
-        ? const Color(0xFF1D4ED8)
-        : const Color(0xFFE4EEFF);
+    final backgroundTop =
+        primary ? const Color(0xFF2D6BFF) : const Color(0xFFF1F6FF);
+    final backgroundBottom =
+        primary ? const Color(0xFF1D4ED8) : const Color(0xFFE4EEFF);
     final border = primary ? const Color(0xFF3B82F6) : const Color(0xFFC9DBFF);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(14),

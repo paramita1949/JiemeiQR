@@ -30,6 +30,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   final _boxesPerBoardController = TextEditingController();
   final _piecesPerBoxController = TextEditingController();
   final _locationController = TextEditingController();
+  final _frozenBoxesController = TextEditingController();
   final _remarkController = TextEditingController();
 
   late final AppDatabase _database;
@@ -71,6 +72,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _boxesPerBoardController.dispose();
     _piecesPerBoxController.dispose();
     _locationController.dispose();
+    _frozenBoxesController.dispose();
     _remarkController.dispose();
     if (_ownsDatabase) {
       _database.close();
@@ -217,6 +219,16 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
                       ),
                       const SizedBox(height: 10),
                       _TextField(
+                        key: const Key('frozenBoxesField'),
+                        controller: _frozenBoxesController,
+                        label: '冻结',
+                        keyboardType: TextInputType.number,
+                        requiredField: false,
+                        prefixIcon: Icons.ac_unit_outlined,
+                        validator: _validateFrozenBoxes,
+                      ),
+                      const SizedBox(height: 10),
+                      _TextField(
                         key: const Key('remarkField'),
                         controller: _remarkController,
                         label: '备注',
@@ -360,6 +372,11 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
       final piecesPerBox = int.parse(_piecesPerBoxController.text);
       final stockPieces = int.parse(_stockPiecesController.text);
       final initialBoxes = stockPieces ~/ piecesPerBox;
+      final frozenBoxes = int.tryParse(
+              _frozenBoxesController.text.trim().isEmpty
+                  ? '0'
+                  : _frozenBoxesController.text.trim()) ??
+          0;
       final hasDuplicate = await _productDao.hasDuplicateActualBatch(
         actualBatch: actualBatch,
         excludeBatchId: widget.editingBatchId,
@@ -380,6 +397,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
           actualBatch: actualBatch,
           dateBatch: dateBatch,
           currentBoxes: initialBoxes,
+          frozenBoxes: frozenBoxes,
           boxesPerBoard: int.parse(_boxesPerBoardController.text),
           piecesPerBox: piecesPerBox,
           tsRequired: _tsRequired,
@@ -398,6 +416,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
           actualBatch: actualBatch,
           dateBatch: dateBatch,
           initialBoxes: initialBoxes,
+          frozenBoxes: frozenBoxes,
           boxesPerBoard: int.parse(_boxesPerBoardController.text),
           tsRequired: _tsRequired,
           location: _emptyAsNull(_locationController.text),
@@ -520,6 +539,8 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _boxesPerBoardController.text = entry.batch.boxesPerBoard.toString();
     _piecesPerBoxController.text = entry.product.piecesPerBox.toString();
     _locationController.text = entry.batch.location ?? '';
+    _frozenBoxesController.text =
+        entry.batch.frozenBoxes == 0 ? '' : entry.batch.frozenBoxes.toString();
     _remarkController.text = entry.batch.remark ?? '';
     _tsRequired = entry.batch.tsRequired;
     _savedProductId = entry.product.id;
@@ -645,6 +666,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _dateBatchController.clear();
     _stockPiecesController.clear();
     _locationController.clear();
+    _frozenBoxesController.clear();
     _remarkController.clear();
     _boxesPerBoardController.clear();
     if (!continueSameProduct) {
@@ -672,6 +694,21 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     }
     if (stockPieces % piecesPerBox != 0) {
       return '数量必须是整箱';
+    }
+    return null;
+  }
+
+  String? _validateFrozenBoxes(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
+    }
+    final frozenBoxes = int.tryParse(text);
+    if (frozenBoxes == null) {
+      return '请输入数字';
+    }
+    if (frozenBoxes < 0 || frozenBoxes > 1000000000) {
+      return '请输入有效冻结箱数';
     }
     return null;
   }

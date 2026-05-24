@@ -47,12 +47,14 @@ class ProductDao {
     required String actualBatch,
     required String dateBatch,
     required int initialBoxes,
+    int frozenBoxes = 0,
     int? boxesPerBoard,
     bool tsRequired = false,
     String? location,
     String? remark,
   }) async {
     _validatePositive(initialBoxes, 'initialBoxes');
+    _validateNonNegative(frozenBoxes, 'frozenBoxes');
     final product = await (_database.select(_database.products)
           ..where((table) => table.id.equals(productId)))
         .getSingle();
@@ -64,6 +66,7 @@ class ProductDao {
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             initialBoxes: initialBoxes,
+            frozenBoxes: Value(frozenBoxes),
             boxesPerBoard: batchBoxesPerBoard,
             tsRequired: Value(tsRequired),
             location: Value.absentIfNull(location),
@@ -450,6 +453,7 @@ class ProductDao {
     required String actualBatch,
     required String dateBatch,
     required int currentBoxes,
+    int? frozenBoxes,
     required int boxesPerBoard,
     required int piecesPerBox,
     required bool tsRequired,
@@ -465,6 +469,8 @@ class ProductDao {
       if (entry == null) {
         throw StateError('Batch $batchId does not exist.');
       }
+      final effectiveFrozenBoxes = frozenBoxes ?? entry.batch.frozenBoxes;
+      _validateNonNegative(effectiveFrozenBoxes, 'frozenBoxes');
       final oldProductId = entry.product.id;
       final oldDateBatch = entry.batch.dateBatch;
       final oldActualBatch = entry.batch.actualBatch;
@@ -504,6 +510,7 @@ class ProductDao {
           actualBatch: Value(actualBatch),
           dateBatch: Value(dateBatch),
           initialBoxes: Value(initialBoxes),
+          frozenBoxes: Value(effectiveFrozenBoxes),
           boxesPerBoard: Value(boxesPerBoard),
           tsRequired: Value(tsRequired),
           location: Value(location),
@@ -580,6 +587,12 @@ class ProductDao {
 
   void _validatePositive(int value, String fieldName) {
     if (value <= 0 || value > 1000000000) {
+      throw InvalidProductQuantityException(fieldName: fieldName, value: value);
+    }
+  }
+
+  void _validateNonNegative(int value, String fieldName) {
+    if (value < 0 || value > 1000000000) {
       throw InvalidProductQuantityException(fieldName: fieldName, value: value);
     }
   }
