@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
@@ -527,7 +528,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<_DebugLogReport> _buildDebugReport() async {
     final buffer = StringBuffer();
     String dbStatus = '正常';
+    var appVersion = '读取失败';
     buffer.writeln('time=${DateTime.now().toIso8601String()}');
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      appVersion = packageInfo.version;
+      final buildNumber = packageInfo.buildNumber.trim();
+      if (buildNumber.isNotEmpty) {
+        appVersion = '$appVersion+$buildNumber';
+      }
+      buffer.writeln('app_version=$appVersion');
+    } catch (error) {
+      buffer.writeln('app_version_error=$error');
+    }
     buffer.writeln('schema=${_database.schemaVersion}');
     try {
       final userVersionRow =
@@ -572,6 +585,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
     return _DebugLogReport(
+      appVersion: appVersion,
       dbStatus: dbStatus,
       sqliteSchemaVersion: _database.schemaVersion,
       orderCount: orderCount,
@@ -622,6 +636,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
 class _DebugLogReport {
   const _DebugLogReport({
+    required this.appVersion,
     required this.dbStatus,
     required this.sqliteSchemaVersion,
     required this.orderCount,
@@ -632,6 +647,7 @@ class _DebugLogReport {
     required this.rawText,
   });
 
+  final String appVersion;
   final String dbStatus;
   final int sqliteSchemaVersion;
   final int? orderCount;
@@ -685,6 +701,11 @@ class _DebugLogSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              _DebugStatusCard(
+                label: '当前版本',
+                value: report.appVersion,
+              ),
+              const SizedBox(height: 8),
               _DebugStatusCard(
                 label: '数据库状态',
                 value: report.dbStatus,
