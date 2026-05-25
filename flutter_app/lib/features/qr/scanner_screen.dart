@@ -15,7 +15,14 @@ class ScannerScreen extends StatefulWidget {
     this.endScanResult,
     this.minContinuousDetections = 1,
     this.validateResult,
+    this.formats = const [BarcodeFormat.qrCode],
   });
+
+  static const batchCodeFormats = [
+    BarcodeFormat.qrCode,
+    BarcodeFormat.dataMatrix,
+    BarcodeFormat.code128,
+  ];
 
   final bool startFromGallery;
   final String title;
@@ -25,6 +32,7 @@ class ScannerScreen extends StatefulWidget {
   final String? endScanResult;
   final int minContinuousDetections;
   final bool Function(String value)? validateResult;
+  final List<BarcodeFormat> formats;
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -34,10 +42,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     with SingleTickerProviderStateMixin {
   static const double _scanBoxSize = 280;
 
-  final MobileScannerController _controller = MobileScannerController(
-    formats: const [BarcodeFormat.qrCode],
-    detectionSpeed: DetectionSpeed.normal,
-  );
+  late final MobileScannerController _controller;
   final ImagePicker _picker = ImagePicker();
 
   late final AnimationController _lineController;
@@ -48,6 +53,10 @@ class _ScannerScreenState extends State<ScannerScreen>
   @override
   void initState() {
     super.initState();
+    _controller = MobileScannerController(
+      formats: widget.formats,
+      detectionSpeed: DetectionSpeed.normal,
+    );
     _lineController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),

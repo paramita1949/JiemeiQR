@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
+import 'package:qrscan_flutter/features/base_info/base_info_scan_parser.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
-import 'package:qrscan_flutter/services/qr_parser.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
 
@@ -350,6 +350,25 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     if (_productNameController.text.trim().isEmpty) {
       _productNameController.text = product.name;
     }
+    final shouldFillBoxesPerBoard =
+        _boxesPerBoardController.text.trim().isEmpty;
+    final shouldFillPiecesPerBox = _piecesPerBoxController.text.trim().isEmpty;
+    if (shouldFillBoxesPerBoard || shouldFillPiecesPerBox) {
+      final batches = await _productDao.batchesForProduct(product.id);
+      if (!mounted || currentVersion != _productLookupVersion) {
+        return;
+      }
+      if (shouldFillBoxesPerBoard) {
+        final boxesPerBoard = batches.isEmpty
+            ? product.boxesPerBoard
+            : batches.first.boxesPerBoard;
+        _boxesPerBoardController.text = boxesPerBoard.toString();
+      }
+      if (shouldFillPiecesPerBox) {
+        _piecesPerBoxController.text = product.piecesPerBox.toString();
+      }
+      setState(() {});
+    }
     final hasTsRequired = await _productDao.hasTsRequiredBatches(product.id);
     if (!mounted || currentVersion != _productLookupVersion) {
       return;
@@ -627,28 +646,36 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   Future<void> _scanActualBatch({required bool startFromGallery}) async {
     final content = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => ScannerScreen(startFromGallery: startFromGallery),
+        builder: (_) => ScannerScreen(
+          startFromGallery: startFromGallery,
+          formats: ScannerScreen.batchCodeFormats,
+        ),
       ),
     );
     if (!mounted || content == null) {
       return;
     }
-    _applyScannedContent(content);
+    await _applyScannedContent(content);
   }
 
-  void _applyScannedContent(String content) {
-    final parsed = QrParser.parse(content.trim());
-    if (parsed == null) {
+  Future<void> _applyScannedContent(String content) async {
+    final scanResult = BaseInfoScanParser.extract(content);
+    if (scanResult == null) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法解析QR箱码')),
+        const SnackBar(content: Text('无法识别批号码')),
       );
       return;
     }
 
-    _actualBatchController.text = parsed.batch;
+    final productCode = scanResult.productCode;
+    if (productCode != null && productCode.isNotEmpty) {
+      _productCodeController.text = productCode;
+      await _onProductCodeChanged(productCode);
+    }
+    _actualBatchController.text = scanResult.batch;
   }
 
   String? _emptyAsNull(String value) {
