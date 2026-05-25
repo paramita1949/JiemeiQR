@@ -87,6 +87,46 @@ class ProductDao {
         .get();
   }
 
+  Future<List<Product>> productsByInventoryVolume() async {
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.id AS id,
+        COALESCE(SUM(MAX(COALESCE(b.initial_boxes, 0) + COALESCE(m.delta_boxes, 0), 0)), 0) AS current_boxes
+      FROM products p
+      LEFT JOIN batches b ON b.product_id = p.id
+      LEFT JOIN (
+        SELECT batch_id, COALESCE(SUM(CASE
+          WHEN type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+            THEN boxes
+          ELSE -boxes
+        END), 0) AS delta_boxes
+        FROM stock_movements
+        GROUP BY batch_id
+      ) m ON m.batch_id = b.id
+      GROUP BY p.id, p.code
+      ORDER BY current_boxes DESC, p.code ASC
+      ''',
+      readsFrom: {
+        _database.products,
+        _database.batches,
+        _database.stockMovements,
+      },
+    ).get();
+    final orderedIds = rows.map((row) => row.read<int>('id')).toList();
+    if (orderedIds.isEmpty) {
+      return const <Product>[];
+    }
+    final products = await (_database.select(_database.products)
+          ..where((table) => table.id.isIn(orderedIds)))
+        .get();
+    final productsById = {for (final product in products) product.id: product};
+    return [
+      for (final id in orderedIds)
+        if (productsById[id] != null) productsById[id]!,
+    ];
+  }
+
   Future<List<Product>> tsRequiredProducts() async {
     final rows = await _database.customSelect(
       '''

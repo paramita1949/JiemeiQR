@@ -480,7 +480,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   }
 
   Future<void> _loadQuickProducts() async {
-    final products = await _productDao.allProducts();
+    final products = await _productDao.productsByInventoryVolume();
     if (!mounted) {
       return;
     }
