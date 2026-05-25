@@ -485,9 +485,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) {
       return;
     }
+    final lastOffset =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
     setState(() {
       _detailFuture = _loadDetail();
     });
+    await _detailFuture;
+    if (mounted && _scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        final maxOffset = _scrollController.position.maxScrollExtent;
+        final restored = lastOffset.clamp(0.0, maxOffset);
+        _scrollController.jumpTo(restored);
+      });
+    }
     final shouldAutoSetPicked = isPicked &&
         latest.order.status == OrderStatus.pending &&
         latest.lines.isNotEmpty &&
