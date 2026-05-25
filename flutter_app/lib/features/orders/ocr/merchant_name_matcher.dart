@@ -29,17 +29,19 @@ String resolveMerchantNameFromHistory({
       matches.add(_MerchantMatch(candidate, normalizedCandidate.length + 1000));
       continue;
     }
-    final shorterLength = normalizedRecognized.length < normalizedCandidate.length
-        ? normalizedRecognized.length
-        : normalizedCandidate.length;
-    final longerLength = normalizedRecognized.length > normalizedCandidate.length
-        ? normalizedRecognized.length
-        : normalizedCandidate.length;
+    final shorterLength =
+        normalizedRecognized.length < normalizedCandidate.length
+            ? normalizedRecognized.length
+            : normalizedCandidate.length;
+    final longerLength =
+        normalizedRecognized.length > normalizedCandidate.length
+            ? normalizedRecognized.length
+            : normalizedCandidate.length;
     final coverage = shorterLength / longerLength;
     if ((normalizedRecognized.contains(normalizedCandidate) ||
             normalizedCandidate.contains(normalizedRecognized)) &&
         shorterLength >= 4 &&
-        coverage >= 0.72) {
+        coverage >= 0.60) {
       matches.add(_MerchantMatch(candidate, normalizedCandidate.length));
     }
   }

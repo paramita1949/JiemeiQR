@@ -276,7 +276,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     else if (_filteredRows.isEmpty)
                       const _EmptyState(text: '暂无记录')
                     else
-                      ..._filteredRows.take(12).map(
+                      ..._filteredRows.map(
                         (r) => _DetailCard(
                           row: r,
                           onTap: () => _openEdit(r),

@@ -14,7 +14,8 @@ class AttendanceDao {
   Future<AttendanceRule> getRule() async {
     final existing = await (_db.select(
       _db.attendanceRules,
-    )..limit(1)).getSingleOrNull();
+    )..limit(1))
+        .getSingleOrNull();
     if (existing != null) return existing;
     await _db
         .into(_db.attendanceRules)
@@ -26,8 +27,8 @@ class AttendanceDao {
     final rule = await getRule();
     await (_db.update(_db.attendanceRules)..where((t) => t.id.equals(rule.id)))
         .write(
-          companion.copyWith(updatedAt: Value(DateTime.now())),
-        );
+      companion.copyWith(updatedAt: Value(DateTime.now())),
+    );
   }
 
   Future<void> checkInOrOut({DateTime? now}) async {
@@ -96,8 +97,10 @@ class AttendanceDao {
     final alreadyCheckedIn = todayRecord?.checkInAt != null;
 
     final enteredFence = !wasInside && isInsideNow;
-    final shouldTrigger =
-        enteredFence && !hasTriggered && !alreadyCheckedIn && rule.checkinReminderEnabled;
+    final shouldTrigger = enteredFence &&
+        !hasTriggered &&
+        !alreadyCheckedIn &&
+        rule.checkinReminderEnabled;
 
     if (daily == null) {
       await _db.into(_db.geofenceDailyStates).insert(
@@ -111,7 +114,8 @@ class AttendanceDao {
             ),
           );
     } else {
-      await (_db.update(_db.geofenceDailyStates)..where((t) => t.id.equals(daily.id)))
+      await (_db.update(_db.geofenceDailyStates)
+            ..where((t) => t.id.equals(daily.id)))
           .write(
         GeofenceDailyStatesCompanion(
           wasInside: Value(isInsideNow),
@@ -180,7 +184,8 @@ class AttendanceDao {
   Future<GeofenceDailyState?> getTodayGeofenceState({DateTime? now}) async {
     final ts = now ?? DateTime.now();
     final day = DateTime(ts.year, ts.month, ts.day);
-    return (_db.select(_db.geofenceDailyStates)..where((t) => t.day.equals(day)))
+    return (_db.select(_db.geofenceDailyStates)
+          ..where((t) => t.day.equals(day)))
         .getSingleOrNull();
   }
 
@@ -188,7 +193,8 @@ class AttendanceDao {
     final from = DateTime(month.year, month.month, 1);
     final to = DateTime(month.year, month.month + 1, 1);
     final rows = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.isBiggerOrEqualValue(from) & t.day.isSmallerThanValue(to))
+          ..where((t) =>
+              t.day.isBiggerOrEqualValue(from) & t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
     return _applyWeekendOvertime(rows);
@@ -275,7 +281,11 @@ class AttendanceDao {
       leaveMinutes += row.leaveMinutes;
     }
     final hasRecords = rows.isNotEmpty;
-    final fullAttendance = hasRecords && absent == 0 && leave == 0 && late == 0 && pendingPatch == 0;
+    final fullAttendance = hasRecords &&
+        absent == 0 &&
+        leave == 0 &&
+        late == 0 &&
+        pendingPatch == 0;
     return MonthAttendanceStats(
       presentDays: present,
       lateCount: late,
@@ -310,7 +320,8 @@ class AttendanceDao {
     final json = await exportAttendanceJson();
     final dir = await _attendanceBackupDir();
     final stamp = _fileStamp(DateTime.now());
-    final file = File(p.join(dir.path, 'attendance-backup-$stamp.attendance.json'));
+    final file =
+        File(p.join(dir.path, 'attendance-backup-$stamp.attendance.json'));
     await file.writeAsString(json);
     return AttendanceBackupSnapshot(
       fileName: p.basename(file.path),
@@ -384,7 +395,9 @@ class AttendanceDao {
   }
 
   Future<void> deleteRecordById(int recordId) async {
-    await (_db.delete(_db.attendanceRecords)..where((t) => t.id.equals(recordId))).go();
+    await (_db.delete(_db.attendanceRecords)
+          ..where((t) => t.id.equals(recordId)))
+        .go();
   }
 
   Future<AttendanceRecord> getOrCreateRecordByDay(DateTime day) async {
@@ -571,27 +584,28 @@ class AttendanceDao {
 
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
-    final autoHoliday = await _shouldAutoHoliday(
-      day: day,
-      checkIn: checkIn,
-      checkOut: checkOut,
-      rule: rule,
-    );
-    final effectiveHoliday = row.isHoliday || autoHoliday;
+    final isWorkdayByRule = _isWorkday(day, rule.weekendType);
+    final effectiveHoliday = row.isHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;
     final exception = (hasCheckIn ^ hasCheckOut) ||
         (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
-    final needsPatch = exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
+    final needsPatch =
+        exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
     final patched = row.patched || (row.needsPatch && !needsPatch);
-    final late = row.isLeave || effectiveHoliday
+    final late = row.isLeave || effectiveHoliday || !isWorkdayByRule
         ? false
         : (checkIn != null ? checkIn.isAfter(workStart) : false);
-    final early = effectiveHoliday ? false : (checkOut != null ? checkOut.isBefore(workEnd) : false);
-    final leaveMinutes = row.isLeave && !effectiveHoliday && checkIn != null && checkIn.isAfter(workStartBase)
+    final early = (effectiveHoliday || !isWorkdayByRule)
+        ? false
+        : (checkOut != null ? checkOut.isBefore(workEnd) : false);
+    final leaveMinutes = row.isLeave &&
+            !effectiveHoliday &&
+            checkIn != null &&
+            checkIn.isAfter(workStartBase)
         ? checkIn.difference(workStartBase).inMinutes
         : 0;
-    final rawMinutes = effectiveHoliday
+    final rawMinutes = (effectiveHoliday || !isWorkdayByRule)
         ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
             ? checkOut.difference(checkIn).inMinutes
             : 0
@@ -600,7 +614,8 @@ class AttendanceDao {
             : 0;
     final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
 
-    await (_db.update(_db.attendanceRecords)..where((t) => t.id.equals(row.id))).write(
+    await (_db.update(_db.attendanceRecords)..where((t) => t.id.equals(row.id)))
+        .write(
       AttendanceRecordsCompanion(
         checkInAt: Value(checkIn),
         checkOutAt: Value(checkOut),
@@ -611,6 +626,7 @@ class AttendanceDao {
         overtimeMinutesRaw: Value(rawMinutes),
         leaveMinutes: Value(leaveMinutes),
         overtimeHoursRounded: Value(roundedHours),
+        isWorkday: Value(isWorkdayByRule),
         isAbsent: Value(effectiveHoliday ? false : row.isAbsent),
         isLeave: Value(effectiveHoliday ? false : row.isLeave),
         isHoliday: Value(effectiveHoliday),
@@ -620,28 +636,6 @@ class AttendanceDao {
         updatedAt: Value(DateTime.now()),
       ),
     );
-  }
-
-  Future<bool> _shouldAutoHoliday({
-    required DateTime day,
-    required DateTime? checkIn,
-    required DateTime? checkOut,
-    required AttendanceRule rule,
-  }) async {
-    final workedToday = checkIn != null || checkOut != null;
-    if (!workedToday) return false;
-
-    if (day.weekday != DateTime.sunday) return false;
-    final sat = day.subtract(const Duration(days: 1));
-    final satRow = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.equals(sat)))
-        .getSingleOrNull();
-    final satWorked = satRow?.checkInAt != null || satRow?.checkOutAt != null;
-    if (!satWorked) return false;
-
-    // 单休：周六周日可休一天；双休：周六周日都为休息日。
-    // 共同规则：当周六、周日都上班时，周日按假期/加班模式处理。
-    return rule.weekendType == 'single' || rule.weekendType == 'double';
   }
 }
 
