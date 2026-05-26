@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.1 (2026-05-27)
+
+### Changed
+- 备份导入兼容增强：当 `incoming` 库缺少新字段时自动补默认值，新增 `orders.is_urgent=0` 与 `order_items.is_picked/is_exception=0` 兜底，避免旧备份在新版本导入时报错。
+- 业务表列清单补齐 `orders.is_urgent`、`order_items.is_picked`、`order_items.is_exception`，确保导入链路与当前 schema 对齐。
+- 应用代码版本号更新为 4.0.1。
+
 ## 3.9.10 (2026-05-27)
 
 ### Changed

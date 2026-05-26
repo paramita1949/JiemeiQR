@@ -603,11 +603,19 @@ class BackupService {
     String table,
     String column,
   ) {
-    if (_hasSqliteColumn(db, schema: 'incoming', table: table, column: column)) {
+    if (_hasSqliteColumn(db,
+        schema: 'incoming', table: table, column: column)) {
       return column;
     }
     if (table == 'batches' && column == 'frozen_boxes') {
       return '0 AS frozen_boxes';
+    }
+    if (table == 'orders' && column == 'is_urgent') {
+      return '0 AS is_urgent';
+    }
+    if (table == 'order_items' &&
+        (column == 'is_picked' || column == 'is_exception')) {
+      return '0 AS $column';
     }
     return column;
   }
@@ -791,6 +799,7 @@ const _businessTableColumns = <String, List<String>>{
     'merchant_name',
     'order_date',
     'status',
+    'is_urgent',
     'remark',
     'created_at',
     'updated_at',
@@ -803,6 +812,8 @@ const _businessTableColumns = <String, List<String>>{
     'boxes',
     'boxes_per_board',
     'pieces_per_box',
+    'is_picked',
+    'is_exception',
     'created_at',
   ],
   'stock_movements': [
