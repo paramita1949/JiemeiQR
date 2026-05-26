@@ -38,6 +38,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
   int? _restockFloorFilter;
   bool _restockUrgentOnly = false;
   bool _hasUrgentRestock = false;
+  List<String> _restockMerchantOptions = const [];
+  Set<String> _restockMerchantFilter = const <String>{};
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
@@ -168,6 +170,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 selectedFloor: _restockFloorFilter,
                 urgentOnly: _restockUrgentOnly,
                 showUrgentFilter: _hasUrgentRestock,
+                merchantOptions: _restockMerchantOptions,
+                selectedMerchants: _restockMerchantFilter,
                 onSelectFloor: (floor) {
                   setState(() => _restockFloorFilter = floor);
                 },
@@ -175,6 +179,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   setState(() => _restockUrgentOnly = !_restockUrgentOnly);
                   _refreshOrders();
                 },
+                onOpenMerchantFilter: _showRestockMerchantFilterSheet,
                 onTapRow: _showRestockWaybillLines,
               ),
             ],
@@ -221,21 +226,54 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _allRestockAggregates = const [];
       _restockAggregates = const [];
       _hasUrgentRestock = false;
+      _restockMerchantOptions = const [];
       _orders.clear();
     });
-    final page = await _orderDao.orderSummariesPage(
-      status: _status,
-      dateRange: _dateRange,
-      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
-      exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
-      offset: 0,
-      limit: _pageSize,
-    );
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
     final hideRestock = _quickFilter == _OrderQuickFilter.exception ||
         _status == OrderStatus.picked ||
         _status == OrderStatus.done;
     final restockStatus = _status ?? OrderStatus.pending;
+    final allDuplicateMerchants = hideRestock
+        ? const <String>[]
+        : await _orderDao.orderRestockDuplicateMerchants(
+            status: restockStatus,
+            dateRange: _dateRange,
+            unfinishedOnly: false,
+            urgentOnly: false,
+          );
+    final urgentDuplicateMerchants = hideRestock
+        ? const <String>[]
+        : await _orderDao.orderRestockDuplicateMerchants(
+            status: restockStatus,
+            dateRange: _dateRange,
+            unfinishedOnly: false,
+            urgentOnly: true,
+          );
+    final urgentRestockAll = hideRestock
+        ? const <OrderRestockAggregate>[]
+        : await _orderDao.orderRestockAggregates(
+            status: restockStatus,
+            dateRange: _dateRange,
+            unfinishedOnly: false,
+            urgentOnly: true,
+          );
+    final hasUrgentRestock = urgentRestockAll.isNotEmpty;
+    final shouldUseUrgent = _restockUrgentOnly && hasUrgentRestock;
+    final page = await _orderDao.orderSummariesPage(
+      status: _status,
+      dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
+      urgentOnly: shouldUseUrgent,
+      offset: 0,
+      limit: _pageSize,
+    );
+    final merchantOptions =
+        shouldUseUrgent ? urgentDuplicateMerchants : allDuplicateMerchants;
+    final selectedMerchants = _restockMerchantFilter
+        .where((merchant) => merchantOptions.contains(merchant))
+        .toSet();
     final allRestockAggregates = hideRestock
         ? const <OrderRestockAggregate>[]
         : await _orderDao.orderRestockAggregates(
@@ -243,6 +281,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             dateRange: _dateRange,
             unfinishedOnly: false,
             urgentOnly: false,
+            merchantNames: selectedMerchants.toList(),
           );
     final urgentRestockAggregates = hideRestock
         ? const <OrderRestockAggregate>[]
@@ -251,12 +290,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
             dateRange: _dateRange,
             unfinishedOnly: false,
             urgentOnly: true,
+            merchantNames: selectedMerchants.toList(),
           );
     if (!mounted) {
       return;
     }
-    final hasUrgentRestock = urgentRestockAggregates.isNotEmpty;
-    final shouldUseUrgent = _restockUrgentOnly && hasUrgentRestock;
     final restockAggregates =
         shouldUseUrgent ? urgentRestockAggregates : allRestockAggregates;
     final availableFloors = _extractAvailableFloors(allRestockAggregates);
@@ -266,6 +304,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _allRestockAggregates = allRestockAggregates;
       _restockAggregates = restockAggregates;
       _hasUrgentRestock = hasUrgentRestock;
+      _restockMerchantOptions = merchantOptions;
+      _restockMerchantFilter = selectedMerchants;
       if (_restockUrgentOnly && !hasUrgentRestock) {
         _restockUrgentOnly = false;
       }
@@ -289,6 +329,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
       exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
+      urgentOnly: _restockUrgentOnly && _hasUrgentRestock,
       offset: _orders.length,
       limit: _pageSize,
     );
@@ -438,6 +479,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
       urgentOnly: _restockUrgentOnly && _hasUrgentRestock,
+      merchantNames: _restockMerchantFilter.toList(),
     );
     if (!mounted) {
       return;
@@ -469,6 +511,103 @@ class _OrderListScreenState extends State<OrderListScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _showRestockMerchantFilterSheet() async {
+    final options = _restockMerchantOptions;
+    if (options.isEmpty) {
+      return;
+    }
+    final selected = {..._restockMerchantFilter};
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF3F6FB),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '筛选商家',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final merchant in options)
+                      CheckboxListTile(
+                        value: selected.contains(merchant),
+                        onChanged: (checked) {
+                          setLocalState(() {
+                            if (checked == true) {
+                              selected.add(merchant);
+                            } else {
+                              selected.remove(merchant);
+                            }
+                          });
+                        },
+                        title: Text(
+                          merchant,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(<String>{}),
+                    child: const Text('清空'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(selected),
+                    child: const Text('确定'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _restockMerchantFilter = result;
+    });
+    await _refreshOrders();
   }
 }
 
@@ -1031,8 +1170,11 @@ class _RestockAggregateCard extends StatelessWidget {
     required this.selectedFloor,
     required this.urgentOnly,
     required this.showUrgentFilter,
+    required this.merchantOptions,
+    required this.selectedMerchants,
     required this.onSelectFloor,
     required this.onToggleUrgent,
+    required this.onOpenMerchantFilter,
     required this.onTapRow,
   });
 
@@ -1041,8 +1183,11 @@ class _RestockAggregateCard extends StatelessWidget {
   final int? selectedFloor;
   final bool urgentOnly;
   final bool showUrgentFilter;
+  final List<String> merchantOptions;
+  final Set<String> selectedMerchants;
   final ValueChanged<int?> onSelectFloor;
   final VoidCallback onToggleUrgent;
+  final VoidCallback onOpenMerchantFilter;
   final ValueChanged<OrderRestockAggregate> onTapRow;
 
   @override
@@ -1092,16 +1237,19 @@ class _RestockAggregateCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          if (floors.isNotEmpty) ...[
+          if (floors.isNotEmpty ||
+              showUrgentFilter ||
+              merchantOptions.isNotEmpty) ...[
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _QuickChip(
-                    label: '全部楼层',
-                    selected: selectedFloor == null,
-                    onTap: () => onSelectFloor(null),
-                  ),
+                  if (floors.isNotEmpty)
+                    _QuickChip(
+                      label: '全部楼层',
+                      selected: selectedFloor == null,
+                      onTap: () => onSelectFloor(null),
+                    ),
                   for (final floor in floors) ...[
                     const SizedBox(width: 8),
                     _QuickChip(
@@ -1116,6 +1264,14 @@ class _RestockAggregateCard extends StatelessWidget {
                       label: '紧急',
                       selected: urgentOnly,
                       onTap: onToggleUrgent,
+                    ),
+                  ],
+                  if (merchantOptions.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _QuickChip(
+                      label: '商家',
+                      selected: selectedMerchants.isNotEmpty,
+                      onTap: onOpenMerchantFilter,
                     ),
                   ],
                 ],
@@ -1226,6 +1382,7 @@ class _RestockWaybillSheet extends StatelessWidget {
         '合计 ${aggregate.totalBoxes}箱 · ${BoardCalculator.format(boxes: aggregate.totalBoxes, boxesPerBoard: aggregate.boxesPerBoard)}'
         '${location == null || location.isEmpty ? '' : ' · 库位 $location'}';
     return Container(
+      key: const Key('restockWaybillSheet'),
       decoration: const BoxDecoration(
         color: Color(0xFFF3F6FB),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),

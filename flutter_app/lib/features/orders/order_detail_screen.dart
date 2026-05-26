@@ -736,28 +736,37 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              FilledButton.tonalIcon(
-                onPressed: () => onToggleUrgent(!detail.order.isUrgent),
-                style: FilledButton.styleFrom(
-                  backgroundColor: detail.order.isUrgent
-                      ? const Color(0xFFDC2626)
-                      : const Color(0xFFFFEFEF),
-                  foregroundColor: detail.order.isUrgent
-                      ? Colors.white
-                      : const Color(0xFFDC2626),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                icon: const Icon(Icons.priority_high_rounded, size: 16),
-                label: Text(
-                  detail.order.isUrgent ? '紧急备货' : '标记紧急备货',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
+              Material(
+                color: detail.order.isUrgent
+                    ? const Color(0xFFDC2626)
+                    : const Color(0xFFFFEFEF),
+                borderRadius: BorderRadius.circular(999),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () => onToggleUrgent(!detail.order.isUrgent),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: detail.order.isUrgent
+                            ? const Color(0xFFDC2626)
+                            : const Color(0xFFFFB4B4),
+                      ),
+                    ),
+                    child: Text(
+                      '紧急',
+                      style: TextStyle(
+                        color: detail.order.isUrgent
+                            ? Colors.white
+                            : const Color(0xFFDC2626),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ),
               ),

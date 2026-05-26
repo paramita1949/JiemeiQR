@@ -614,6 +614,7 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
     bool urgentOnly = false,
+    List<String> merchantNames = const <String>[],
   }) async {
     final where = <String>['oi.is_picked = 0'];
     final vars = <Variable<Object>>[];
@@ -644,6 +645,12 @@ class OrderDao {
     }
     if (urgentOnly) {
       where.add('o.is_urgent = 1');
+    }
+    if (merchantNames.isNotEmpty) {
+      where.add(
+        'o.merchant_name IN (${List.filled(merchantNames.length, '?').join(', ')})',
+      );
+      vars.addAll(merchantNames.map(Variable.withString));
     }
     final whereSql = where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}';
     final rows = await _database
@@ -711,6 +718,7 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
     bool urgentOnly = false,
+    List<String> merchantNames = const <String>[],
   }) async {
     final where = <String>[
       'p.code = ?',
@@ -750,6 +758,12 @@ class OrderDao {
     }
     if (urgentOnly) {
       where.add('o.is_urgent = 1');
+    }
+    if (merchantNames.isNotEmpty) {
+      where.add(
+        'o.merchant_name IN (${List.filled(merchantNames.length, '?').join(', ')})',
+      );
+      vars.addAll(merchantNames.map(Variable.withString));
     }
     final rows = await _database
         .customSelect(
@@ -796,6 +810,68 @@ class OrderDao {
           ),
         )
         .where((row) => row.orderId > 0)
+        .toList(growable: false);
+  }
+
+  Future<List<String>> orderRestockDuplicateMerchants({
+    OrderStatus? status,
+    DateTimeRange? dateRange,
+    bool unfinishedOnly = false,
+    bool urgentOnly = false,
+  }) async {
+    final where = <String>['oi.is_picked = 0'];
+    final vars = <Variable<Object>>[];
+    if (unfinishedOnly) {
+      where.add('o.status != ?');
+      vars.add(Variable.withInt(OrderStatus.done.index));
+    } else if (status != null) {
+      where.add('o.status = ?');
+      vars.add(Variable.withInt(status.index));
+    }
+    if (dateRange != null) {
+      final start = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+      );
+      final end = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23,
+        59,
+        59,
+      );
+      where.add('o.order_date BETWEEN ? AND ?');
+      vars.add(Variable.withDateTime(start));
+      vars.add(Variable.withDateTime(end));
+    }
+    if (urgentOnly) {
+      where.add('o.is_urgent = 1');
+    }
+    final rows = await _database
+        .customSelect(
+          '''
+      SELECT
+        o.merchant_name AS merchant_name,
+        COUNT(DISTINCT o.id) AS order_count
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE ${where.join(' AND ')}
+      GROUP BY o.merchant_name
+      HAVING COUNT(DISTINCT o.id) > 1
+      ORDER BY order_count DESC, o.merchant_name ASC
+      ''',
+          variables: vars,
+          readsFrom: {
+            _database.orderItems,
+            _database.orders,
+          },
+        )
+        .get();
+    return rows
+        .map((row) => row.data['merchant_name'] as String? ?? '')
+        .where((merchant) => merchant.trim().isNotEmpty)
         .toList(growable: false);
   }
 
@@ -856,6 +932,7 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
     bool exceptionOnly = false,
+    bool urgentOnly = false,
     required int offset,
     required int limit,
   }) async {
@@ -898,6 +975,9 @@ class OrderDao {
       );
       countQuery.where(orderTable.orderDate.isBetweenValues(start, end));
     }
+    if (urgentOnly) {
+      countQuery.where(orderTable.isUrgent.equals(true));
+    }
     final total = exceptionOnly
         ? exceptionOrderIds!.total
         : (await countQuery.getSingle()).read(countExp) ?? 0;
@@ -926,6 +1006,9 @@ class OrderDao {
         59,
       );
       query.where((table) => table.orderDate.isBetweenValues(start, end));
+    }
+    if (urgentOnly) {
+      query.where((table) => table.isUrgent.equals(true));
     }
     if (!exceptionOnly) {
       query.orderBy([
