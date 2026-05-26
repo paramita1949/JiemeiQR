@@ -109,7 +109,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 14),
-                  if (snapshot.connectionState != ConnectionState.done)
+                  if (detail == null &&
+                      snapshot.connectionState != ConnectionState.done)
                     const Center(child: CircularProgressIndicator())
                   else if (detail == null)
                     const Text('未找到运单')
@@ -196,6 +197,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
+  Future<void> _reloadDetail({bool preserveScroll = false}) async {
+    if (!mounted) {
+      return;
+    }
+    final lastOffset = preserveScroll && _scrollController.hasClients
+        ? _scrollController.offset
+        : null;
+    setState(() {
+      _detailFuture = _loadDetail();
+    });
+    await _detailFuture;
+    if (lastOffset == null || !mounted || !_scrollController.hasClients) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final maxOffset = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(lastOffset.clamp(0.0, maxOffset));
+    });
+  }
+
   Future<void> _setStatus(OrderStatus status) async {
     try {
       await _completionService.updateStatus(
@@ -220,19 +244,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) {
       return;
     }
-    setState(() {
-      _detailFuture = _loadDetail();
-    });
+    await _reloadDetail(preserveScroll: true);
   }
 
   Future<void> _setUrgent(bool isUrgent) async {
     await _orderDao.setUrgent(widget.orderId, isUrgent);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _detailFuture = _loadDetail();
-    });
+    await _reloadDetail(preserveScroll: true);
   }
 
   Future<void> _editOrderBasic(OrderDetail detail) async {
@@ -498,22 +515,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) {
       return;
     }
-    final lastOffset =
-        _scrollController.hasClients ? _scrollController.offset : 0.0;
-    setState(() {
-      _detailFuture = _loadDetail();
-    });
-    await _detailFuture;
-    if (mounted && _scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) {
-          return;
-        }
-        final maxOffset = _scrollController.position.maxScrollExtent;
-        final restored = lastOffset.clamp(0.0, maxOffset);
-        _scrollController.jumpTo(restored);
-      });
-    }
+    await _reloadDetail(preserveScroll: true);
     final shouldAutoSetPicked = isPicked &&
         latest.order.status == OrderStatus.pending &&
         latest.lines.isNotEmpty &&
@@ -734,34 +736,28 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => onToggleUrgent(!detail.order.isUrgent),
-                child: Container(
+              FilledButton.tonalIcon(
+                onPressed: () => onToggleUrgent(!detail.order.isUrgent),
+                style: FilledButton.styleFrom(
+                  backgroundColor: detail.order.isUrgent
+                      ? const Color(0xFFDC2626)
+                      : const Color(0xFFFFEFEF),
+                  foregroundColor: detail.order.isUrgent
+                      ? Colors.white
+                      : const Color(0xFFDC2626),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                    horizontal: 12,
+                    vertical: 8,
                   ),
-                  decoration: BoxDecoration(
-                    color: detail.order.isUrgent
-                        ? const Color(0xFFDC2626).withValues(alpha: 0.12)
-                        : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: detail.order.isUrgent
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFFCBD5E1),
-                    ),
-                  ),
-                  child: Text(
-                    detail.order.isUrgent ? '紧急' : '设为紧急',
-                    style: TextStyle(
-                      color: detail.order.isUrgent
-                          ? const Color(0xFFDC2626)
-                          : AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.priority_high_rounded, size: 16),
+                label: Text(
+                  detail.order.isUrgent ? '紧急备货' : '标记紧急备货',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),

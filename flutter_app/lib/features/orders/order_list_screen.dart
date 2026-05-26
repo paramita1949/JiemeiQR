@@ -33,9 +33,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
   _OrderQuickFilter _quickFilter = _OrderQuickFilter.pendingOnly;
   OrderStatus? _status;
   final List<OrderSummary> _orders = <OrderSummary>[];
+  List<OrderRestockAggregate> _allRestockAggregates = const [];
   List<OrderRestockAggregate> _restockAggregates = const [];
   int? _restockFloorFilter;
   bool _restockUrgentOnly = false;
+  bool _hasUrgentRestock = false;
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
@@ -158,12 +160,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
               ),
             ],
-            if (_restockAggregates.isNotEmpty) ...[
+            if (_allRestockAggregates.isNotEmpty) ...[
               const SizedBox(height: 8),
               _RestockAggregateCard(
                 rows: _restockAggregates,
+                floorRows: _allRestockAggregates,
                 selectedFloor: _restockFloorFilter,
                 urgentOnly: _restockUrgentOnly,
+                showUrgentFilter: _hasUrgentRestock,
                 onSelectFloor: (floor) {
                   setState(() => _restockFloorFilter = floor);
                 },
@@ -214,7 +218,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _hasMore = false;
       _total = 0;
       _counts = null;
+      _allRestockAggregates = const [];
       _restockAggregates = const [];
+      _hasUrgentRestock = false;
       _orders.clear();
     });
     final page = await _orderDao.orderSummariesPage(
@@ -230,22 +236,39 @@ class _OrderListScreenState extends State<OrderListScreen> {
         _status == OrderStatus.picked ||
         _status == OrderStatus.done;
     final restockStatus = _status ?? OrderStatus.pending;
-    final restockAggregates = hideRestock
+    final allRestockAggregates = hideRestock
         ? const <OrderRestockAggregate>[]
         : await _orderDao.orderRestockAggregates(
             status: restockStatus,
             dateRange: _dateRange,
             unfinishedOnly: false,
-            urgentOnly: _restockUrgentOnly,
+            urgentOnly: false,
+          );
+    final urgentRestockAggregates = hideRestock
+        ? const <OrderRestockAggregate>[]
+        : await _orderDao.orderRestockAggregates(
+            status: restockStatus,
+            dateRange: _dateRange,
+            unfinishedOnly: false,
+            urgentOnly: true,
           );
     if (!mounted) {
       return;
     }
-    final availableFloors = _extractAvailableFloors(restockAggregates);
+    final hasUrgentRestock = urgentRestockAggregates.isNotEmpty;
+    final shouldUseUrgent = _restockUrgentOnly && hasUrgentRestock;
+    final restockAggregates =
+        shouldUseUrgent ? urgentRestockAggregates : allRestockAggregates;
+    final availableFloors = _extractAvailableFloors(allRestockAggregates);
     setState(() {
       _orders.addAll(page.orders);
       _counts = counts;
+      _allRestockAggregates = allRestockAggregates;
       _restockAggregates = restockAggregates;
+      _hasUrgentRestock = hasUrgentRestock;
+      if (_restockUrgentOnly && !hasUrgentRestock) {
+        _restockUrgentOnly = false;
+      }
       if (_restockFloorFilter != null &&
           !availableFloors.contains(_restockFloorFilter)) {
         _restockFloorFilter = null;
@@ -414,7 +437,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       status: _status,
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
-      urgentOnly: _restockUrgentOnly,
+      urgentOnly: _restockUrgentOnly && _hasUrgentRestock,
     );
     if (!mounted) {
       return;
@@ -1004,23 +1027,27 @@ String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 class _RestockAggregateCard extends StatelessWidget {
   const _RestockAggregateCard({
     required this.rows,
+    required this.floorRows,
     required this.selectedFloor,
     required this.urgentOnly,
+    required this.showUrgentFilter,
     required this.onSelectFloor,
     required this.onToggleUrgent,
     required this.onTapRow,
   });
 
   final List<OrderRestockAggregate> rows;
+  final List<OrderRestockAggregate> floorRows;
   final int? selectedFloor;
   final bool urgentOnly;
+  final bool showUrgentFilter;
   final ValueChanged<int?> onSelectFloor;
   final VoidCallback onToggleUrgent;
   final ValueChanged<OrderRestockAggregate> onTapRow;
 
   @override
   Widget build(BuildContext context) {
-    final floors = _extractAvailableFloors(rows);
+    final floors = _extractAvailableFloors(floorRows);
     final visibleRows = selectedFloor == null
         ? rows
         : rows
@@ -1071,12 +1098,6 @@ class _RestockAggregateCard extends StatelessWidget {
               child: Row(
                 children: [
                   _QuickChip(
-                    label: '紧急',
-                    selected: urgentOnly,
-                    onTap: onToggleUrgent,
-                  ),
-                  const SizedBox(width: 8),
-                  _QuickChip(
                     label: '全部楼层',
                     selected: selectedFloor == null,
                     onTap: () => onSelectFloor(null),
@@ -1087,6 +1108,14 @@ class _RestockAggregateCard extends StatelessWidget {
                       label: '$floor楼',
                       selected: selectedFloor == floor,
                       onTap: () => onSelectFloor(floor),
+                    ),
+                  ],
+                  if (showUrgentFilter) ...[
+                    const SizedBox(width: 8),
+                    _QuickChip(
+                      label: '紧急',
+                      selected: urgentOnly,
+                      onTap: onToggleUrgent,
                     ),
                   ],
                 ],
