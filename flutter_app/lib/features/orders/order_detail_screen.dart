@@ -736,37 +736,14 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Material(
-                color: detail.order.isUrgent
-                    ? const Color(0xFFDC2626)
-                    : const Color(0xFFFFEFEF),
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () => onToggleUrgent(!detail.order.isUrgent),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: detail.order.isUrgent
-                            ? const Color(0xFFDC2626)
-                            : const Color(0xFFFFB4B4),
-                      ),
-                    ),
-                    child: Text(
-                      '紧急',
-                      style: TextStyle(
-                        color: detail.order.isUrgent
-                            ? Colors.white
-                            : const Color(0xFFDC2626),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+              GestureDetector(
+                onTap: () => onToggleUrgent(!detail.order.isUrgent),
+                child: const Text(
+                  '紧急',
+                  style: TextStyle(
+                    color: Color(0xFFDC2626),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -778,6 +755,11 @@ class _HeaderCard extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
+              ),
+              const SizedBox(width: 12),
+              _InlineToggleSwitch(
+                value: detail.order.isUrgent,
+                onTap: () => onToggleUrgent(!detail.order.isUrgent),
               ),
             ],
           ),
@@ -1081,6 +1063,57 @@ class _MetricChip extends StatelessWidget {
           color: textColor,
           fontSize: 13,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineToggleSwitch extends StatelessWidget {
+  const _InlineToggleSwitch({
+    required this.value,
+    required this.onTap,
+  });
+
+  final bool value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: '紧急开关',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          width: 58,
+          height: 32,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: value ? const Color(0xFFDC2626) : const Color(0xFFE9E6F2),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: value ? const Color(0xFFDC2626) : const Color(0xFF7C7A86),
+              width: 2,
+            ),
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: value ? Colors.white : const Color(0xFF7C7A86),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
         ),
       ),
     );
