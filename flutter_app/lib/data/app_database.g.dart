@@ -1113,6 +1113,16 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
               requiredDuringInsert: false,
               defaultValue: Constant(OrderStatus.pending.index))
           .withConverter<OrderStatus>($OrdersTable.$converterstatus);
+  static const VerificationMeta _isUrgentMeta =
+      const VerificationMeta('isUrgent');
+  @override
+  late final GeneratedColumn<bool> isUrgent = GeneratedColumn<bool>(
+      'is_urgent', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_urgent" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _remarkMeta = const VerificationMeta('remark');
   @override
   late final GeneratedColumn<String> remark = GeneratedColumn<String>(
@@ -1139,6 +1149,7 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
         merchantName,
         orderDate,
         status,
+        isUrgent,
         remark,
         createdAt,
         updatedAt
@@ -1176,6 +1187,10 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
     } else if (isInserting) {
       context.missing(_orderDateMeta);
     }
+    if (data.containsKey('is_urgent')) {
+      context.handle(_isUrgentMeta,
+          isUrgent.isAcceptableOrUnknown(data['is_urgent']!, _isUrgentMeta));
+    }
     if (data.containsKey('remark')) {
       context.handle(_remarkMeta,
           remark.isAcceptableOrUnknown(data['remark']!, _remarkMeta));
@@ -1207,6 +1222,8 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
           .read(DriftSqlType.dateTime, data['${effectivePrefix}order_date'])!,
       status: $OrdersTable.$converterstatus.fromSql(attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}status'])!),
+      isUrgent: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_urgent'])!,
       remark: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}remark']),
       createdAt: attachedDatabase.typeMapping
@@ -1231,6 +1248,7 @@ class Order extends DataClass implements Insertable<Order> {
   final String merchantName;
   final DateTime orderDate;
   final OrderStatus status;
+  final bool isUrgent;
   final String? remark;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -1240,6 +1258,7 @@ class Order extends DataClass implements Insertable<Order> {
       required this.merchantName,
       required this.orderDate,
       required this.status,
+      required this.isUrgent,
       this.remark,
       required this.createdAt,
       this.updatedAt});
@@ -1254,6 +1273,7 @@ class Order extends DataClass implements Insertable<Order> {
       map['status'] =
           Variable<int>($OrdersTable.$converterstatus.toSql(status));
     }
+    map['is_urgent'] = Variable<bool>(isUrgent);
     if (!nullToAbsent || remark != null) {
       map['remark'] = Variable<String>(remark);
     }
@@ -1271,6 +1291,7 @@ class Order extends DataClass implements Insertable<Order> {
       merchantName: Value(merchantName),
       orderDate: Value(orderDate),
       status: Value(status),
+      isUrgent: Value(isUrgent),
       remark:
           remark == null && nullToAbsent ? const Value.absent() : Value(remark),
       createdAt: Value(createdAt),
@@ -1290,6 +1311,7 @@ class Order extends DataClass implements Insertable<Order> {
       orderDate: serializer.fromJson<DateTime>(json['orderDate']),
       status: $OrdersTable.$converterstatus
           .fromJson(serializer.fromJson<int>(json['status'])),
+      isUrgent: serializer.fromJson<bool>(json['isUrgent']),
       remark: serializer.fromJson<String?>(json['remark']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
@@ -1305,6 +1327,7 @@ class Order extends DataClass implements Insertable<Order> {
       'orderDate': serializer.toJson<DateTime>(orderDate),
       'status':
           serializer.toJson<int>($OrdersTable.$converterstatus.toJson(status)),
+      'isUrgent': serializer.toJson<bool>(isUrgent),
       'remark': serializer.toJson<String?>(remark),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime?>(updatedAt),
@@ -1317,6 +1340,7 @@ class Order extends DataClass implements Insertable<Order> {
           String? merchantName,
           DateTime? orderDate,
           OrderStatus? status,
+          bool? isUrgent,
           Value<String?> remark = const Value.absent(),
           DateTime? createdAt,
           Value<DateTime?> updatedAt = const Value.absent()}) =>
@@ -1326,6 +1350,7 @@ class Order extends DataClass implements Insertable<Order> {
         merchantName: merchantName ?? this.merchantName,
         orderDate: orderDate ?? this.orderDate,
         status: status ?? this.status,
+        isUrgent: isUrgent ?? this.isUrgent,
         remark: remark.present ? remark.value : this.remark,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
@@ -1339,6 +1364,7 @@ class Order extends DataClass implements Insertable<Order> {
           : this.merchantName,
       orderDate: data.orderDate.present ? data.orderDate.value : this.orderDate,
       status: data.status.present ? data.status.value : this.status,
+      isUrgent: data.isUrgent.present ? data.isUrgent.value : this.isUrgent,
       remark: data.remark.present ? data.remark.value : this.remark,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1353,6 +1379,7 @@ class Order extends DataClass implements Insertable<Order> {
           ..write('merchantName: $merchantName, ')
           ..write('orderDate: $orderDate, ')
           ..write('status: $status, ')
+          ..write('isUrgent: $isUrgent, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -1362,7 +1389,7 @@ class Order extends DataClass implements Insertable<Order> {
 
   @override
   int get hashCode => Object.hash(id, waybillNo, merchantName, orderDate,
-      status, remark, createdAt, updatedAt);
+      status, isUrgent, remark, createdAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1372,6 +1399,7 @@ class Order extends DataClass implements Insertable<Order> {
           other.merchantName == this.merchantName &&
           other.orderDate == this.orderDate &&
           other.status == this.status &&
+          other.isUrgent == this.isUrgent &&
           other.remark == this.remark &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -1383,6 +1411,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   final Value<String> merchantName;
   final Value<DateTime> orderDate;
   final Value<OrderStatus> status;
+  final Value<bool> isUrgent;
   final Value<String?> remark;
   final Value<DateTime> createdAt;
   final Value<DateTime?> updatedAt;
@@ -1392,6 +1421,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     this.merchantName = const Value.absent(),
     this.orderDate = const Value.absent(),
     this.status = const Value.absent(),
+    this.isUrgent = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1402,6 +1432,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     required String merchantName,
     required DateTime orderDate,
     this.status = const Value.absent(),
+    this.isUrgent = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1414,6 +1445,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     Expression<String>? merchantName,
     Expression<DateTime>? orderDate,
     Expression<int>? status,
+    Expression<bool>? isUrgent,
     Expression<String>? remark,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1424,6 +1456,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       if (merchantName != null) 'merchant_name': merchantName,
       if (orderDate != null) 'order_date': orderDate,
       if (status != null) 'status': status,
+      if (isUrgent != null) 'is_urgent': isUrgent,
       if (remark != null) 'remark': remark,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1436,6 +1469,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       Value<String>? merchantName,
       Value<DateTime>? orderDate,
       Value<OrderStatus>? status,
+      Value<bool>? isUrgent,
       Value<String?>? remark,
       Value<DateTime>? createdAt,
       Value<DateTime?>? updatedAt}) {
@@ -1445,6 +1479,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       merchantName: merchantName ?? this.merchantName,
       orderDate: orderDate ?? this.orderDate,
       status: status ?? this.status,
+      isUrgent: isUrgent ?? this.isUrgent,
       remark: remark ?? this.remark,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1470,6 +1505,9 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       map['status'] =
           Variable<int>($OrdersTable.$converterstatus.toSql(status.value));
     }
+    if (isUrgent.present) {
+      map['is_urgent'] = Variable<bool>(isUrgent.value);
+    }
     if (remark.present) {
       map['remark'] = Variable<String>(remark.value);
     }
@@ -1490,6 +1528,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
           ..write('merchantName: $merchantName, ')
           ..write('orderDate: $orderDate, ')
           ..write('status: $status, ')
+          ..write('isUrgent: $isUrgent, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -6990,6 +7029,7 @@ typedef $$OrdersTableCreateCompanionBuilder = OrdersCompanion Function({
   required String merchantName,
   required DateTime orderDate,
   Value<OrderStatus> status,
+  Value<bool> isUrgent,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -7000,6 +7040,7 @@ typedef $$OrdersTableUpdateCompanionBuilder = OrdersCompanion Function({
   Value<String> merchantName,
   Value<DateTime> orderDate,
   Value<OrderStatus> status,
+  Value<bool> isUrgent,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -7064,6 +7105,9 @@ class $$OrdersTableFilterComposer
       $composableBuilder(
           column: $table.status,
           builder: (column) => ColumnWithTypeConverterFilters(column));
+
+  ColumnFilters<bool> get isUrgent => $composableBuilder(
+      column: $table.isUrgent, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnFilters(column));
@@ -7142,6 +7186,9 @@ class $$OrdersTableOrderingComposer
   ColumnOrderings<int> get status => $composableBuilder(
       column: $table.status, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isUrgent => $composableBuilder(
+      column: $table.isUrgent, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnOrderings(column));
 
@@ -7175,6 +7222,9 @@ class $$OrdersTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<OrderStatus, int> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<bool> get isUrgent =>
+      $composableBuilder(column: $table.isUrgent, builder: (column) => column);
 
   GeneratedColumn<String> get remark =>
       $composableBuilder(column: $table.remark, builder: (column) => column);
@@ -7256,6 +7306,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             Value<String> merchantName = const Value.absent(),
             Value<DateTime> orderDate = const Value.absent(),
             Value<OrderStatus> status = const Value.absent(),
+            Value<bool> isUrgent = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -7266,6 +7317,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             merchantName: merchantName,
             orderDate: orderDate,
             status: status,
+            isUrgent: isUrgent,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -7276,6 +7328,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             required String merchantName,
             required DateTime orderDate,
             Value<OrderStatus> status = const Value.absent(),
+            Value<bool> isUrgent = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -7286,6 +7339,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             merchantName: merchantName,
             orderDate: orderDate,
             status: status,
+            isUrgent: isUrgent,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,

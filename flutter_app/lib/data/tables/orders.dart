@@ -10,6 +10,7 @@ class Orders extends Table {
   IntColumn get status => intEnum<OrderStatus>().withDefault(
         Constant(OrderStatus.pending.index),
       )();
+  BoolColumn get isUrgent => boolean().withDefault(const Constant(false))();
   TextColumn get remark => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().nullable()();

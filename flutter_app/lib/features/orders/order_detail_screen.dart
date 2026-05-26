@@ -114,7 +114,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   else if (detail == null)
                     const Text('未找到运单')
                   else ...[
-                    _HeaderCard(detail: detail),
+                    _HeaderCard(
+                      detail: detail,
+                      onToggleUrgent: (next) => _setUrgent(next),
+                    ),
                     const SizedBox(height: 10),
                     _StatusControls(
                       status: detail.order.status,
@@ -214,6 +217,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
       return;
     }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _detailFuture = _loadDetail();
+    });
+  }
+
+  Future<void> _setUrgent(bool isUrgent) async {
+    await _orderDao.setUrgent(widget.orderId, isUrgent);
     if (!mounted) {
       return;
     }
@@ -664,9 +677,13 @@ class _OrderDetailViewData {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.detail});
+  const _HeaderCard({
+    required this.detail,
+    required this.onToggleUrgent,
+  });
 
   final OrderDetail detail;
+  final ValueChanged<bool> onToggleUrgent;
 
   @override
   Widget build(BuildContext context) {
@@ -715,16 +732,49 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '总箱数 $totalBoxes箱',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+          Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => onToggleUrgent(!detail.order.isUrgent),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: detail.order.isUrgent
+                        ? const Color(0xFFDC2626).withValues(alpha: 0.12)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: detail.order.isUrgent
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Text(
+                    detail.order.isUrgent ? '紧急' : '设为紧急',
+                    style: TextStyle(
+                      color: detail.order.isUrgent
+                          ? const Color(0xFFDC2626)
+                          : AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const Spacer(),
+              Text(
+                '总箱数 $totalBoxes箱',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
         ],
       ),

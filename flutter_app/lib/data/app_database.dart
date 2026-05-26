@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -77,9 +77,11 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(geofenceDailyStates);
           }
           if (from < 8) {
-            final exists = await _hasColumn('attendance_records', 'leave_minutes');
+            final exists =
+                await _hasColumn('attendance_records', 'leave_minutes');
             if (!exists) {
-              await m.addColumn(attendanceRecords, attendanceRecords.leaveMinutes);
+              await m.addColumn(
+                  attendanceRecords, attendanceRecords.leaveMinutes);
             }
           }
           if (from < 9) {
@@ -88,7 +90,8 @@ class AppDatabase extends _$AppDatabase {
             await _createStocktakeIndexes(m);
           }
           if (from < 10) {
-            final exists = await _hasColumn('stocktake_items', 'boxes_per_board');
+            final exists =
+                await _hasColumn('stocktake_items', 'boxes_per_board');
             if (!exists) {
               await m.database.customStatement(
                 'ALTER TABLE stocktake_items ADD COLUMN boxes_per_board INTEGER NOT NULL DEFAULT 1;',
@@ -137,6 +140,12 @@ class AppDatabase extends _$AppDatabase {
             final exists = await _hasColumn('batches', 'frozen_boxes');
             if (!exists) {
               await m.addColumn(batches, batches.frozenBoxes);
+            }
+          }
+          if (from < 18) {
+            final exists = await _hasColumn('orders', 'is_urgent');
+            if (!exists) {
+              await m.addColumn(orders, orders.isUrgent);
             }
           }
         },

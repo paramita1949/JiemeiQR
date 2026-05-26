@@ -100,6 +100,17 @@ class OrderDao {
     );
   }
 
+  Future<void> setUrgent(int orderId, bool isUrgent) async {
+    await (_database.update(_database.orders)
+          ..where((table) => table.id.equals(orderId)))
+        .write(
+      OrdersCompanion(
+        isUrgent: Value(isUrgent),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<int> findOrCreateOpenOrder({
     required String waybillNo,
     required String merchantName,
@@ -602,6 +613,7 @@ class OrderDao {
     OrderStatus? status,
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
+    bool urgentOnly = false,
   }) async {
     final where = <String>['oi.is_picked = 0'];
     final vars = <Variable<Object>>[];
@@ -629,6 +641,9 @@ class OrderDao {
       where.add('o.order_date BETWEEN ? AND ?');
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
+    }
+    if (urgentOnly) {
+      where.add('o.is_urgent = 1');
     }
     final whereSql = where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}';
     final rows = await _database
@@ -695,6 +710,7 @@ class OrderDao {
     OrderStatus? status,
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
+    bool urgentOnly = false,
   }) async {
     final where = <String>[
       'p.code = ?',
@@ -731,6 +747,9 @@ class OrderDao {
       where.add('o.order_date BETWEEN ? AND ?');
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
+    }
+    if (urgentOnly) {
+      where.add('o.is_urgent = 1');
     }
     final rows = await _database
         .customSelect(

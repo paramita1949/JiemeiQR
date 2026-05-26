@@ -35,6 +35,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   final List<OrderSummary> _orders = <OrderSummary>[];
   List<OrderRestockAggregate> _restockAggregates = const [];
   int? _restockFloorFilter;
+  bool _restockUrgentOnly = false;
   OrderStatusCounts? _counts;
   bool _loadingInitial = true;
   bool _loadingMore = false;
@@ -162,8 +163,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
               _RestockAggregateCard(
                 rows: _restockAggregates,
                 selectedFloor: _restockFloorFilter,
+                urgentOnly: _restockUrgentOnly,
                 onSelectFloor: (floor) {
                   setState(() => _restockFloorFilter = floor);
+                },
+                onToggleUrgent: () {
+                  setState(() => _restockUrgentOnly = !_restockUrgentOnly);
+                  _refreshOrders();
                 },
                 onTapRow: _showRestockWaybillLines,
               ),
@@ -230,6 +236,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             status: restockStatus,
             dateRange: _dateRange,
             unfinishedOnly: false,
+            urgentOnly: _restockUrgentOnly,
           );
     if (!mounted) {
       return;
@@ -407,6 +414,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       status: _status,
       dateRange: _dateRange,
       unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      urgentOnly: _restockUrgentOnly,
     );
     if (!mounted) {
       return;
@@ -997,13 +1005,17 @@ class _RestockAggregateCard extends StatelessWidget {
   const _RestockAggregateCard({
     required this.rows,
     required this.selectedFloor,
+    required this.urgentOnly,
     required this.onSelectFloor,
+    required this.onToggleUrgent,
     required this.onTapRow,
   });
 
   final List<OrderRestockAggregate> rows;
   final int? selectedFloor;
+  final bool urgentOnly;
   final ValueChanged<int?> onSelectFloor;
+  final VoidCallback onToggleUrgent;
   final ValueChanged<OrderRestockAggregate> onTapRow;
 
   @override
@@ -1058,6 +1070,12 @@ class _RestockAggregateCard extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  _QuickChip(
+                    label: '紧急',
+                    selected: urgentOnly,
+                    onTap: onToggleUrgent,
+                  ),
+                  const SizedBox(width: 8),
                   _QuickChip(
                     label: '全部楼层',
                     selected: selectedFloor == null,
