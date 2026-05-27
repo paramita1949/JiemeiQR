@@ -1083,6 +1083,12 @@ class _OrderCardContent extends StatelessWidget {
                 ),
                 if (order.hasTsRequired) const _TsPill(),
                 if (order.hasException) const _ExceptionPill(),
+                if ((order.scannerGun ?? '').trim().isNotEmpty)
+                  _SmallInfoPill(
+                    text: '扫码枪 ${order.scannerGun!.trim()}',
+                    textColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFFEFF6FF),
+                  ),
                 if (order.itemCount == 1 && order.locationsText.isNotEmpty)
                   Text(
                     '库位 ${order.locationsText}',
@@ -1128,18 +1134,39 @@ class _TsPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return const _SmallInfoPill(
+      text: 'TS',
+      textColor: Color(0xFFDC2626),
+      backgroundColor: Color(0x1FDC2626),
+    );
+  }
+}
+
+class _SmallInfoPill extends StatelessWidget {
+  const _SmallInfoPill({
+    required this.text,
+    required this.textColor,
+    required this.backgroundColor,
+  });
+
+  final String text;
+  final Color textColor;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: const Text(
-        'TS',
+      child: Text(
+        text,
         style: TextStyle(
-          color: Color(0xFFDC2626),
+          color: textColor,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -1633,20 +1660,10 @@ class _ExceptionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF97316).withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: const Text(
-        '异常',
-        style: TextStyle(
-          color: Color(0xFFC2410C),
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
+    return const _SmallInfoPill(
+      text: '异常',
+      textColor: Color(0xFFC2410C),
+      backgroundColor: Color(0x24F97316),
     );
   }
 }

@@ -578,6 +578,10 @@ class BackupService {
 
   void _copyBusinessRows(sqlite.Database db) {
     for (final table in _businessTables) {
+      if (table == 'scanner_guns' &&
+          !_hasSqliteTable(db, schema: 'incoming', table: table)) {
+        continue;
+      }
       final columns = _businessTableColumns[table]!;
       final selectColumns = columns
           .map((column) => _incomingColumnExpression(db, table, column))
@@ -613,6 +617,9 @@ class BackupService {
     if (table == 'orders' && column == 'is_urgent') {
       return '0 AS is_urgent';
     }
+    if (table == 'orders' && column == 'scanner_gun') {
+      return 'NULL AS scanner_gun';
+    }
     if (table == 'order_items' &&
         (column == 'is_picked' || column == 'is_exception')) {
       return '0 AS $column';
@@ -628,6 +635,18 @@ class BackupService {
   }) {
     final rows = db.select('PRAGMA $schema.table_info($table);');
     return rows.any((row) => row['name'] == column);
+  }
+
+  bool _hasSqliteTable(
+    sqlite.Database db, {
+    required String schema,
+    required String table,
+  }) {
+    final rows = db.select(
+      "SELECT name FROM $schema.sqlite_master WHERE type = 'table' AND name = ?;",
+      [table],
+    );
+    return rows.isNotEmpty;
   }
 
   String _escapeSqlString(String value) => value.replaceAll("'", "''");
@@ -765,6 +784,7 @@ const _businessTables = <String>[
   'orders',
   'order_items',
   'stock_movements',
+  'scanner_guns',
 ];
 
 const _businessTableColumns = <String, List<String>>{
@@ -800,6 +820,7 @@ const _businessTableColumns = <String, List<String>>{
     'order_date',
     'status',
     'is_urgent',
+    'scanner_gun',
     'remark',
     'created_at',
     'updated_at',
@@ -824,6 +845,11 @@ const _businessTableColumns = <String, List<String>>{
     'type',
     'boxes',
     'remark',
+    'created_at',
+  ],
+  'scanner_guns': [
+    'id',
+    'label',
     'created_at',
   ],
 };

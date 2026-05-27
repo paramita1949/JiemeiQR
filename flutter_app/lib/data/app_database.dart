@@ -15,6 +15,7 @@ import 'tables/order_items.dart';
 import 'tables/orders.dart';
 import 'tables/patch_requests.dart';
 import 'tables/products.dart';
+import 'tables/scanner_guns.dart';
 import 'tables/stock_movements.dart';
 import 'tables/stocktake_items.dart';
 import 'tables/stocktake_sessions.dart';
@@ -36,6 +37,7 @@ part 'app_database.g.dart';
     GeofenceDailyStates,
     StocktakeSessions,
     StocktakeItems,
+    ScannerGuns,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -44,7 +46,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -148,6 +150,15 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(orders, orders.isUrgent);
             }
           }
+          if (from < 19) {
+            final hasScannerGun = await _hasColumn('orders', 'scanner_gun');
+            if (!hasScannerGun) {
+              await m.addColumn(orders, orders.scannerGun);
+            }
+            if (!await _hasTable('scanner_guns')) {
+              await m.createTable(scannerGuns);
+            }
+          }
         },
         beforeOpen: (details) async {
           await customStatement('''
@@ -167,6 +178,17 @@ class AppDatabase extends _$AppDatabase {
       if (name == column) return true;
     }
     return false;
+  }
+
+  Future<bool> _hasTable(String table) async {
+    final rows = await customSelect(
+      'SELECT name FROM sqlite_master WHERE type = ? AND name = ?;',
+      variables: [
+        Variable.withString('table'),
+        Variable.withString(table),
+      ],
+    ).get();
+    return rows.isNotEmpty;
   }
 
   Future<void> _createPerformanceIndexes(Migrator m) async {

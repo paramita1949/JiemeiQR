@@ -9,6 +9,7 @@ class OrderDao {
   OrderDao(this._database);
 
   final AppDatabase _database;
+  static const List<String> defaultScannerGuns = ['1号', '3号', '4号'];
 
   Future<int> createOrder({
     required String waybillNo,
@@ -109,6 +110,41 @@ class OrderDao {
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  Future<List<String>> scannerGunOptions() async {
+    final rows = await (_database.select(_database.scannerGuns)
+          ..orderBy([(table) => OrderingTerm.asc(table.createdAt)]))
+        .get();
+    final labels = <String>[
+      ...defaultScannerGuns,
+      ...rows.map((row) => row.label.trim()),
+    ];
+    return labels
+        .where((label) => label.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  Future<void> addScannerGunOption(String label) async {
+    final normalized = label.trim();
+    if (normalized.isEmpty || defaultScannerGuns.contains(normalized)) {
+      return;
+    }
+    await _database.into(_database.scannerGuns).insert(
+          ScannerGunsCompanion.insert(label: normalized),
+          mode: InsertMode.insertOrIgnore,
+        );
+  }
+
+  Future<void> deleteScannerGunOption(String label) async {
+    final normalized = label.trim();
+    if (normalized.isEmpty || defaultScannerGuns.contains(normalized)) {
+      return;
+    }
+    await (_database.delete(_database.scannerGuns)
+          ..where((table) => table.label.equals(normalized)))
+        .go();
   }
 
   Future<int> findOrCreateOpenOrder({
@@ -368,6 +404,7 @@ class OrderDao {
     required String waybillNo,
     required String merchantName,
     required DateTime orderDate,
+    String? scannerGun,
   }) async {
     final normalizedDate = DateTime(
       orderDate.year,
@@ -385,6 +422,8 @@ class OrderDao {
         waybillNo: Value(waybillNo),
         merchantName: Value(merchantName),
         orderDate: Value(normalizedDate),
+        scannerGun: Value(
+            scannerGun?.trim().isEmpty == true ? null : scannerGun?.trim()),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -1087,6 +1126,7 @@ class OrderDao {
           merchantName: order.merchantName,
           orderDate: order.orderDate,
           status: order.status,
+          scannerGun: order.scannerGun,
           itemCount: stats?.count ?? 0,
           totalBoxes: stats?.totalBoxes ?? 0,
           pickedItemCount: stats?.pickedCount ?? 0,
@@ -1355,6 +1395,7 @@ class OrderSummary {
     required this.merchantName,
     required this.orderDate,
     required this.status,
+    required this.scannerGun,
     required this.itemCount,
     required this.totalBoxes,
     required this.pickedItemCount,
@@ -1369,6 +1410,7 @@ class OrderSummary {
   final String merchantName;
   final DateTime orderDate;
   final OrderStatus status;
+  final String? scannerGun;
   final int itemCount;
   final int totalBoxes;
   final int pickedItemCount;

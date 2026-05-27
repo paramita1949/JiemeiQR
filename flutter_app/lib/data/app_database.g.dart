@@ -1123,6 +1123,12 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_urgent" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _scannerGunMeta =
+      const VerificationMeta('scannerGun');
+  @override
+  late final GeneratedColumn<String> scannerGun = GeneratedColumn<String>(
+      'scanner_gun', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _remarkMeta = const VerificationMeta('remark');
   @override
   late final GeneratedColumn<String> remark = GeneratedColumn<String>(
@@ -1150,6 +1156,7 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
         orderDate,
         status,
         isUrgent,
+        scannerGun,
         remark,
         createdAt,
         updatedAt
@@ -1191,6 +1198,12 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
       context.handle(_isUrgentMeta,
           isUrgent.isAcceptableOrUnknown(data['is_urgent']!, _isUrgentMeta));
     }
+    if (data.containsKey('scanner_gun')) {
+      context.handle(
+          _scannerGunMeta,
+          scannerGun.isAcceptableOrUnknown(
+              data['scanner_gun']!, _scannerGunMeta));
+    }
     if (data.containsKey('remark')) {
       context.handle(_remarkMeta,
           remark.isAcceptableOrUnknown(data['remark']!, _remarkMeta));
@@ -1224,6 +1237,8 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
           .read(DriftSqlType.int, data['${effectivePrefix}status'])!),
       isUrgent: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_urgent'])!,
+      scannerGun: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}scanner_gun']),
       remark: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}remark']),
       createdAt: attachedDatabase.typeMapping
@@ -1249,6 +1264,7 @@ class Order extends DataClass implements Insertable<Order> {
   final DateTime orderDate;
   final OrderStatus status;
   final bool isUrgent;
+  final String? scannerGun;
   final String? remark;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -1259,6 +1275,7 @@ class Order extends DataClass implements Insertable<Order> {
       required this.orderDate,
       required this.status,
       required this.isUrgent,
+      this.scannerGun,
       this.remark,
       required this.createdAt,
       this.updatedAt});
@@ -1274,6 +1291,9 @@ class Order extends DataClass implements Insertable<Order> {
           Variable<int>($OrdersTable.$converterstatus.toSql(status));
     }
     map['is_urgent'] = Variable<bool>(isUrgent);
+    if (!nullToAbsent || scannerGun != null) {
+      map['scanner_gun'] = Variable<String>(scannerGun);
+    }
     if (!nullToAbsent || remark != null) {
       map['remark'] = Variable<String>(remark);
     }
@@ -1292,6 +1312,9 @@ class Order extends DataClass implements Insertable<Order> {
       orderDate: Value(orderDate),
       status: Value(status),
       isUrgent: Value(isUrgent),
+      scannerGun: scannerGun == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scannerGun),
       remark:
           remark == null && nullToAbsent ? const Value.absent() : Value(remark),
       createdAt: Value(createdAt),
@@ -1312,6 +1335,7 @@ class Order extends DataClass implements Insertable<Order> {
       status: $OrdersTable.$converterstatus
           .fromJson(serializer.fromJson<int>(json['status'])),
       isUrgent: serializer.fromJson<bool>(json['isUrgent']),
+      scannerGun: serializer.fromJson<String?>(json['scannerGun']),
       remark: serializer.fromJson<String?>(json['remark']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
@@ -1328,6 +1352,7 @@ class Order extends DataClass implements Insertable<Order> {
       'status':
           serializer.toJson<int>($OrdersTable.$converterstatus.toJson(status)),
       'isUrgent': serializer.toJson<bool>(isUrgent),
+      'scannerGun': serializer.toJson<String?>(scannerGun),
       'remark': serializer.toJson<String?>(remark),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime?>(updatedAt),
@@ -1341,6 +1366,7 @@ class Order extends DataClass implements Insertable<Order> {
           DateTime? orderDate,
           OrderStatus? status,
           bool? isUrgent,
+          Value<String?> scannerGun = const Value.absent(),
           Value<String?> remark = const Value.absent(),
           DateTime? createdAt,
           Value<DateTime?> updatedAt = const Value.absent()}) =>
@@ -1351,6 +1377,7 @@ class Order extends DataClass implements Insertable<Order> {
         orderDate: orderDate ?? this.orderDate,
         status: status ?? this.status,
         isUrgent: isUrgent ?? this.isUrgent,
+        scannerGun: scannerGun.present ? scannerGun.value : this.scannerGun,
         remark: remark.present ? remark.value : this.remark,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
@@ -1365,6 +1392,8 @@ class Order extends DataClass implements Insertable<Order> {
       orderDate: data.orderDate.present ? data.orderDate.value : this.orderDate,
       status: data.status.present ? data.status.value : this.status,
       isUrgent: data.isUrgent.present ? data.isUrgent.value : this.isUrgent,
+      scannerGun:
+          data.scannerGun.present ? data.scannerGun.value : this.scannerGun,
       remark: data.remark.present ? data.remark.value : this.remark,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1380,6 +1409,7 @@ class Order extends DataClass implements Insertable<Order> {
           ..write('orderDate: $orderDate, ')
           ..write('status: $status, ')
           ..write('isUrgent: $isUrgent, ')
+          ..write('scannerGun: $scannerGun, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -1389,7 +1419,7 @@ class Order extends DataClass implements Insertable<Order> {
 
   @override
   int get hashCode => Object.hash(id, waybillNo, merchantName, orderDate,
-      status, isUrgent, remark, createdAt, updatedAt);
+      status, isUrgent, scannerGun, remark, createdAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1400,6 +1430,7 @@ class Order extends DataClass implements Insertable<Order> {
           other.orderDate == this.orderDate &&
           other.status == this.status &&
           other.isUrgent == this.isUrgent &&
+          other.scannerGun == this.scannerGun &&
           other.remark == this.remark &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -1412,6 +1443,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   final Value<DateTime> orderDate;
   final Value<OrderStatus> status;
   final Value<bool> isUrgent;
+  final Value<String?> scannerGun;
   final Value<String?> remark;
   final Value<DateTime> createdAt;
   final Value<DateTime?> updatedAt;
@@ -1422,6 +1454,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     this.orderDate = const Value.absent(),
     this.status = const Value.absent(),
     this.isUrgent = const Value.absent(),
+    this.scannerGun = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1433,6 +1466,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     required DateTime orderDate,
     this.status = const Value.absent(),
     this.isUrgent = const Value.absent(),
+    this.scannerGun = const Value.absent(),
     this.remark = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1446,6 +1480,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     Expression<DateTime>? orderDate,
     Expression<int>? status,
     Expression<bool>? isUrgent,
+    Expression<String>? scannerGun,
     Expression<String>? remark,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1457,6 +1492,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       if (orderDate != null) 'order_date': orderDate,
       if (status != null) 'status': status,
       if (isUrgent != null) 'is_urgent': isUrgent,
+      if (scannerGun != null) 'scanner_gun': scannerGun,
       if (remark != null) 'remark': remark,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1470,6 +1506,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       Value<DateTime>? orderDate,
       Value<OrderStatus>? status,
       Value<bool>? isUrgent,
+      Value<String?>? scannerGun,
       Value<String?>? remark,
       Value<DateTime>? createdAt,
       Value<DateTime?>? updatedAt}) {
@@ -1480,6 +1517,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
       orderDate: orderDate ?? this.orderDate,
       status: status ?? this.status,
       isUrgent: isUrgent ?? this.isUrgent,
+      scannerGun: scannerGun ?? this.scannerGun,
       remark: remark ?? this.remark,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1508,6 +1546,9 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     if (isUrgent.present) {
       map['is_urgent'] = Variable<bool>(isUrgent.value);
     }
+    if (scannerGun.present) {
+      map['scanner_gun'] = Variable<String>(scannerGun.value);
+    }
     if (remark.present) {
       map['remark'] = Variable<String>(remark.value);
     }
@@ -1529,6 +1570,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
           ..write('orderDate: $orderDate, ')
           ..write('status: $status, ')
           ..write('isUrgent: $isUrgent, ')
+          ..write('scannerGun: $scannerGun, ')
           ..write('remark: $remark, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -5931,6 +5973,223 @@ class StocktakeItemsCompanion extends UpdateCompanion<StocktakeItemRecord> {
   }
 }
 
+class $ScannerGunsTable extends ScannerGuns
+    with TableInfo<$ScannerGunsTable, ScannerGun> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScannerGunsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+      'label', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [id, label, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scanner_guns';
+  @override
+  VerificationContext validateIntegrity(Insertable<ScannerGun> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+          _labelMeta, label.isAcceptableOrUnknown(data['label']!, _labelMeta));
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ScannerGun map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScannerGun(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      label: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}label'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $ScannerGunsTable createAlias(String alias) {
+    return $ScannerGunsTable(attachedDatabase, alias);
+  }
+}
+
+class ScannerGun extends DataClass implements Insertable<ScannerGun> {
+  final int id;
+  final String label;
+  final DateTime createdAt;
+  const ScannerGun(
+      {required this.id, required this.label, required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['label'] = Variable<String>(label);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ScannerGunsCompanion toCompanion(bool nullToAbsent) {
+    return ScannerGunsCompanion(
+      id: Value(id),
+      label: Value(label),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ScannerGun.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScannerGun(
+      id: serializer.fromJson<int>(json['id']),
+      label: serializer.fromJson<String>(json['label']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'label': serializer.toJson<String>(label),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ScannerGun copyWith({int? id, String? label, DateTime? createdAt}) =>
+      ScannerGun(
+        id: id ?? this.id,
+        label: label ?? this.label,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ScannerGun copyWithCompanion(ScannerGunsCompanion data) {
+    return ScannerGun(
+      id: data.id.present ? data.id.value : this.id,
+      label: data.label.present ? data.label.value : this.label,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScannerGun(')
+          ..write('id: $id, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, label, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScannerGun &&
+          other.id == this.id &&
+          other.label == this.label &&
+          other.createdAt == this.createdAt);
+}
+
+class ScannerGunsCompanion extends UpdateCompanion<ScannerGun> {
+  final Value<int> id;
+  final Value<String> label;
+  final Value<DateTime> createdAt;
+  const ScannerGunsCompanion({
+    this.id = const Value.absent(),
+    this.label = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ScannerGunsCompanion.insert({
+    this.id = const Value.absent(),
+    required String label,
+    this.createdAt = const Value.absent(),
+  }) : label = Value(label);
+  static Insertable<ScannerGun> custom({
+    Expression<int>? id,
+    Expression<String>? label,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (label != null) 'label': label,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ScannerGunsCompanion copyWith(
+      {Value<int>? id, Value<String>? label, Value<DateTime>? createdAt}) {
+    return ScannerGunsCompanion(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScannerGunsCompanion(')
+          ..write('id: $id, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5949,6 +6208,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StocktakeSessionsTable stocktakeSessions =
       $StocktakeSessionsTable(this);
   late final $StocktakeItemsTable stocktakeItems = $StocktakeItemsTable(this);
+  late final $ScannerGunsTable scannerGuns = $ScannerGunsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5964,7 +6224,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         patchRequests,
         geofenceDailyStates,
         stocktakeSessions,
-        stocktakeItems
+        stocktakeItems,
+        scannerGuns
       ];
 }
 
@@ -7030,6 +7291,7 @@ typedef $$OrdersTableCreateCompanionBuilder = OrdersCompanion Function({
   required DateTime orderDate,
   Value<OrderStatus> status,
   Value<bool> isUrgent,
+  Value<String?> scannerGun,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -7041,6 +7303,7 @@ typedef $$OrdersTableUpdateCompanionBuilder = OrdersCompanion Function({
   Value<DateTime> orderDate,
   Value<OrderStatus> status,
   Value<bool> isUrgent,
+  Value<String?> scannerGun,
   Value<String?> remark,
   Value<DateTime> createdAt,
   Value<DateTime?> updatedAt,
@@ -7108,6 +7371,9 @@ class $$OrdersTableFilterComposer
 
   ColumnFilters<bool> get isUrgent => $composableBuilder(
       column: $table.isUrgent, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get scannerGun => $composableBuilder(
+      column: $table.scannerGun, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnFilters(column));
@@ -7189,6 +7455,9 @@ class $$OrdersTableOrderingComposer
   ColumnOrderings<bool> get isUrgent => $composableBuilder(
       column: $table.isUrgent, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get scannerGun => $composableBuilder(
+      column: $table.scannerGun, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get remark => $composableBuilder(
       column: $table.remark, builder: (column) => ColumnOrderings(column));
 
@@ -7225,6 +7494,9 @@ class $$OrdersTableAnnotationComposer
 
   GeneratedColumn<bool> get isUrgent =>
       $composableBuilder(column: $table.isUrgent, builder: (column) => column);
+
+  GeneratedColumn<String> get scannerGun => $composableBuilder(
+      column: $table.scannerGun, builder: (column) => column);
 
   GeneratedColumn<String> get remark =>
       $composableBuilder(column: $table.remark, builder: (column) => column);
@@ -7307,6 +7579,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             Value<DateTime> orderDate = const Value.absent(),
             Value<OrderStatus> status = const Value.absent(),
             Value<bool> isUrgent = const Value.absent(),
+            Value<String?> scannerGun = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -7318,6 +7591,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             orderDate: orderDate,
             status: status,
             isUrgent: isUrgent,
+            scannerGun: scannerGun,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -7329,6 +7603,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             required DateTime orderDate,
             Value<OrderStatus> status = const Value.absent(),
             Value<bool> isUrgent = const Value.absent(),
+            Value<String?> scannerGun = const Value.absent(),
             Value<String?> remark = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime?> updatedAt = const Value.absent(),
@@ -7340,6 +7615,7 @@ class $$OrdersTableTableManager extends RootTableManager<
             orderDate: orderDate,
             status: status,
             isUrgent: isUrgent,
+            scannerGun: scannerGun,
             remark: remark,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -10248,6 +10524,137 @@ typedef $$StocktakeItemsTableProcessedTableManager = ProcessedTableManager<
     (StocktakeItemRecord, $$StocktakeItemsTableReferences),
     StocktakeItemRecord,
     PrefetchHooks Function({bool sessionId, bool productId, bool batchId})>;
+typedef $$ScannerGunsTableCreateCompanionBuilder = ScannerGunsCompanion
+    Function({
+  Value<int> id,
+  required String label,
+  Value<DateTime> createdAt,
+});
+typedef $$ScannerGunsTableUpdateCompanionBuilder = ScannerGunsCompanion
+    Function({
+  Value<int> id,
+  Value<String> label,
+  Value<DateTime> createdAt,
+});
+
+class $$ScannerGunsTableFilterComposer
+    extends Composer<_$AppDatabase, $ScannerGunsTable> {
+  $$ScannerGunsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$ScannerGunsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScannerGunsTable> {
+  $$ScannerGunsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ScannerGunsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScannerGunsTable> {
+  $$ScannerGunsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ScannerGunsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ScannerGunsTable,
+    ScannerGun,
+    $$ScannerGunsTableFilterComposer,
+    $$ScannerGunsTableOrderingComposer,
+    $$ScannerGunsTableAnnotationComposer,
+    $$ScannerGunsTableCreateCompanionBuilder,
+    $$ScannerGunsTableUpdateCompanionBuilder,
+    (ScannerGun, BaseReferences<_$AppDatabase, $ScannerGunsTable, ScannerGun>),
+    ScannerGun,
+    PrefetchHooks Function()> {
+  $$ScannerGunsTableTableManager(_$AppDatabase db, $ScannerGunsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScannerGunsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScannerGunsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScannerGunsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> label = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              ScannerGunsCompanion(
+            id: id,
+            label: label,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String label,
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              ScannerGunsCompanion.insert(
+            id: id,
+            label: label,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ScannerGunsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ScannerGunsTable,
+    ScannerGun,
+    $$ScannerGunsTableFilterComposer,
+    $$ScannerGunsTableOrderingComposer,
+    $$ScannerGunsTableAnnotationComposer,
+    $$ScannerGunsTableCreateCompanionBuilder,
+    $$ScannerGunsTableUpdateCompanionBuilder,
+    (ScannerGun, BaseReferences<_$AppDatabase, $ScannerGunsTable, ScannerGun>),
+    ScannerGun,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10274,4 +10681,6 @@ class $AppDatabaseManager {
       $$StocktakeSessionsTableTableManager(_db, _db.stocktakeSessions);
   $$StocktakeItemsTableTableManager get stocktakeItems =>
       $$StocktakeItemsTableTableManager(_db, _db.stocktakeItems);
+  $$ScannerGunsTableTableManager get scannerGuns =>
+      $$ScannerGunsTableTableManager(_db, _db.scannerGuns);
 }

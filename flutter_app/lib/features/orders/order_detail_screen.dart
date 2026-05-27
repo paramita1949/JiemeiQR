@@ -263,6 +263,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       detail.order.orderDate.month,
       detail.order.orderDate.day,
     );
+    var selectedScannerGun = detail.order.scannerGun?.trim() ?? '';
+    var scannerGunOptions = await _orderDao.scannerGunOptions();
+    if (!mounted) {
+      return;
+    }
 
     final shouldSave = await showDialog<bool>(
       context: context,
@@ -301,6 +306,59 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   setLocalState(() => selectedDate = picked);
                 },
               ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                key: ValueKey(selectedScannerGun),
+                initialValue: selectedScannerGun,
+                decoration: const InputDecoration(labelText: '扫码枪'),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('不选择')),
+                  for (final option in scannerGunOptions)
+                    DropdownMenuItem(value: option, child: Text(option)),
+                ],
+                onChanged: (value) {
+                  setLocalState(() => selectedScannerGun = value ?? '');
+                },
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final label = await _promptScannerGunLabel(context);
+                      if (label == null || label.trim().isEmpty) {
+                        return;
+                      }
+                      await _orderDao.addScannerGunOption(label);
+                      final options = await _orderDao.scannerGunOptions();
+                      setLocalState(() {
+                        scannerGunOptions = options;
+                        selectedScannerGun = label.trim();
+                      });
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('新增'),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: selectedScannerGun.isNotEmpty &&
+                            !OrderDao.defaultScannerGuns
+                                .contains(selectedScannerGun)
+                        ? () async {
+                            await _orderDao
+                                .deleteScannerGunOption(selectedScannerGun);
+                            final options = await _orderDao.scannerGunOptions();
+                            setLocalState(() {
+                              scannerGunOptions = options;
+                              selectedScannerGun = '';
+                            });
+                          }
+                        : null,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('删除'),
+                  ),
+                ],
+              ),
             ],
           ),
           actions: [
@@ -337,6 +395,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         waybillNo: waybillNo,
         merchantName: merchantName,
         orderDate: selectedDate,
+        scannerGun: selectedScannerGun.isEmpty ? null : selectedScannerGun,
       );
     } on DuplicateWaybillNoException {
       if (!mounted) {
@@ -353,6 +412,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     setState(() {
       _detailFuture = _loadDetail();
     });
+  }
+
+  Future<String?> _promptScannerGunLabel(BuildContext context) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('新增扫码枪'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '扫码枪名称',
+            hintText: '例如 5号',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _deleteOrder() async {
@@ -726,12 +815,24 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            _formatDate(detail.order.orderDate),
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Text(
+                _formatDate(detail.order.orderDate),
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if ((detail.order.scannerGun ?? '').trim().isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _MetricChip(
+                  text: '扫码枪 ${detail.order.scannerGun!.trim()}',
+                  textColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFFEFF6FF),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 8),
           Row(

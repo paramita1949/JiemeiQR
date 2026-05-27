@@ -11,6 +11,7 @@ class Orders extends Table {
         Constant(OrderStatus.pending.index),
       )();
   BoolColumn get isUrgent => boolean().withDefault(const Constant(false))();
+  TextColumn get scannerGun => text().nullable()();
   TextColumn get remark => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().nullable()();
