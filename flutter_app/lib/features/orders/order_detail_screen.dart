@@ -265,6 +265,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
     var selectedScannerGun = detail.order.scannerGun?.trim() ?? '';
     var scannerGunOptions = await _orderDao.scannerGunOptions();
+    var deleteArmedScannerGun = '';
     if (!mounted) {
       return;
     }
@@ -307,23 +308,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 },
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                key: ValueKey(selectedScannerGun),
-                initialValue: selectedScannerGun,
-                decoration: const InputDecoration(labelText: '扫码枪'),
-                items: [
-                  const DropdownMenuItem(value: '', child: Text('不选择')),
-                  for (final option in scannerGunOptions)
-                    DropdownMenuItem(value: option, child: Text(option)),
-                ],
-                onChanged: (value) {
-                  setLocalState(() => selectedScannerGun = value ?? '');
-                },
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '扫码枪',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
               ),
-              const SizedBox(height: 6),
-              Row(
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  TextButton.icon(
+                  for (final option in scannerGunOptions)
+                    _ScannerGunTag(
+                      label: option,
+                      selected: selectedScannerGun == option,
+                      showDelete: deleteArmedScannerGun == option,
+                      onTap: () {
+                        setLocalState(() {
+                          deleteArmedScannerGun = '';
+                          selectedScannerGun =
+                              selectedScannerGun == option ? '' : option;
+                        });
+                      },
+                      onLongPress: () {
+                        setLocalState(() => deleteArmedScannerGun = option);
+                      },
+                      onDeleted: () async {
+                        await _orderDao.deleteScannerGunOption(option);
+                        final options = await _orderDao.scannerGunOptions();
+                        setLocalState(() {
+                          scannerGunOptions = options;
+                          deleteArmedScannerGun = '';
+                          if (selectedScannerGun == option) {
+                            selectedScannerGun = '';
+                          }
+                        });
+                      },
+                    ),
+                  ActionChip(
+                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('新增'),
                     onPressed: () async {
                       final label = await _promptScannerGunLabel(context);
                       if (label == null || label.trim().isEmpty) {
@@ -333,29 +362,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                       final options = await _orderDao.scannerGunOptions();
                       setLocalState(() {
                         scannerGunOptions = options;
+                        deleteArmedScannerGun = '';
                         selectedScannerGun = label.trim();
                       });
                     },
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('新增'),
-                  ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: selectedScannerGun.isNotEmpty &&
-                            !OrderDao.defaultScannerGuns
-                                .contains(selectedScannerGun)
-                        ? () async {
-                            await _orderDao
-                                .deleteScannerGunOption(selectedScannerGun);
-                            final options = await _orderDao.scannerGunOptions();
-                            setLocalState(() {
-                              scannerGunOptions = options;
-                              selectedScannerGun = '';
-                            });
-                          }
-                        : null,
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('删除'),
+                    backgroundColor: const Color(0xFFEFF6FF),
+                    labelStyle: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w900,
+                    ),
+                    shape: const StadiumBorder(
+                      side: BorderSide(color: Color(0xFFBFDBFE)),
+                    ),
                   ),
                 ],
               ),
@@ -1135,6 +1153,78 @@ class _LineActionButton extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _ScannerGunTag extends StatelessWidget {
+  const _ScannerGunTag({
+    required this.label,
+    required this.selected,
+    required this.showDelete,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onDeleted,
+  });
+
+  final String label;
+  final bool selected;
+  final bool showDelete;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onDeleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? Colors.white : AppTheme.primary;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected ? AppTheme.primary : const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected ? AppTheme.primary : const Color(0xFFBFDBFE),
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        if (showDelete)
+          Positioned(
+            right: -7,
+            top: -7,
+            child: GestureDetector(
+              onTap: onDeleted,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDC2626),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 14,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

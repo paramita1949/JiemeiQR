@@ -10,6 +10,8 @@ class OrderDao {
 
   final AppDatabase _database;
   static const List<String> defaultScannerGuns = ['1号', '3号', '4号'];
+  static const String _scannerGunDefaultsInitialized =
+      '__scanner_gun_defaults_initialized__';
 
   Future<int> createOrder({
     required String waybillNo,
@@ -113,22 +115,21 @@ class OrderDao {
   }
 
   Future<List<String>> scannerGunOptions() async {
+    await _ensureScannerGunDefaults();
     final rows = await (_database.select(_database.scannerGuns)
           ..orderBy([(table) => OrderingTerm.asc(table.createdAt)]))
         .get();
-    final labels = <String>[
-      ...defaultScannerGuns,
-      ...rows.map((row) => row.label.trim()),
-    ];
-    return labels
+    return rows
+        .map((row) => row.label.trim())
         .where((label) => label.isNotEmpty)
-        .toSet()
+        .where((label) => label != _scannerGunDefaultsInitialized)
         .toList(growable: false);
   }
 
   Future<void> addScannerGunOption(String label) async {
+    await _ensureScannerGunDefaults();
     final normalized = label.trim();
-    if (normalized.isEmpty || defaultScannerGuns.contains(normalized)) {
+    if (normalized.isEmpty || normalized == _scannerGunDefaultsInitialized) {
       return;
     }
     await _database.into(_database.scannerGuns).insert(
@@ -138,13 +139,38 @@ class OrderDao {
   }
 
   Future<void> deleteScannerGunOption(String label) async {
+    await _ensureScannerGunDefaults();
     final normalized = label.trim();
-    if (normalized.isEmpty || defaultScannerGuns.contains(normalized)) {
+    if (normalized.isEmpty || normalized == _scannerGunDefaultsInitialized) {
       return;
     }
     await (_database.delete(_database.scannerGuns)
           ..where((table) => table.label.equals(normalized)))
         .go();
+  }
+
+  Future<void> _ensureScannerGunDefaults() async {
+    final sentinel = await (_database.select(_database.scannerGuns)
+          ..where((table) => table.label.equals(_scannerGunDefaultsInitialized))
+          ..limit(1))
+        .getSingleOrNull();
+    if (sentinel != null) {
+      return;
+    }
+    await _database.transaction(() async {
+      for (final label in defaultScannerGuns) {
+        await _database.into(_database.scannerGuns).insert(
+              ScannerGunsCompanion.insert(label: label),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+      await _database.into(_database.scannerGuns).insert(
+            ScannerGunsCompanion.insert(
+              label: _scannerGunDefaultsInitialized,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+    });
   }
 
   Future<int> findOrCreateOpenOrder({

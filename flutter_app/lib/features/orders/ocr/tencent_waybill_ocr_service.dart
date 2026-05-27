@@ -44,7 +44,10 @@ class TencentWaybillOcrService implements WaybillPhotoOcrService {
   static const _configId = 'SalesDeliveryNote';
 
   @override
-  Future<WaybillOcrDraft> recognize(File image) async {
+  Future<WaybillOcrDraft> recognize(
+    File image, {
+    Iterable<String> merchantHistoryNames = const [],
+  }) async {
     final needsConfig =
         secretId.trim().isEmpty || secretKey.trim().isEmpty || region.isEmpty;
     final config = needsConfig ? await _configStore.load() : null;

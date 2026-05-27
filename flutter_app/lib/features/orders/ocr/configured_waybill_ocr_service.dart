@@ -41,7 +41,10 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
   final OcrServiceFactory _modelScopeServiceFactory;
 
   @override
-  Future<WaybillOcrDraft> recognize(File image) async {
+  Future<WaybillOcrDraft> recognize(
+    File image, {
+    Iterable<String> merchantHistoryNames = const [],
+  }) async {
     final config = await configStore.load();
     final provider = config.usesModelScopeOcr ? 'modelscope' : 'gemini';
     final model =
@@ -51,10 +54,16 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
       'route provider=$provider model=$model promptPreset=${config.ocrPromptPreset}',
     );
     if (config.usesModelScopeOcr) {
-      return _modelScopeServiceFactory(configStore, config).recognize(image);
+      return _modelScopeServiceFactory(configStore, config).recognize(
+        image,
+        merchantHistoryNames: merchantHistoryNames,
+      );
     }
     try {
-      return await _geminiServiceFactory(configStore, config).recognize(image);
+      return await _geminiServiceFactory(configStore, config).recognize(
+        image,
+        merchantHistoryNames: merchantHistoryNames,
+      );
     } catch (error) {
       DebugEventLog.add(
         'AI_OCR',
@@ -63,7 +72,10 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
       if (!config.hasModelScopeCredential) {
         rethrow;
       }
-      return _modelScopeServiceFactory(configStore, config).recognize(image);
+      return _modelScopeServiceFactory(configStore, config).recognize(
+        image,
+        merchantHistoryNames: merchantHistoryNames,
+      );
     }
   }
 }

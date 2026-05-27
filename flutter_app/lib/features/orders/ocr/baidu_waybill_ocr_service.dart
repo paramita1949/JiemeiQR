@@ -30,7 +30,10 @@ class BaiduWaybillOcrService implements WaybillPhotoOcrService {
   final BaiduHttpPost _httpPost;
 
   @override
-  Future<WaybillOcrDraft> recognize(File image) async {
+  Future<WaybillOcrDraft> recognize(
+    File image, {
+    Iterable<String> merchantHistoryNames = const [],
+  }) async {
     final needsConfig = apiKey.trim().isEmpty || secretKey.trim().isEmpty;
     final config = needsConfig ? await _configStore.load() : null;
     final effectiveApiKey = apiKey.trim().isNotEmpty

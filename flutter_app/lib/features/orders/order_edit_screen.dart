@@ -10,7 +10,6 @@ import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
-import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
@@ -707,8 +706,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      var draft = await _effectiveOcrService.recognize(image);
-      draft = await _resolveOcrMerchantName(draft);
+      final merchantHistoryNames = await _orderDao.recentMerchantNames(
+        limit: 200,
+      );
+      final draft = await _effectiveOcrService.recognize(
+        image,
+        merchantHistoryNames: merchantHistoryNames,
+      );
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
       DebugEventLog.add(
         'AI_OCR',
@@ -754,28 +758,6 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         const SnackBar(content: Text('识别失败，请重试')),
       );
     }
-  }
-
-  Future<WaybillOcrDraft> _resolveOcrMerchantName(WaybillOcrDraft draft) async {
-    final merchantName = draft.merchantName.trim();
-    if (merchantName.isEmpty) {
-      return draft;
-    }
-    final historyNames = await _orderDao.recentMerchantNames(limit: 200);
-    final resolved = resolveMerchantNameFromHistory(
-      recognizedName: merchantName,
-      historyNames: historyNames,
-    );
-    if (resolved == merchantName) {
-      return draft;
-    }
-    return WaybillOcrDraft(
-      waybillNo: draft.waybillNo,
-      merchantName: resolved,
-      orderDateText: draft.orderDateText,
-      rows: draft.rows,
-      warnings: draft.warnings,
-    );
   }
 
   Future<void> _refreshMerchantHistory() async {

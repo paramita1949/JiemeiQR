@@ -48,7 +48,10 @@ class AliyunWaybillOcrService implements WaybillPhotoOcrService {
   static const _version = '2021-07-07';
 
   @override
-  Future<WaybillOcrDraft> recognize(File image) async {
+  Future<WaybillOcrDraft> recognize(
+    File image, {
+    Iterable<String> merchantHistoryNames = const [],
+  }) async {
     final needsConfig = accessKeyId.trim().isEmpty ||
         accessKeySecret.trim().isEmpty ||
         endpoint.trim().isEmpty;

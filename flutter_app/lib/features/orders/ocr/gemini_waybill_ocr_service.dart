@@ -27,7 +27,10 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
   final GeminiHttpPost _httpPost;
 
   @override
-  Future<WaybillOcrDraft> recognize(File image) async {
+  Future<WaybillOcrDraft> recognize(
+    File image, {
+    Iterable<String> merchantHistoryNames = const [],
+  }) async {
     final needsConfig = apiKey.trim().isEmpty;
     final config = needsConfig ? await _configStore.load() : null;
     final effectiveApiKey = apiKey.trim().isNotEmpty
@@ -47,15 +50,25 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
     final uri = Uri.parse(
       'https://generativelanguage.googleapis.com/v1beta/models/$effectiveModel:generateContent',
     ).replace(queryParameters: {'key': effectiveApiKey});
-    final responseText =
-        await _httpPost(uri, _requestBody(bytes, promptPreset));
+    final responseText = await _httpPost(
+      uri,
+      _requestBody(bytes, promptPreset, merchantHistoryNames),
+    );
     return _parseResponse(responseText);
   }
 
-  Map<String, Object?> _requestBody(List<int> imageBytes, String promptPreset) {
-    final prompt = promptPreset == AiOcrConfig.ocrPromptPresetGeneral
+  Map<String, Object?> _requestBody(
+    List<int> imageBytes,
+    String promptPreset,
+    Iterable<String> merchantHistoryNames,
+  ) {
+    final basePrompt = promptPreset == AiOcrConfig.ocrPromptPresetGeneral
         ? _ocrPromptGeneral
         : _ocrPromptWaybillTemplateV2;
+    final prompt = _promptWithMerchantHistory(
+      basePrompt,
+      merchantHistoryNames,
+    );
     return {
       'contents': [
         {
@@ -198,6 +211,13 @@ const _responseSchema = {
   'properties': {
     'waybillNo': {'type': 'string'},
     'merchantName': {'type': 'string'},
+    'rawMerchantName': {'type': 'string'},
+    'matchedHistoryMerchant': {'type': 'string'},
+    'merchantConfidence': {
+      'type': 'string',
+      'enum': ['high', 'medium', 'low', ''],
+    },
+    'merchantMatchReason': {'type': 'string'},
     'orderDate': {'type': 'string'},
     'warnings': {
       'type': 'array',
@@ -227,8 +247,55 @@ const _responseSchema = {
   'required': [
     'waybillNo',
     'merchantName',
+    'rawMerchantName',
+    'matchedHistoryMerchant',
+    'merchantConfidence',
+    'merchantMatchReason',
     'orderDate',
     'rows',
     'warnings',
   ],
 };
+
+String _promptWithMerchantHistory(
+  String basePrompt,
+  Iterable<String> merchantHistoryNames,
+) {
+  final history = _cleanMerchantHistoryNames(merchantHistoryNames);
+  if (history.isEmpty) {
+    return '$basePrompt\n'
+        '商家输出额外要求：rawMerchantName、matchedHistoryMerchant、'
+        'merchantConfidence、merchantMatchReason 返回空字符串。\n';
+  }
+  final historyText = history.map((name) => '- $name').join('\n');
+  return '''
+$basePrompt
+
+历史商家候选：
+$historyText
+
+商家联动规则：
+- rawMerchantName: 图片中“收货方/客户/经销商/售达方”字段读到的原始商家文本或业务短称。
+- merchantName: 最终采用的商家名。只有当图片商家与某个历史商家高度确定是同一个商家时，才必须完整复制历史商家原文；否则使用 rawMerchantName。
+- matchedHistoryMerchant: 命中的历史商家原文；没有高置信命中时返回空字符串。
+- merchantConfidence: high、medium、low 之一；只有 high 才代表可自动采用历史商家。
+- merchantMatchReason: 用一句中文说明命中或未命中的原因。
+- 不要发明历史商家候选列表之外的 matchedHistoryMerchant。
+''';
+}
+
+List<String> _cleanMerchantHistoryNames(Iterable<String> names) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final name in names) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || !seen.add(trimmed)) {
+      continue;
+    }
+    result.add(trimmed);
+    if (result.length >= 200) {
+      break;
+    }
+  }
+  return result;
+}

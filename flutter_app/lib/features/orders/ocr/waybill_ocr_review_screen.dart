@@ -91,7 +91,8 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
       0,
       (sum, entry) => sum + entry.line.boxes,
     );
-    final totalBoxes = _entries.fold<int>(0, (sum, entry) => sum + entry.line.boxes);
+    final totalBoxes =
+        _entries.fold<int>(0, (sum, entry) => sum + entry.line.boxes);
     final reviewCount = _entries
         .where((entry) => entry.line.resolvedStatus == OcrLineStatus.needReview)
         .length;
@@ -154,6 +155,8 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               children: [
                 _InfoRow(label: '运单号', value: draft.waybillNo),
                 _EditableMerchantRow(controller: _merchantController),
+                if (_merchantMatchText(draft).isNotEmpty)
+                  _InfoRow(label: '商家匹配', value: _merchantMatchText(draft)),
                 _InfoRow(
                   label: '日期',
                   value:
@@ -815,6 +818,30 @@ String _dateText(DateTime? date, String fallback) {
     return fallback;
   }
   return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}
+
+String _merchantMatchText(WaybillOcrDraft draft) {
+  final matched = draft.matchedHistoryMerchant.trim();
+  final raw = draft.rawMerchantName.trim();
+  final confidence = draft.merchantConfidence.trim();
+  final reason = draft.merchantMatchReason.trim();
+  if (matched.isEmpty && raw.isEmpty && reason.isEmpty) {
+    return '';
+  }
+  final parts = <String>[];
+  if (matched.isNotEmpty) {
+    parts.add('历史：$matched');
+  }
+  if (raw.isNotEmpty && raw != draft.merchantName.trim()) {
+    parts.add('原文：$raw');
+  }
+  if (confidence.isNotEmpty) {
+    parts.add('置信：$confidence');
+  }
+  if (reason.isNotEmpty) {
+    parts.add(reason);
+  }
+  return parts.join(' / ');
 }
 
 String _productDateKey({

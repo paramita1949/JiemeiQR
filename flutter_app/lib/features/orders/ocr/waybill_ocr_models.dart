@@ -6,11 +6,19 @@ class WaybillOcrDraft {
     required this.merchantName,
     required this.orderDateText,
     required this.rows,
+    this.rawMerchantName = '',
+    this.matchedHistoryMerchant = '',
+    this.merchantConfidence = '',
+    this.merchantMatchReason = '',
     this.warnings = const [],
   });
 
   final String waybillNo;
   final String merchantName;
+  final String rawMerchantName;
+  final String matchedHistoryMerchant;
+  final String merchantConfidence;
+  final String merchantMatchReason;
   final String orderDateText;
   final List<WaybillOcrRow> rows;
   final List<String> warnings;
@@ -28,6 +36,10 @@ class WaybillOcrDraft {
     return WaybillOcrDraft(
       waybillNo: _stringValue(json['waybillNo']),
       merchantName: _stringValue(json['merchantName']),
+      rawMerchantName: _stringValue(json['rawMerchantName']),
+      matchedHistoryMerchant: _stringValue(json['matchedHistoryMerchant']),
+      merchantConfidence: _stringValue(json['merchantConfidence']),
+      merchantMatchReason: _stringValue(json['merchantMatchReason']),
       orderDateText: _stringValue(json['orderDate']),
       rows: rows,
       warnings: warningValues is List
