@@ -274,25 +274,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
+          scrollable: true,
           title: const Text('编辑订单信息'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
                 controller: waybillController,
-                decoration: const InputDecoration(labelText: '运单号'),
+                decoration: _editDialogInputDecoration('运单号'),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               TextField(
                 controller: merchantController,
-                decoration: const InputDecoration(labelText: '商家'),
+                decoration: _editDialogInputDecoration('商家'),
               ),
-              const SizedBox(height: 10),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('日期'),
-                subtitle: Text(_formatDate(selectedDate)),
-                trailing: const Icon(Icons.calendar_month_outlined),
+              const SizedBox(height: 12),
+              _EditDialogDatePicker(
+                dateText: _formatDate(selectedDate),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
@@ -307,75 +306,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   setLocalState(() => selectedDate = picked);
                 },
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '扫码枪',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final option in scannerGunOptions)
-                    _ScannerGunTag(
-                      label: option,
-                      selected: selectedScannerGun == option,
-                      showDelete: deleteArmedScannerGun == option,
-                      onTap: () {
-                        setLocalState(() {
-                          deleteArmedScannerGun = '';
-                          selectedScannerGun =
-                              selectedScannerGun == option ? '' : option;
-                        });
-                      },
-                      onLongPress: () {
-                        setLocalState(() => deleteArmedScannerGun = option);
-                      },
-                      onDeleted: () async {
-                        await _orderDao.deleteScannerGunOption(option);
-                        final options = await _orderDao.scannerGunOptions();
-                        setLocalState(() {
-                          scannerGunOptions = options;
-                          deleteArmedScannerGun = '';
-                          if (selectedScannerGun == option) {
-                            selectedScannerGun = '';
-                          }
-                        });
-                      },
-                    ),
-                  ActionChip(
-                    avatar: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('新增'),
-                    onPressed: () async {
-                      final label = await _promptScannerGunLabel(context);
-                      if (label == null || label.trim().isEmpty) {
-                        return;
-                      }
-                      await _orderDao.addScannerGunOption(label);
-                      final options = await _orderDao.scannerGunOptions();
-                      setLocalState(() {
-                        scannerGunOptions = options;
-                        deleteArmedScannerGun = '';
-                        selectedScannerGun = label.trim();
-                      });
-                    },
-                    backgroundColor: const Color(0xFFEFF6FF),
-                    labelStyle: const TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontWeight: FontWeight.w900,
-                    ),
-                    shape: const StadiumBorder(
-                      side: BorderSide(color: Color(0xFFBFDBFE)),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _ScannerGunSelector(
+                options: scannerGunOptions,
+                selected: selectedScannerGun,
+                deleteArmed: deleteArmedScannerGun,
+                onSelected: (option) {
+                  setLocalState(() {
+                    deleteArmedScannerGun = '';
+                    selectedScannerGun =
+                        selectedScannerGun == option ? '' : option;
+                  });
+                },
+                onArmDelete: (option) {
+                  setLocalState(() => deleteArmedScannerGun = option);
+                },
+                onDeleted: (option) async {
+                  await _orderDao.deleteScannerGunOption(option);
+                  final options = await _orderDao.scannerGunOptions();
+                  setLocalState(() {
+                    scannerGunOptions = options;
+                    deleteArmedScannerGun = '';
+                    if (selectedScannerGun == option) {
+                      selectedScannerGun = '';
+                    }
+                  });
+                },
+                onAdd: () async {
+                  final label = await _promptScannerGunLabel(context);
+                  if (label == null || label.trim().isEmpty) {
+                    return;
+                  }
+                  await _orderDao.addScannerGunOption(label);
+                  final options = await _orderDao.scannerGunOptions();
+                  setLocalState(() {
+                    scannerGunOptions = options;
+                    deleteArmedScannerGun = '';
+                    selectedScannerGun = label.trim();
+                  });
+                },
               ),
             ],
           ),
@@ -855,16 +824,26 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              GestureDetector(
-                onTap: () => onToggleUrgent(!detail.order.isUrgent),
-                child: const Text(
-                  '紧急',
-                  style: TextStyle(
-                    color: Color(0xFFDC2626),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => onToggleUrgent(!detail.order.isUrgent),
+                    child: const Text(
+                      '紧急',
+                      style: TextStyle(
+                        color: Color(0xFFDC2626),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  _InlineToggleSwitch(
+                    value: detail.order.isUrgent,
+                    onTap: () => onToggleUrgent(!detail.order.isUrgent),
+                  ),
+                ],
               ),
               const Spacer(),
               Text(
@@ -874,11 +853,6 @@ class _HeaderCard extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
-              ),
-              const SizedBox(width: 12),
-              _InlineToggleSwitch(
-                value: detail.order.isUrgent,
-                onTap: () => onToggleUrgent(!detail.order.isUrgent),
               ),
             ],
           ),
@@ -1157,6 +1131,211 @@ class _LineActionButton extends StatelessWidget {
   }
 }
 
+InputDecoration _editDialogInputDecoration(String label) {
+  const borderColor = Color(0xFFE3E0DA);
+  return InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: const Color(0xFFF8F7F4),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: borderColor),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: borderColor),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: AppTheme.primary, width: 1.4),
+    ),
+  );
+}
+
+class _EditDialogDatePicker extends StatelessWidget {
+  const _EditDialogDatePicker({
+    required this.dateText,
+    required this.onTap,
+  });
+
+  final String dateText;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8F7F4),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE3E0DA)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '日期',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      dateText,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.calendar_month_rounded,
+                color: AppTheme.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScannerGunSelector extends StatelessWidget {
+  const _ScannerGunSelector({
+    required this.options,
+    required this.selected,
+    required this.deleteArmed,
+    required this.onSelected,
+    required this.onArmDelete,
+    required this.onDeleted,
+    required this.onAdd,
+  });
+
+  final List<String> options;
+  final String selected;
+  final String deleteArmed;
+  final ValueChanged<String> onSelected;
+  final ValueChanged<String> onArmDelete;
+  final ValueChanged<String> onDeleted;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSelected = selected.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8E1D8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _ScannerGunTag.hermesOrange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: 18,
+                  color: _ScannerGunTag.hermesOrange,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  '扫码枪',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: hasSelected
+                      ? _ScannerGunTag.hermesOrange.withValues(alpha: 0.12)
+                      : const Color(0xFFF1F0ED),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  hasSelected ? '已选 $selected' : '未选择',
+                  style: TextStyle(
+                    color: hasSelected
+                        ? _ScannerGunTag.hermesOrange
+                        : AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 9,
+            runSpacing: 10,
+            children: [
+              for (final option in options)
+                _ScannerGunTag(
+                  label: option,
+                  selected: selected == option,
+                  showDelete: deleteArmed == option,
+                  onTap: () => onSelected(option),
+                  onLongPress: () => onArmDelete(option),
+                  onDeleted: () => onDeleted(option),
+                ),
+              _ScannerGunAddTag(onTap: onAdd),
+            ],
+          ),
+          if (deleteArmed.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text(
+              '点击红色叉叉删除，点其他标签退出删除状态',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ScannerGunTag extends StatelessWidget {
   const _ScannerGunTag({
     required this.label,
@@ -1173,10 +1352,14 @@ class _ScannerGunTag extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onDeleted;
+  static const hermesOrange = Color(0xFFF37021);
+  static const unselectedBackground = Color(0xFFF7F7F5);
+  static const unselectedBorder = Color(0xFFE3E0DA);
+  static const unselectedText = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? Colors.white : AppTheme.primary;
+    final foreground = selected ? Colors.white : unselectedText;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -1185,19 +1368,30 @@ class _ScannerGunTag extends StatelessWidget {
           onLongPress: onLongPress,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            constraints: const BoxConstraints(minWidth: 64, minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: selected ? AppTheme.primary : const Color(0xFFEFF6FF),
+              color: selected ? hermesOrange : unselectedBackground,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: selected ? AppTheme.primary : const Color(0xFFBFDBFE),
+                color: selected ? hermesOrange : unselectedBorder,
               ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: hermesOrange.withValues(alpha: 0.22),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
             child: Text(
               label,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: foreground,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -1225,6 +1419,51 @@ class _ScannerGunTag extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _ScannerGunAddTag extends StatelessWidget {
+  const _ScannerGunAddTag({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _ScannerGunTag.unselectedBackground,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: _ScannerGunTag.unselectedBorder),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: _ScannerGunTag.hermesOrange,
+              ),
+              SizedBox(width: 5),
+              Text(
+                '新增',
+                style: TextStyle(
+                  color: _ScannerGunTag.hermesOrange,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1281,15 +1520,15 @@ class _InlineToggleSwitch extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          width: 58,
-          height: 32,
-          padding: const EdgeInsets.all(4),
+          width: 42,
+          height: 24,
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             color: value ? const Color(0xFFDC2626) : const Color(0xFFE9E6F2),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: value ? const Color(0xFFDC2626) : const Color(0xFF7C7A86),
-              width: 2,
+              width: 1.5,
             ),
           ),
           child: AnimatedAlign(
@@ -1297,8 +1536,8 @@ class _InlineToggleSwitch extends StatelessWidget {
             curve: Curves.easeOut,
             alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
-              width: 22,
-              height: 22,
+              width: 16,
+              height: 16,
               decoration: BoxDecoration(
                 color: value ? Colors.white : const Color(0xFF7C7A86),
                 shape: BoxShape.circle,
