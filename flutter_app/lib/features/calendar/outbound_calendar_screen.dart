@@ -95,12 +95,27 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      icon: Image.asset(
-                        'assets/icon/daily-report.png',
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.contain,
-                        semanticLabel: '日报',
+                      icon: Container(
+                        key: const Key('dailyReportTextIcon'),
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(
+                            color: AppTheme.primary,
+                            width: 1.6,
+                          ),
+                        ),
+                        child: const Text(
+                          '日报',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -917,8 +932,6 @@ class _OutboundDailyReportSheet extends StatelessWidget {
                   ),
                 )
               else ...[
-                const _OutboundDailyReportHeader(),
-                const SizedBox(height: 6),
                 ...rows.map((row) => _OutboundDailyReportTile(row: row)),
               ],
             ],
@@ -954,32 +967,6 @@ class _OutboundDailyReportSheet extends StatelessWidget {
   }
 }
 
-class _OutboundDailyReportHeader extends StatelessWidget {
-  const _OutboundDailyReportHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          Expanded(flex: 24, child: Text('产品编号', style: _reportHeaderStyle)),
-          Expanded(flex: 24, child: Text('批号', style: _reportHeaderStyle)),
-          Expanded(flex: 22, child: Text('日期', style: _reportHeaderStyle)),
-          Expanded(
-            flex: 16,
-            child: Text(
-              '箱数',
-              textAlign: TextAlign.right,
-              style: _reportHeaderStyle,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _OutboundDailyReportTile extends StatelessWidget {
   const _OutboundDailyReportTile({
     required this.row,
@@ -1000,39 +987,30 @@ class _OutboundDailyReportTile extends StatelessWidget {
         title: Row(
           children: [
             Expanded(
-              flex: 24,
-              child: Text(
-                row.productCode,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _reportCellStyle,
+              child: RichText(
+                text: TextSpan(
+                  style: _reportCellStyle,
+                  children: [
+                    TextSpan(text: row.productCode),
+                    const TextSpan(
+                      text: ' · ',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                    TextSpan(text: row.actualBatch),
+                    const TextSpan(
+                      text: ' · ',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                    TextSpan(text: row.dateBatch),
+                  ],
+                ),
               ),
             ),
-            Expanded(
-              flex: 24,
-              child: Text(
-                row.actualBatch,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _reportCellStyle,
-              ),
-            ),
-            Expanded(
-              flex: 22,
-              child: Text(
-                row.dateBatch,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _reportCellStyle,
-              ),
-            ),
-            Expanded(
-              flex: 16,
-              child: Text(
-                row.boxes.toString(),
-                textAlign: TextAlign.right,
-                style: _reportBoxesStyle,
-              ),
+            const SizedBox(width: 10),
+            Text(
+              '${row.boxes}箱',
+              textAlign: TextAlign.right,
+              style: _reportBoxesStyle,
             ),
           ],
         ),
@@ -1112,12 +1090,6 @@ class _OutboundDailySourceRow extends StatelessWidget {
     );
   }
 }
-
-const _reportHeaderStyle = TextStyle(
-  color: AppTheme.textSecondary,
-  fontSize: 11,
-  fontWeight: FontWeight.w800,
-);
 
 const _reportCellStyle = TextStyle(
   color: AppTheme.textPrimary,
