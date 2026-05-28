@@ -1000,6 +1000,7 @@ class _OrderCardContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = _statusMeta(order.status);
+    final scannerGun = (order.scannerGun ?? '').trim();
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -1031,16 +1032,28 @@ class _OrderCardContent extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Text(
-                          order.merchantName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                order.merchantName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (scannerGun.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              _ScannerGunBadge(text: scannerGun),
+                            ],
+                          ],
                         ),
                       ),
                     ],
@@ -1083,12 +1096,6 @@ class _OrderCardContent extends StatelessWidget {
                 ),
                 if (order.hasTsRequired) const _TsPill(),
                 if (order.hasException) const _ExceptionPill(),
-                if ((order.scannerGun ?? '').trim().isNotEmpty)
-                  _SmallInfoPill(
-                    text: '扫码枪 ${order.scannerGun!.trim()}',
-                    textColor: const Color(0xFF2563EB),
-                    backgroundColor: const Color(0xFFEFF6FF),
-                  ),
                 if (order.itemCount == 1 && order.locationsText.isNotEmpty)
                   Text(
                     '库位 ${order.locationsText}',
@@ -1138,6 +1145,32 @@ class _TsPill extends StatelessWidget {
       text: 'TS',
       textColor: Color(0xFFDC2626),
       backgroundColor: Color(0x1FDC2626),
+    );
+  }
+}
+
+class _ScannerGunBadge extends StatelessWidget {
+  const _ScannerGunBadge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    const hermesOrange = Color(0xFFF37021);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: hermesOrange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: hermesOrange,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }

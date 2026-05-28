@@ -118,6 +118,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     _HeaderCard(
                       detail: detail,
                       onToggleUrgent: (next) => _setUrgent(next),
+                      onSelectScannerGun: () =>
+                          _openHeaderScannerGunSelector(detail),
                     ),
                     const SizedBox(height: 10),
                     _StatusControls(
@@ -249,6 +251,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   Future<void> _setUrgent(bool isUrgent) async {
     await _orderDao.setUrgent(widget.orderId, isUrgent);
+    await _reloadDetail(preserveScroll: true);
+  }
+
+  Future<void> _openHeaderScannerGunSelector(OrderDetail detail) async {
+    final options = await _orderDao.scannerGunOptions();
+    if (!mounted) {
+      return;
+    }
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _HeaderScannerGunSheet(
+        options: options,
+        selected: detail.order.scannerGun?.trim() ?? '',
+      ),
+    );
+    if (selected == null) {
+      return;
+    }
+    await _orderDao.updateOrderBasic(
+      orderId: detail.order.id,
+      waybillNo: detail.order.waybillNo,
+      merchantName: detail.order.merchantName,
+      orderDate: detail.order.orderDate,
+      scannerGun: selected.isEmpty ? null : selected,
+    );
     await _reloadDetail(preserveScroll: true);
   }
 
@@ -758,10 +786,12 @@ class _HeaderCard extends StatelessWidget {
   const _HeaderCard({
     required this.detail,
     required this.onToggleUrgent,
+    required this.onSelectScannerGun,
   });
 
   final OrderDetail detail;
   final ValueChanged<bool> onToggleUrgent;
+  final VoidCallback onSelectScannerGun;
 
   @override
   Widget build(BuildContext context) {
@@ -782,6 +812,8 @@ class _HeaderCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   detail.order.waybillNo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 20,
@@ -789,6 +821,12 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              _HeaderScannerGunSelector(
+                scannerGun: detail.order.scannerGun?.trim() ?? '',
+                onTap: onSelectScannerGun,
+              ),
+              const SizedBox(width: 8),
               _StatusPill(label: status.label, color: status.color),
             ],
           ),
@@ -811,14 +849,6 @@ class _HeaderCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if ((detail.order.scannerGun ?? '').trim().isNotEmpty) ...[
-                const SizedBox(width: 8),
-                _MetricChip(
-                  text: '扫码枪 ${detail.order.scannerGun!.trim()}',
-                  textColor: const Color(0xFF2563EB),
-                  backgroundColor: const Color(0xFFEFF6FF),
-                ),
-              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -1236,6 +1266,10 @@ class _ScannerGunSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSelected = selected.trim().isNotEmpty;
+    final optionRows = <List<String>>[];
+    for (var index = 0; index < options.length; index += 3) {
+      optionRows.add(options.skip(index).take(3).toList());
+    }
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1303,36 +1337,68 @@ class _ScannerGunSelector extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Container(
-                  key: const Key('scannerGunOptionGrid'),
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF4F1EC),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFE7E0D8)),
-                  ),
-                  child: Wrap(
-                    spacing: 9,
-                    runSpacing: 9,
+          Container(
+            key: const Key('scannerGunOptionGrid'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F1EC),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE7E0D8)),
+            ),
+            child: Column(
+              children: [
+                for (var rowIndex = 0;
+                    rowIndex < optionRows.length;
+                    rowIndex++) ...[
+                  if (rowIndex > 0) const SizedBox(height: 8),
+                  Row(
                     children: [
-                      for (final option in options)
-                        _ScannerGunTag(
-                          label: option,
-                          selected: selected == option,
-                          showDelete: deleteArmed == option,
-                          onTap: () => onSelected(option),
-                          onLongPress: () => onArmDelete(option),
-                          onDeleted: () => onDeleted(option),
+                      for (var columnIndex = 0; columnIndex < 3; columnIndex++)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              right: columnIndex == 2 ? 0 : 8,
+                            ),
+                            child: columnIndex < optionRows[rowIndex].length
+                                ? _ScannerGunTag(
+                                    label: optionRows[rowIndex][columnIndex],
+                                    selected: selected ==
+                                        optionRows[rowIndex][columnIndex],
+                                    showDelete: deleteArmed ==
+                                        optionRows[rowIndex][columnIndex],
+                                    onTap: () => onSelected(
+                                      optionRows[rowIndex][columnIndex],
+                                    ),
+                                    onLongPress: () => onArmDelete(
+                                      optionRows[rowIndex][columnIndex],
+                                    ),
+                                    onDeleted: () => onDeleted(
+                                      optionRows[rowIndex][columnIndex],
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
                         ),
                     ],
                   ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  '长按标签可删除',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
               _ScannerGunAddTag(
                 key: const Key('scannerGunAddButton'),
                 onTap: onAdd,
@@ -1388,8 +1454,9 @@ class _ScannerGunTag extends StatelessWidget {
           onLongPress: onLongPress,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
-            constraints: const BoxConstraints(minWidth: 66, minHeight: 46),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: selected ? hermesOrange : unselectedBackground,
               borderRadius: BorderRadius.circular(16),
@@ -1457,22 +1524,36 @@ class _ScannerGunAddTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(999),
           child: Container(
-            width: 52,
-            height: 52,
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(999),
               border: Border.all(
                 color: _ScannerGunTag.hermesOrange.withValues(alpha: 0.55),
                 width: 1.4,
               ),
             ),
-            child: const Icon(
-              Icons.add_rounded,
-              semanticLabel: '新增扫码枪',
-              size: 28,
-              color: _ScannerGunTag.hermesOrange,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add_rounded,
+                  semanticLabel: '新增扫码枪',
+                  size: 21,
+                  color: _ScannerGunTag.hermesOrange,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  '新增',
+                  style: TextStyle(
+                    color: _ScannerGunTag.hermesOrange,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1555,6 +1636,165 @@ class _InlineToggleSwitch extends StatelessWidget {
                 color: value ? Colors.white : const Color(0xFF7C7A86),
                 shape: BoxShape.circle,
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderScannerGunSelector extends StatelessWidget {
+  const _HeaderScannerGunSelector({
+    required this.scannerGun,
+    required this.onTap,
+  });
+
+  final String scannerGun;
+  final VoidCallback onTap;
+  static const hermesOrange = Color(0xFFF37021);
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = scannerGun.isNotEmpty;
+    return Material(
+      key: const Key('headerScannerGunSelector'),
+      color: hasValue
+          ? hermesOrange.withValues(alpha: 0.12)
+          : const Color(0xFFFFF7F1),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: hermesOrange.withValues(alpha: hasValue ? 0.34 : 0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                hasValue ? scannerGun : '扫码枪',
+                style: const TextStyle(
+                  color: hermesOrange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 3),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: hermesOrange,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderScannerGunSheet extends StatelessWidget {
+  const _HeaderScannerGunSheet({
+    required this.options,
+    required this.selected,
+  });
+
+  final List<String> options;
+  final String selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '选择扫码枪',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final option in options)
+                  _QuickScannerGunOption(
+                    key: Key('quickScannerGunOption-$option'),
+                    label: option,
+                    selected: selected == option,
+                    onTap: () => Navigator.of(context).pop(option),
+                  ),
+                _QuickScannerGunOption(
+                  key: const Key('quickScannerGunOption-clear'),
+                  label: '清空',
+                  selected: selected.isEmpty,
+                  muted: true,
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickScannerGunOption extends StatelessWidget {
+  const _QuickScannerGunOption({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.muted = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool muted;
+  static const hermesOrange = Color(0xFFF37021);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = muted ? AppTheme.textSecondary : hermesOrange;
+    return Material(
+      color: selected ? color.withValues(alpha: 0.14) : const Color(0xFFF8F7F4),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 70, minHeight: 44),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? color : const Color(0xFFE3E0DA),
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? color : AppTheme.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
