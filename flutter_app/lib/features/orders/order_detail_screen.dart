@@ -1438,7 +1438,7 @@ class _ScannerGunTag extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onDeleted;
-  static const hermesOrange = Color(0xFFF37021);
+  static const hermesOrange = Color(0xFFA8552A);
   static const unselectedBackground = Color(0xFFF7F7F5);
   static const unselectedBorder = Color(0xFFE3E0DA);
   static const unselectedText = Color(0xFF6B7280);
@@ -1652,7 +1652,7 @@ class _HeaderScannerGunSelector extends StatelessWidget {
 
   final String scannerGun;
   final VoidCallback onTap;
-  static const hermesOrange = Color(0xFFF37021);
+  static const hermesOrange = Color(0xFFA8552A);
 
   @override
   Widget build(BuildContext context) {
@@ -1767,7 +1767,7 @@ class _QuickScannerGunOption extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final bool muted;
-  static const hermesOrange = Color(0xFFF37021);
+  static const hermesOrange = Color(0xFFA8552A);
 
   @override
   Widget build(BuildContext context) {

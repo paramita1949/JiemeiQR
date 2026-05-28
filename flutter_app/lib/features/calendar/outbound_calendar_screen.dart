@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/product_dao.dart';
@@ -75,10 +76,23 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 42),
               children: [
-                const PageTitle(
-                  icon: Icons.calendar_month_outlined,
-                  title: '出库日历',
-                  subtitle: '按日期查看出库与订单',
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: PageTitle(
+                        icon: Icons.calendar_month_outlined,
+                        title: '出库日历',
+                        subtitle: '按日期查看出库与订单',
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip: '日报',
+                      onPressed:
+                          state == null ? null : () => _showDailyReport(state),
+                      icon: const Icon(Icons.summarize_outlined),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 _TotalCard(
@@ -640,6 +654,23 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     return rows.where((row) => row.orderId == selectedOrderId).toList();
   }
 
+  void _showDailyReport(_CalendarState state) {
+    final reportDate = _dateOnly(_range.end);
+    final rows = _OutboundDailyReportRow.fromRows(
+      state.rows,
+      reportDate: reportDate,
+    );
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _OutboundDailyReportSheet(
+        reportDate: reportDate,
+        rows: rows,
+      ),
+    );
+  }
+
   Future<void> _pickCustomRange() async {
     final picked = await showDateRangePicker(
       context: context,
@@ -724,6 +755,388 @@ class _OutboundRow {
   final String? waybillNo;
   final String? merchantName;
 }
+
+class _OutboundDailyReportRow {
+  const _OutboundDailyReportRow({
+    required this.productCode,
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.reportDate,
+    required this.boxes,
+    required this.sourceRows,
+  });
+
+  final String productCode;
+  final String actualBatch;
+  final String dateBatch;
+  final DateTime reportDate;
+  final int boxes;
+  final List<_OutboundRow> sourceRows;
+
+  static List<_OutboundDailyReportRow> fromRows(
+    List<_OutboundRow> rows, {
+    required DateTime reportDate,
+  }) {
+    final grouped = <String, List<_OutboundRow>>{};
+    for (final row in rows) {
+      if (!_sameDate(row.outboundDate, reportDate)) {
+        continue;
+      }
+      final key = '${row.productCode}|${row.actualBatch}|${row.dateBatch}';
+      grouped.putIfAbsent(key, () => <_OutboundRow>[]).add(row);
+    }
+
+    final reportRows = grouped.values.map((groupRows) {
+      final first = groupRows.first;
+      final sourceRows = groupRows.toList()
+        ..sort((a, b) {
+          final boxesCmp = b.boxes.compareTo(a.boxes);
+          if (boxesCmp != 0) {
+            return boxesCmp;
+          }
+          return (a.waybillNo ?? '').compareTo(b.waybillNo ?? '');
+        });
+      return _OutboundDailyReportRow(
+        productCode: first.productCode,
+        actualBatch: first.actualBatch,
+        dateBatch: first.dateBatch,
+        reportDate: reportDate,
+        boxes: sourceRows.fold<int>(0, (sum, row) => sum + row.boxes),
+        sourceRows: sourceRows,
+      );
+    }).toList();
+
+    reportRows.sort((a, b) {
+      final boxesCmp = b.boxes.compareTo(a.boxes);
+      if (boxesCmp != 0) {
+        return boxesCmp;
+      }
+      final productCmp = a.productCode.compareTo(b.productCode);
+      if (productCmp != 0) {
+        return productCmp;
+      }
+      final batchCmp = a.actualBatch.compareTo(b.actualBatch);
+      if (batchCmp != 0) {
+        return batchCmp;
+      }
+      return a.dateBatch.compareTo(b.dateBatch);
+    });
+    return reportRows;
+  }
+}
+
+class _OutboundDailyReportSheet extends StatelessWidget {
+  const _OutboundDailyReportSheet({
+    required this.reportDate,
+    required this.rows,
+  });
+
+  final DateTime reportDate;
+  final List<_OutboundDailyReportRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.boxes);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.58,
+      minChildSize: 0.34,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '当日出库日报',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '复制日报',
+                    onPressed:
+                        rows.isEmpty ? null : () => _copyReport(context, rows),
+                    icon: const Icon(Icons.copy_outlined),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_formatDate(reportDate)} · 合计 $totalBoxes箱',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                    child: Text(
+                      '当日暂无出库',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                const _OutboundDailyReportHeader(),
+                const SizedBox(height: 6),
+                ...rows.map((row) => _OutboundDailyReportTile(row: row)),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _copyReport(
+    BuildContext context,
+    List<_OutboundDailyReportRow> rows,
+  ) async {
+    final buffer = StringBuffer('产品编号\t批号\t日期\t箱数');
+    for (final row in rows) {
+      buffer
+        ..writeln()
+        ..write(row.productCode)
+        ..write('\t')
+        ..write(row.actualBatch)
+        ..write('\t')
+        ..write(row.dateBatch)
+        ..write('\t')
+        ..write(row.boxes);
+    }
+    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('日报已复制')),
+    );
+  }
+}
+
+class _OutboundDailyReportHeader extends StatelessWidget {
+  const _OutboundDailyReportHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Expanded(flex: 24, child: Text('产品编号', style: _reportHeaderStyle)),
+          Expanded(flex: 24, child: Text('批号', style: _reportHeaderStyle)),
+          Expanded(flex: 22, child: Text('日期', style: _reportHeaderStyle)),
+          Expanded(
+            flex: 16,
+            child: Text(
+              '箱数',
+              textAlign: TextAlign.right,
+              style: _reportHeaderStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutboundDailyReportTile extends StatelessWidget {
+  const _OutboundDailyReportTile({
+    required this.row,
+  });
+
+  final _OutboundDailyReportRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: Row(
+          children: [
+            Expanded(
+              flex: 24,
+              child: Text(
+                row.productCode,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _reportCellStyle,
+              ),
+            ),
+            Expanded(
+              flex: 24,
+              child: Text(
+                row.actualBatch,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _reportCellStyle,
+              ),
+            ),
+            Expanded(
+              flex: 22,
+              child: Text(
+                row.dateBatch,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _reportCellStyle,
+              ),
+            ),
+            Expanded(
+              flex: 16,
+              child: Text(
+                row.boxes.toString(),
+                textAlign: TextAlign.right,
+                style: _reportBoxesStyle,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          const _OutboundDailySourceHeader(),
+          const SizedBox(height: 4),
+          ...row.sourceRows.map(_OutboundDailySourceRow.new),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutboundDailySourceHeader extends StatelessWidget {
+  const _OutboundDailySourceHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(flex: 34, child: Text('运单号', style: _sourceHeaderStyle)),
+        Expanded(flex: 32, child: Text('商家', style: _sourceHeaderStyle)),
+        Expanded(
+          flex: 14,
+          child: Text(
+            '箱数',
+            textAlign: TextAlign.right,
+            style: _sourceHeaderStyle,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OutboundDailySourceRow extends StatelessWidget {
+  const _OutboundDailySourceRow(this.row);
+
+  final _OutboundRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 34,
+            child: Text(
+              row.waybillNo?.isEmpty ?? true ? '未关联运单' : row.waybillNo!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _sourceCellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 32,
+            child: Text(
+              row.merchantName?.isEmpty ?? true ? '--' : row.merchantName!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _sourceCellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 14,
+            child: Text(
+              row.boxes.toString(),
+              textAlign: TextAlign.right,
+              style: _sourceBoxesStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+const _reportHeaderStyle = TextStyle(
+  color: AppTheme.textSecondary,
+  fontSize: 11,
+  fontWeight: FontWeight.w800,
+);
+
+const _reportCellStyle = TextStyle(
+  color: AppTheme.textPrimary,
+  fontSize: 12,
+  fontWeight: FontWeight.w800,
+);
+
+const _reportBoxesStyle = TextStyle(
+  color: AppTheme.primary,
+  fontSize: 13,
+  fontWeight: FontWeight.w900,
+);
+
+const _sourceHeaderStyle = TextStyle(
+  color: AppTheme.textSecondary,
+  fontSize: 11,
+  fontWeight: FontWeight.w800,
+);
+
+const _sourceCellStyle = TextStyle(
+  color: AppTheme.textPrimary,
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+);
+
+const _sourceBoxesStyle = TextStyle(
+  color: AppTheme.primary,
+  fontSize: 11,
+  fontWeight: FontWeight.w900,
+);
 
 class _OutboundOrderSummary {
   const _OutboundOrderSummary({

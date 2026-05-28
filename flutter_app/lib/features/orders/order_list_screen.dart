@@ -1019,33 +1019,17 @@ class _OrderCardContent extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          order.waybillNo,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Flexible(
+                            Expanded(
                               child: Text(
-                                order.merchantName,
+                                order.waybillNo,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.right,
                                 style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -1054,6 +1038,20 @@ class _OrderCardContent extends StatelessWidget {
                               _ScannerGunBadge(text: scannerGun),
                             ],
                           ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          order.merchantName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -1156,17 +1154,17 @@ class _ScannerGunBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const hermesOrange = Color(0xFFF37021);
+    const scannerGunColor = Color(0xFFA8552A);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: hermesOrange.withValues(alpha: 0.12),
+        color: scannerGunColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
         style: const TextStyle(
-          color: hermesOrange,
+          color: scannerGunColor,
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
