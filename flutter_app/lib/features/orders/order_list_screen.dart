@@ -1038,7 +1038,7 @@ class _OrderCardContent extends StatelessWidget {
                           order.merchantName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
+                          textAlign: TextAlign.left,
                           style: const TextStyle(
                             color: AppTheme.textSecondary,
                             fontSize: 13,

@@ -86,19 +86,21 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                         subtitle: '按日期查看出库与订单',
                       ),
                     ),
-                    IconButton.filledTonal(
+                    IconButton(
                       tooltip: '日报',
                       onPressed:
                           state == null ? null : () => _showDailyReport(state),
-                      icon: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(
-                          'assets/icon/daily-report.png',
-                          width: 28,
-                          height: 28,
-                          fit: BoxFit.cover,
-                          semanticLabel: '日报',
-                        ),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        padding: EdgeInsets.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: Image.asset(
+                        'assets/icon/daily-report.png',
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.contain,
+                        semanticLabel: '日报',
                       ),
                     ),
                   ],
