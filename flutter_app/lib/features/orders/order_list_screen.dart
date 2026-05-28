@@ -1018,30 +1018,22 @@ class _OrderCardContent extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                order.waybillNo,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppTheme.textPrimary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            if (scannerGun.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              _ScannerGunBadge(text: scannerGun),
-                            ],
-                          ],
+                      Text(
+                        order.waybillNo,
+                        maxLines: 1,
+                        overflow: TextOverflow.visible,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
+                      if (scannerGun.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        _ScannerGunBadge(text: scannerGun),
+                      ],
                       const SizedBox(width: 8),
-                      Flexible(
+                      Expanded(
                         child: Text(
                           order.merchantName,
                           maxLines: 1,

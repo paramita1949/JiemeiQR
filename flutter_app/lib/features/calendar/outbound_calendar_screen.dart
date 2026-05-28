@@ -90,7 +90,16 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                       tooltip: '日报',
                       onPressed:
                           state == null ? null : () => _showDailyReport(state),
-                      icon: const Icon(Icons.summarize_outlined),
+                      icon: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          'assets/icon/daily-report.png',
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.cover,
+                          semanticLabel: '日报',
+                        ),
+                      ),
                     ),
                   ],
                 ),
