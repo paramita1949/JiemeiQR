@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.9 (2026-05-30)
+
+### Changed
+- 更新 APK 下载增加多条公共 GitHub 加速代理备用线路：官方 GitHub 下载失败后，依次尝试 `gh-proxy.com`、`github.akams.cn`、`v6.gh-proxy.org`、`ghproxy.net`、`ghproxy.site`、`ghproxy.vip`、`githubproxy.cc`、`gh-fast.com`、`ghpull.com`、`mirror.ghproxy.com`、`ghfast.top`、`gh.llkk.cc`。
+- 下载逻辑保持官方 GitHub 地址优先，公共代理只作为无外网或 GitHub 访问困难环境下的兜底，避免影响正常网络用户。
+- 补充更新下载线路顺序测试，防止后续误删代理或改变官方优先顺序。
+- 应用代码版本号更新为 4.0.9。
+
 ## 4.0.8 (2026-05-30)
 
 ### Changed

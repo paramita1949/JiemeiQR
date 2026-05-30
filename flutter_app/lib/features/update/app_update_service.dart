@@ -78,42 +78,26 @@ class AppUpdateService {
     AppUpdateInfo info, {
     ValueChanged<double>? onProgress,
   }) async {
-    final uri = Uri.parse(info.apkUrl);
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
-      }
-      final directory = await getTemporaryDirectory();
-      final updatesDir = Directory(p.join(directory.path, 'updates'));
-      if (!await updatesDir.exists()) {
-        await updatesDir.create(recursive: true);
-      }
-      final fileName = info.apkName.endsWith('.apk')
-          ? info.apkName
-          : 'jiemei-${info.latestVersion}.apk';
-      final file = File(p.join(updatesDir.path, fileName));
-      final sink = file.openWrite();
-      var received = 0;
-      final total = response.contentLength;
-      try {
-        await for (final chunk in response) {
-          received += chunk.length;
-          sink.add(chunk);
-          if (total > 0) {
-            onProgress?.call(received / total);
-          }
-        }
-      } finally {
-        await sink.close();
-      }
-      onProgress?.call(1);
-      return file;
-    } finally {
-      client.close(force: true);
+    final directory = await getTemporaryDirectory();
+    final updatesDir = Directory(p.join(directory.path, 'updates'));
+    if (!await updatesDir.exists()) {
+      await updatesDir.create(recursive: true);
     }
+    final fileName = info.apkName.endsWith('.apk')
+        ? info.apkName
+        : 'jiemei-${info.latestVersion}.apk';
+    final file = File(p.join(updatesDir.path, fileName));
+    AppUpdateException? lastError;
+
+    for (final uri in appUpdateDownloadUris(info.apkUrl)) {
+      try {
+        return await _downloadApkFromUri(uri, file, onProgress: onProgress);
+      } on AppUpdateException catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? const AppUpdateException('下载失败：没有可用下载线路');
   }
 
   Future<void> installApk(File apkFile) async {
@@ -148,6 +132,43 @@ class AppUpdateService {
     } finally {
       client.close(force: true);
     }
+  }
+}
+
+Future<File> _downloadApkFromUri(
+  Uri uri,
+  File file, {
+  ValueChanged<double>? onProgress,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(uri);
+    final response = await request.close();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
+    }
+    final sink = file.openWrite();
+    var received = 0;
+    final total = response.contentLength;
+    try {
+      await for (final chunk in response) {
+        received += chunk.length;
+        sink.add(chunk);
+        if (total > 0) {
+          onProgress?.call(received / total);
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+    onProgress?.call(1);
+    return file;
+  } on AppUpdateException {
+    rethrow;
+  } catch (error) {
+    throw AppUpdateException('下载失败：$error');
+  } finally {
+    client.close(force: true);
   }
 }
 
@@ -186,3 +207,29 @@ List<int> _versionParts(String version) {
       .map((part) => int.tryParse(part) ?? 0)
       .toList(growable: false);
 }
+
+List<Uri> appUpdateDownloadUris(String officialUrl) {
+  final normalized = officialUrl.trim();
+  if (normalized.isEmpty) {
+    return const [];
+  }
+  return [
+    normalized,
+    for (final proxy in _githubDownloadProxyPrefixes) '$proxy$normalized',
+  ].map(Uri.parse).toList(growable: false);
+}
+
+const _githubDownloadProxyPrefixes = [
+  'https://gh-proxy.com/',
+  'https://github.akams.cn/',
+  'https://v6.gh-proxy.org/',
+  'https://ghproxy.net/',
+  'https://ghproxy.site/',
+  'https://ghproxy.vip/',
+  'https://githubproxy.cc/',
+  'https://gh-fast.com/',
+  'https://ghpull.com/',
+  'https://mirror.ghproxy.com/',
+  'https://ghfast.top/',
+  'https://gh.llkk.cc/',
+];
