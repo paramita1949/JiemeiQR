@@ -48,6 +48,8 @@ class BackupService {
     this.databaseDirectoryProvider,
     this.nowProvider,
     this.randomIntProvider,
+    this.appVersion = defaultAppVersion,
+    this.sqliteSchemaVersion = currentSqliteSchemaVersion,
   });
 
   final String databaseFileName;
@@ -55,8 +57,12 @@ class BackupService {
   final DatabaseDirectoryProvider? databaseDirectoryProvider;
   final NowProvider? nowProvider;
   final RandomIntProvider? randomIntProvider;
+  final String appVersion;
+  final int sqliteSchemaVersion;
   static const int maxSnapshotCount = 90;
   static const String aiConfigFileName = 'ai_ocr_config.json';
+  static const String defaultAppVersion = '4.0.10';
+  static const int currentSqliteSchemaVersion = 19;
   static const Duration dailyAutoBackupInterval = Duration(hours: 24);
   static const Duration weeklyAutoBackupInterval = Duration(days: 7);
 
@@ -353,6 +359,8 @@ class BackupService {
         'createdAt': now.toIso8601String(),
         'databaseFileName': databaseFileName,
         'sourceFileName': p.basename(source.path),
+        'appVersion': appVersion,
+        'sqliteSchemaVersion': sqliteSchemaVersion,
       }),
     );
 
@@ -411,17 +419,20 @@ class BackupService {
       throw InvalidImportDatabaseException(incomingPath);
     }
 
+    late final Map<String, dynamic> manifest;
     try {
-      final manifest = jsonDecode(
+      final decoded = jsonDecode(
         utf8.decode(_archiveContentBytes(manifestFile)),
       );
-      if (manifest is! Map<String, dynamic> ||
-          manifest['type'] != 'jiemei-backup-share') {
+      if (decoded is! Map<String, dynamic> ||
+          decoded['type'] != 'jiemei-backup-share') {
         throw const FormatException('invalid manifest');
       }
+      manifest = decoded;
     } on Object {
       throw InvalidImportDatabaseException(incomingPath);
     }
+    _checkManifestCompatibility(manifest);
 
     final tempDir = Directory(p.join(
       (await _documentsDirectory()).path,
@@ -473,6 +484,7 @@ class BackupService {
     if (!header.startsWith('SQLite format 3')) {
       throw InvalidImportDatabaseException(incomingPath);
     }
+    _checkDatabaseCompatibility(incoming, incomingPath);
 
     final target = await _databaseFile();
     if (!await target.exists()) {
@@ -650,6 +662,46 @@ class BackupService {
   }
 
   String _escapeSqlString(String value) => value.replaceAll("'", "''");
+
+  void _checkManifestCompatibility(Map<String, dynamic> manifest) {
+    final backupSchemaVersion = manifest['sqliteSchemaVersion'];
+    if (backupSchemaVersion is int &&
+        backupSchemaVersion > sqliteSchemaVersion) {
+      throw IncompatibleBackupVersionException(
+        backupSqliteSchemaVersion: backupSchemaVersion,
+        currentSqliteSchemaVersion: sqliteSchemaVersion,
+        backupAppVersion: manifest['appVersion']?.toString(),
+      );
+    }
+  }
+
+  void _checkDatabaseCompatibility(File incoming, String sourcePath) {
+    final incomingVersion = _sqliteUserVersion(incoming);
+    if (incomingVersion > sqliteSchemaVersion) {
+      throw IncompatibleBackupVersionException(
+        backupSqliteSchemaVersion: incomingVersion,
+        currentSqliteSchemaVersion: sqliteSchemaVersion,
+        sourcePath: sourcePath,
+      );
+    }
+  }
+
+  int _sqliteUserVersion(File file) {
+    final db = sqlite.sqlite3.open(file.path);
+    try {
+      final rows = db.select('PRAGMA user_version;');
+      if (rows.isEmpty) {
+        return 0;
+      }
+      final value = rows.first.values.first;
+      if (value is int) {
+        return value;
+      }
+      return int.tryParse(value.toString()) ?? 0;
+    } finally {
+      db.close();
+    }
+  }
 
   String _fileStamp(DateTime value) {
     String pad2(int n) => n.toString().padLeft(2, '0');
@@ -959,6 +1011,27 @@ class ImportDatabaseFailedException implements Exception {
 
   @override
   String toString() => 'ImportDatabaseFailedException(error: $error)';
+}
+
+class IncompatibleBackupVersionException implements Exception {
+  const IncompatibleBackupVersionException({
+    required this.backupSqliteSchemaVersion,
+    required this.currentSqliteSchemaVersion,
+    this.backupAppVersion,
+    this.sourcePath,
+  });
+
+  final int backupSqliteSchemaVersion;
+  final int currentSqliteSchemaVersion;
+  final String? backupAppVersion;
+  final String? sourcePath;
+
+  @override
+  String toString() =>
+      'IncompatibleBackupVersionException(backupSqliteSchemaVersion: '
+      '$backupSqliteSchemaVersion, currentSqliteSchemaVersion: '
+      '$currentSqliteSchemaVersion, backupAppVersion: $backupAppVersion, '
+      'sourcePath: $sourcePath)';
 }
 
 class ImportResult {

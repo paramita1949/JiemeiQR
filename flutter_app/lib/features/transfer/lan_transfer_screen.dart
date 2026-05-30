@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qrscan_flutter/features/qr/scanner_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
+import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -26,6 +28,8 @@ class LanTransferScreen extends StatefulWidget {
     this.initialImportPath,
     this.backupService,
     this.lanTransferService,
+    this.cloudBackupService,
+    this.initialCloudSession,
     this.onPrepareImport,
     this.onImportCompleted,
     this.shareFile,
@@ -36,6 +40,8 @@ class LanTransferScreen extends StatefulWidget {
   final String? initialImportPath;
   final BackupService? backupService;
   final LanTransferService? lanTransferService;
+  final CloudBackupService? cloudBackupService;
+  final CloudBackupSession? initialCloudSession;
   final Future<void> Function()? onPrepareImport;
   final DatabaseReloadCallback? onImportCompleted;
   final BackupShareCallback? shareFile;
@@ -48,6 +54,7 @@ class LanTransferScreen extends StatefulWidget {
 class _LanTransferScreenState extends State<LanTransferScreen> {
   late final BackupService _backupService;
   late final LanTransferService _lanTransferService;
+  late final CloudBackupService _cloudBackupService;
 
   bool _creatingBackup = false;
   bool _resettingDatabase = false;
@@ -58,11 +65,18 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   bool _applyingSchedule = false;
   bool _sharingBackup = false;
   bool _importingSharedBackup = false;
+  bool _loadingCloudSession = true;
+  bool _cloudSigningIn = false;
+  bool _cloudUploading = false;
+  bool _cloudRestoring = false;
+  bool _loadingCloudBackups = false;
   String? _restoringBackupPath;
   String? _sharingBackupPath;
   List<BackupSnapshot> _backupSnapshots = const [];
   BackupSchedule _backupSchedule = BackupSchedule.off;
   SendSession? _sendSession;
+  CloudBackupSession? _cloudSession;
+  List<CloudBackupRemoteBackup> _cloudBackups = const [];
   String? _statusText;
   _ReceiveStage _receiveStage = _ReceiveStage.idle;
   Timer? _sendSessionMonitor;
@@ -76,7 +90,16 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         BackupService(databaseFileName: widget.databasePath);
     _lanTransferService = widget.lanTransferService ??
         LanTransferService(backupService: _backupService);
+    _cloudBackupService = widget.cloudBackupService ??
+        CloudBackupService(api: SupabaseCloudBackupApi());
+    _cloudSession = widget.initialCloudSession;
+    _loadingCloudSession = widget.initialCloudSession == null;
     _bootstrapBackupPanel();
+    if (widget.initialCloudSession == null) {
+      unawaited(_loadCloudSession());
+    } else {
+      unawaited(_loadCloudBackups(widget.initialCloudSession!));
+    }
     final initialImportPath = widget.initialImportPath?.trim();
     if (initialImportPath != null && initialImportPath.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -109,6 +132,26 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               title: '数据备份',
             ),
             const SizedBox(height: 18),
+            _CloudBackupPanel(
+              loading: _loadingCloudSession,
+              session: _cloudSession,
+              signingIn: _cloudSigningIn,
+              uploading: _cloudUploading,
+              restoring: _cloudRestoring,
+              loadingBackups: _loadingCloudBackups,
+              backups: _cloudBackups,
+              onLogin: _showCloudLoginDialog,
+              onLogout: _logoutCloudBackup,
+              onUpload: _cloudSession?.canUpload == true
+                  ? _confirmAndUploadCloudBackup
+                  : null,
+              onRestore:
+                  _cloudSession == null ? null : _confirmAndRestoreCloudBackup,
+              onRestoreBackup: _cloudSession == null
+                  ? null
+                  : (backup) => _confirmAndRestoreCloudBackup(backup: backup),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -601,6 +644,248 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
     await _importSharedBackupWithConfirm(path.trim());
   }
 
+  Future<void> _loadCloudSession() async {
+    try {
+      final session = await _cloudBackupService.loadSavedSession();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _cloudSession = session;
+        _loadingCloudSession = false;
+      });
+      if (session != null) {
+        unawaited(_loadCloudBackups(session));
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadingCloudSession = false);
+    }
+  }
+
+  Future<void> _showCloudLoginDialog() async {
+    final result = await showDialog<_CloudLoginResult>(
+      context: context,
+      builder: (context) => const _CloudLoginDialog(),
+    );
+    if (result == null) {
+      return;
+    }
+    setState(() => _cloudSigningIn = true);
+    try {
+      final session = await _cloudBackupService.signIn(
+        email: result.email,
+        password: result.password,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _cloudSession = session);
+      unawaited(_loadCloudBackups(session));
+      _showSnack('云备份已登录');
+    } catch (_) {
+      _showSnack('云备份登录失败');
+    } finally {
+      if (mounted) {
+        setState(() => _cloudSigningIn = false);
+      }
+    }
+  }
+
+  Future<void> _logoutCloudBackup() async {
+    await _cloudBackupService.signOut();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cloudSession = null;
+      _cloudBackups = const [];
+      _loadingCloudBackups = false;
+    });
+    _showSnack('已退出云备份账号');
+  }
+
+  Future<void> _loadCloudBackups(CloudBackupSession session) async {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _loadingCloudBackups = true);
+    try {
+      final backups =
+          await _cloudBackupService.listBackups(session: session, limit: 5);
+      if (!mounted || _cloudSession?.accessToken != session.accessToken) {
+        return;
+      }
+      setState(() => _cloudBackups = backups);
+    } catch (_) {
+      if (!mounted || _cloudSession?.accessToken != session.accessToken) {
+        return;
+      }
+      setState(() => _cloudBackups = const []);
+    } finally {
+      if (mounted && _cloudSession?.accessToken == session.accessToken) {
+        setState(() => _loadingCloudBackups = false);
+      }
+    }
+  }
+
+  Future<void> _confirmAndUploadCloudBackup() async {
+    final session = _cloudSession;
+    if (session == null || !session.canUpload) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('上传到云端'),
+        content: const Text(
+          '将用本机当前数据和 AI 配置覆盖云端备份。其他手机下载后会变成本机当前数据，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认上传'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _cloudUploading = true;
+      _statusText = '正在上传云备份...';
+    });
+    try {
+      final package = await _backupService.createSharePackage();
+      await _cloudBackupService.uploadPackage(
+        session: session,
+        packageFile: File(package.filePath),
+      );
+      if (!mounted) {
+        return;
+      }
+      await _loadCloudBackups(session);
+      setState(() => _statusText = '云备份上传完成：${package.fileName}');
+      _showSnack('云备份已上传');
+    } on BackupSourceMissingException {
+      _showSnack('当前数据库不存在，无法上传');
+    } on CloudBackupPermissionException {
+      _showSnack('当前账号没有上传权限');
+    } catch (_) {
+      _showSnack('云备份上传失败');
+    } finally {
+      if (mounted) {
+        setState(() => _cloudUploading = false);
+      }
+    }
+  }
+
+  Future<void> _confirmAndRestoreCloudBackup({
+    CloudBackupRemoteBackup? backup,
+  }) async {
+    final session = _cloudSession;
+    if (session == null) {
+      return;
+    }
+    final backupText = backup == null
+        ? '云端最新备份'
+        : '云端备份 ${_formatSnapshotTime(backup.createdAt)}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('从云端恢复'),
+        content: Text(
+          '将用$backupText覆盖本机数据和 AI 配置。恢复前会自动备份当前数据，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _cloudRestoring = true;
+      _statusText = '正在下载云备份...';
+      _receiveStage = _ReceiveStage.transferring;
+    });
+    var prepared = false;
+    try {
+      final packageFile = await _cloudBackupService.downloadPackage(
+        session: session,
+        backup: backup,
+      );
+      await widget.onPrepareImport?.call();
+      prepared = true;
+      final result =
+          await _backupService.importSharedBackupPackage(packageFile.path);
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
+      prepared = false;
+      if (!mounted) {
+        return;
+      }
+      await _loadBackupSnapshots();
+      setState(() {
+        _receiveStage = _ReceiveStage.success;
+        _statusText = '云备份恢复完成，已自动备份当前数据：${result.backupFileName}';
+      });
+      _showSnack('云备份已恢复');
+    } on IncompatibleBackupVersionException {
+      _showSnack('云端备份来自新版本，请先升级 App');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on InvalidImportDatabaseException {
+      _showSnack('云端备份文件无效');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on BackupSourceMissingException {
+      _showSnack('当前数据库不存在，无法恢复');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } on ImportDatabaseFailedException {
+      _showSnack('恢复失败，请关闭占用数据库的页面后重试');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } catch (_) {
+      _showSnack('云备份恢复失败');
+      if (mounted) {
+        setState(() => _receiveStage = _ReceiveStage.error);
+      }
+    } finally {
+      if (prepared) {
+        try {
+          await widget.onImportCompleted?.call(seedIfEmpty: false);
+        } catch (_) {
+          _showSnack('数据库恢复失败，请重启应用后再试');
+        }
+      }
+      if (mounted) {
+        setState(() => _cloudRestoring = false);
+      }
+    }
+  }
+
   Future<void> _importSharedBackupWithConfirm(String path) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1088,6 +1373,353 @@ class _PairingCodeDialogState extends State<_PairingCodeDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CloudBackupPanel extends StatelessWidget {
+  const _CloudBackupPanel({
+    required this.loading,
+    required this.session,
+    required this.signingIn,
+    required this.uploading,
+    required this.restoring,
+    required this.loadingBackups,
+    required this.backups,
+    required this.onLogin,
+    required this.onLogout,
+    required this.onUpload,
+    required this.onRestore,
+    required this.onRestoreBackup,
+  });
+
+  final bool loading;
+  final CloudBackupSession? session;
+  final bool signingIn;
+  final bool uploading;
+  final bool restoring;
+  final bool loadingBackups;
+  final List<CloudBackupRemoteBackup> backups;
+  final VoidCallback onLogin;
+  final VoidCallback onLogout;
+  final VoidCallback? onUpload;
+  final VoidCallback? onRestore;
+  final ValueChanged<CloudBackupRemoteBackup>? onRestoreBackup;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = session;
+    final roleText = current == null
+        ? '未登录'
+        : current.canUpload
+            ? '可上传、可恢复'
+            : '只能恢复';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF7EF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.cloud_done_outlined,
+                  color: Color(0xFF168A4A),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '云备份',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      loading ? '正在读取账号...' : current?.email ?? '登录后使用云端备份',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (current != null)
+                TextButton(
+                  onPressed:
+                      uploading || restoring || signingIn ? null : onLogout,
+                  child: const Text('退出'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: current?.canUpload == true
+                  ? const Color(0xFFF3F8FF)
+                  : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              '权限：$roleText。云备份包含业务数据和 AI 配置。',
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (current == null)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: loading || signingIn ? null : onLogin,
+                icon: signingIn
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.login_rounded),
+                label: Text(signingIn ? '登录中...' : '登录云备份'),
+              ),
+            )
+          else
+            Column(
+              children: [
+                Row(
+                  children: [
+                    if (current.canUpload) ...[
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: uploading || restoring ? null : onUpload,
+                          icon: uploading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.cloud_upload_outlined),
+                          label: Text(uploading ? '上传中...' : '上传到云端'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: uploading || restoring ? null : onRestore,
+                        icon: restoring
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.cloud_download_outlined),
+                        label: Text(restoring ? '恢复中...' : '恢复最新'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _CloudBackupHistoryList(
+                  loading: loadingBackups,
+                  restoring: restoring,
+                  backups: backups,
+                  onRestoreBackup: onRestoreBackup,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloudBackupHistoryList extends StatelessWidget {
+  const _CloudBackupHistoryList({
+    required this.loading,
+    required this.restoring,
+    required this.backups,
+    required this.onRestoreBackup,
+  });
+
+  final bool loading;
+  final bool restoring;
+  final List<CloudBackupRemoteBackup> backups;
+  final ValueChanged<CloudBackupRemoteBackup>? onRestoreBackup;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '正在读取最近5次备份...',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+    if (backups.isEmpty) {
+      return const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '暂无历史备份，上传后会保留最近5次。',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '最近5次备份',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...backups.map(
+          (backup) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.history_rounded,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _formatSnapshotTime(backup.createdAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: restoring || onRestoreBackup == null
+                      ? null
+                      : () => onRestoreBackup!(backup),
+                  child: const Text('恢复'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CloudLoginResult {
+  const _CloudLoginResult({
+    required this.email,
+    required this.password,
+  });
+
+  final String email;
+  final String password;
+}
+
+class _CloudLoginDialog extends StatefulWidget {
+  const _CloudLoginDialog();
+
+  @override
+  State<_CloudLoginDialog> createState() => _CloudLoginDialogState();
+}
+
+class _CloudLoginDialogState extends State<_CloudLoginDialog> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('登录云备份'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: '账号',
+              hintText: 'admin@jiemei.com / role@jiemei.com',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: '密码'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _CloudLoginResult(
+                email: _emailController.text.trim(),
+                password: _passwordController.text,
+              ),
+            );
+          },
+          child: const Text('登录'),
         ),
       ],
     );
