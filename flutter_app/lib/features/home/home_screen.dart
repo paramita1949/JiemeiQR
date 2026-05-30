@@ -18,6 +18,7 @@ import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_import_intent_service.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
+import 'package:qrscan_flutter/features/update/app_update_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
@@ -55,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       const BackupService(databaseFileName: 'jiemei.sqlite');
   final BackupImportIntentService _backupImportIntentService =
       const BackupImportIntentService();
+  final AppUpdateService _appUpdateService = const AppUpdateService();
   _HomeStats? _stats;
   bool _loadingStats = true;
   bool _handlingIntentImport = false;
@@ -514,6 +516,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       showDragHandle: true,
       builder: (context) => _DebugLogSheet(
         report: report,
+        onCheckUpdate: _checkForUpdateFromLogPanel,
         onCopy: () async {
           await Clipboard.setData(ClipboardData(text: report.rawText));
           if (!context.mounted) return;
@@ -523,6 +526,136 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
       ),
     );
+  }
+
+  Future<void> _checkForUpdateFromLogPanel() async {
+    var progress = 0.0;
+    StateSetter? progressSetState;
+    var blockingDialogOpen = false;
+
+    void showMessage(String message) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+
+    void closeBlockingDialog() {
+      if (!mounted || !blockingDialogOpen) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      blockingDialogOpen = false;
+    }
+
+    try {
+      blockingDialogOpen = true;
+      unawaited(showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) {
+            progressSetState = setState;
+            return const AlertDialog(
+              title: Text('正在检查更新'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [Text('正在连接 GitHub Release...')],
+              ),
+            );
+          },
+        ),
+      ));
+      final info = await _appUpdateService.checkLatest();
+      if (!mounted) {
+        return;
+      }
+      closeBlockingDialog();
+      if (!info.hasUpdate) {
+        showMessage('当前已经是最新版本：${info.currentVersion}');
+        return;
+      }
+      final shouldDownload = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('发现新版本 ${info.latestVersion}'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('当前版本：${info.currentVersion}'),
+                const SizedBox(height: 8),
+                if (info.releaseNotes.trim().isNotEmpty)
+                  Text(info.releaseNotes.trim()),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('稍后'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('下载并安装'),
+            ),
+          ],
+        ),
+      );
+      if (shouldDownload != true || !mounted) {
+        return;
+      }
+      progress = 0.0;
+      progressSetState = null;
+      blockingDialogOpen = true;
+      unawaited(showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) {
+            progressSetState = setState;
+            return AlertDialog(
+              title: const Text('正在下载更新'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 10),
+                  Text('下载进度 ${(progress * 100).round()}%'),
+                ],
+              ),
+            );
+          },
+        ),
+      ));
+      final apk = await _appUpdateService.downloadApk(
+        info,
+        onProgress: (value) {
+          progress = value.clamp(0.0, 1.0).toDouble();
+          progressSetState?.call(() {});
+        },
+      );
+      if (!mounted) {
+        return;
+      }
+      closeBlockingDialog();
+      await _appUpdateService.installApk(apk);
+      showMessage('安装界面已打开，请按系统提示完成更新');
+    } on AppUpdateException catch (error) {
+      closeBlockingDialog();
+      showMessage(error.message);
+    } on PlatformException catch (error) {
+      closeBlockingDialog();
+      showMessage(error.message ?? '无法打开安装界面');
+    } catch (error) {
+      closeBlockingDialog();
+      showMessage('更新失败：$error');
+    }
   }
 
   Future<_DebugLogReport> _buildDebugReport() async {
@@ -661,10 +794,12 @@ class _DebugLogReport {
 class _DebugLogSheet extends StatelessWidget {
   const _DebugLogSheet({
     required this.report,
+    required this.onCheckUpdate,
     required this.onCopy,
   });
 
   final _DebugLogReport report;
+  final VoidCallback onCheckUpdate;
   final VoidCallback onCopy;
 
   @override
@@ -776,6 +911,15 @@ class _DebugLogSheet extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
+                  onPressed: onCheckUpdate,
+                  icon: const Icon(Icons.system_update_alt_rounded),
+                  label: const Text('检查更新'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
                   onPressed: onCopy,
                   icon: const Icon(Icons.copy_all_rounded),
                   label: const Text('一键复制完整日志'),

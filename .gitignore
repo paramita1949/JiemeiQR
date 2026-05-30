@@ -18,3 +18,6 @@ flutter_app/test/
 
 # Local runtime logs (auto-generated)
 flutter_app/flutter_*.log
+
+# Local Android/Kotlin build caches
+flutter_app/android/.kotlin/

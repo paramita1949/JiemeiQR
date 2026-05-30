@@ -1,0 +1,188 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+class AppUpdateInfo {
+  const AppUpdateInfo({
+    required this.currentVersion,
+    required this.latestVersion,
+    required this.releaseName,
+    required this.releaseNotes,
+    required this.apkUrl,
+    required this.apkName,
+    required this.hasUpdate,
+  });
+
+  final String currentVersion;
+  final String latestVersion;
+  final String releaseName;
+  final String releaseNotes;
+  final String apkUrl;
+  final String apkName;
+  final bool hasUpdate;
+}
+
+class AppUpdateService {
+  const AppUpdateService({
+    this.owner = 'paramita1949',
+    this.repo = 'JiemeiQR',
+  });
+
+  final String owner;
+  final String repo;
+
+  static const _channel = MethodChannel('com.jiemei.hualushui/app_update');
+
+  Future<AppUpdateInfo> checkLatest() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version.trim();
+    final uri = Uri.https(
+      'api.github.com',
+      '/repos/$owner/$repo/releases/latest',
+    );
+    final response = await _getJson(uri);
+    final latestVersion = _normalizeVersion(
+      response['tag_name']?.toString().trim().isNotEmpty == true
+          ? response['tag_name'].toString()
+          : response['name']?.toString() ?? '',
+    );
+    final assets = response['assets'];
+    final apkAsset = assets is List
+        ? assets.cast<Object?>().whereType<Map<String, Object?>>().firstWhere(
+              (asset) =>
+                  (asset['name']?.toString().toLowerCase().endsWith('.apk') ??
+                      false) &&
+                  (asset['browser_download_url']?.toString().isNotEmpty ??
+                      false),
+              orElse: () => const <String, Object?>{},
+            )
+        : const <String, Object?>{};
+
+    return AppUpdateInfo(
+      currentVersion: currentVersion,
+      latestVersion: latestVersion,
+      releaseName: response['name']?.toString() ?? latestVersion,
+      releaseNotes: response['body']?.toString() ?? '',
+      apkUrl: apkAsset['browser_download_url']?.toString() ?? '',
+      apkName: apkAsset['name']?.toString() ?? 'jiemei-update.apk',
+      hasUpdate: _compareVersions(latestVersion, currentVersion) > 0 &&
+          (apkAsset['browser_download_url']?.toString().isNotEmpty ?? false),
+    );
+  }
+
+  Future<File> downloadApk(
+    AppUpdateInfo info, {
+    ValueChanged<double>? onProgress,
+  }) async {
+    final uri = Uri.parse(info.apkUrl);
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
+      }
+      final directory = await getTemporaryDirectory();
+      final updatesDir = Directory(p.join(directory.path, 'updates'));
+      if (!await updatesDir.exists()) {
+        await updatesDir.create(recursive: true);
+      }
+      final fileName = info.apkName.endsWith('.apk')
+          ? info.apkName
+          : 'jiemei-${info.latestVersion}.apk';
+      final file = File(p.join(updatesDir.path, fileName));
+      final sink = file.openWrite();
+      var received = 0;
+      final total = response.contentLength;
+      try {
+        await for (final chunk in response) {
+          received += chunk.length;
+          sink.add(chunk);
+          if (total > 0) {
+            onProgress?.call(received / total);
+          }
+        }
+      } finally {
+        await sink.close();
+      }
+      onProgress?.call(1);
+      return file;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> installApk(File apkFile) async {
+    await _channel.invokeMethod<void>('installApk', {
+      'path': apkFile.path,
+    });
+  }
+
+  Future<Map<String, Object?>> _getJson(Uri uri) async {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      request.headers.set(
+        HttpHeaders.acceptHeader,
+        'application/vnd.github+json',
+      );
+      request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
+      final response = await request.close();
+      final text = await response.transform(utf8.decoder).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw AppUpdateException('检查失败：HTTP ${response.statusCode}');
+      }
+      final decoded = jsonDecode(text);
+      if (decoded is! Map<String, Object?>) {
+        throw const AppUpdateException('更新信息格式无效');
+      }
+      return decoded;
+    } on AppUpdateException {
+      rethrow;
+    } catch (error) {
+      throw AppUpdateException('检查更新失败：$error');
+    } finally {
+      client.close(force: true);
+    }
+  }
+}
+
+class AppUpdateException implements Exception {
+  const AppUpdateException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+String _normalizeVersion(String value) {
+  final match = RegExp(r'(\d+(?:\.\d+){1,3})').firstMatch(value);
+  return match?.group(1) ?? value.replaceFirst(RegExp(r'^[vV]'), '').trim();
+}
+
+int _compareVersions(String a, String b) {
+  final left = _versionParts(a);
+  final right = _versionParts(b);
+  final length = left.length > right.length ? left.length : right.length;
+  for (var index = 0; index < length; index += 1) {
+    final diff = (index < left.length ? left[index] : 0) -
+        (index < right.length ? right[index] : 0);
+    if (diff != 0) {
+      return diff;
+    }
+  }
+  return 0;
+}
+
+List<int> _versionParts(String version) {
+  return _normalizeVersion(version)
+      .split(RegExp(r'[^0-9]+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList(growable: false);
+}
