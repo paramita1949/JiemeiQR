@@ -522,8 +522,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => _DebugLogSheet(
         report: report,
         onCheckUpdate: _checkForUpdateFromLogPanel,
-        onCopy: () async {
-          await Clipboard.setData(ClipboardData(text: report.rawText));
+        onCopy: (latestReport) async {
+          await Clipboard.setData(ClipboardData(text: latestReport.rawText));
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('日志已复制')),
@@ -533,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _checkForUpdateFromLogPanel() async {
+  Future<_DebugLogReport> _checkForUpdateFromLogPanel() async {
     var progress = 0.0;
     StateSetter? progressSetState;
     var blockingDialogOpen = false;
@@ -575,13 +575,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ));
       final info = await _appUpdateService.checkLatest();
+      DebugEventLog.add(
+        'APP_UPDATE',
+        'checked current=${info.currentVersion} latest=${info.latestVersion} hasUpdate=${info.hasUpdate}',
+      );
       if (!mounted) {
-        return;
+        return _buildDebugReport();
       }
       closeBlockingDialog();
       if (!info.hasUpdate) {
-        showMessage('当前已经是最新版本：${info.currentVersion}');
-        return;
+        return _buildDebugReport();
       }
       final shouldDownload = await showDialog<bool>(
         context: context,
@@ -612,7 +615,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       );
       if (shouldDownload != true || !mounted) {
-        return;
+        return _buildDebugReport();
       }
       progress = 0.0;
       progressSetState = null;
@@ -646,21 +649,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
       );
       if (!mounted) {
-        return;
+        return _buildDebugReport();
       }
       closeBlockingDialog();
       await _appUpdateService.installApk(apk);
+      DebugEventLog.add(
+        'APP_UPDATE',
+        'install_opened current=${info.currentVersion} latest=${info.latestVersion}',
+      );
       showMessage('安装界面已打开，请按系统提示完成更新');
     } on AppUpdateException catch (error) {
       closeBlockingDialog();
+      DebugEventLog.add('APP_UPDATE', 'failed ${error.message}');
       showMessage(error.message);
     } on PlatformException catch (error) {
       closeBlockingDialog();
+      DebugEventLog.add('APP_UPDATE', 'install_failed ${error.message}');
       showMessage(error.message ?? '无法打开安装界面');
     } catch (error) {
       closeBlockingDialog();
+      DebugEventLog.add('APP_UPDATE', 'failed $error');
       showMessage('更新失败：$error');
     }
+    return _buildDebugReport();
   }
 
   Future<_DebugLogReport> _buildDebugReport() async {
@@ -696,17 +707,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     buffer.writeln('--- recent_debug_events ---');
     final events = DebugEventLog.dump();
-    const aiKeywords = <String>[
+    const visibleKeywords = <String>[
       '[AI_OCR]',
+      '[APP_UPDATE]',
       'ocr',
       '识别',
       'gemini',
       'modelscope',
       'prompt',
+      '更新',
+      '版本',
     ];
     final filtered = events.where((e) {
       final lower = e.toLowerCase();
-      for (final keyword in aiKeywords) {
+      for (final keyword in visibleKeywords) {
         if (keyword.startsWith('[')) {
           if (e.contains(keyword)) return true;
         } else if (lower.contains(keyword)) {
@@ -725,6 +739,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _DebugLogReport(
       appVersion: appVersion,
       dbStatus: dbStatus,
+      updateCheckStatus: _latestUpdateCheckText(events),
       sqliteSchemaVersion: _database.schemaVersion,
       orderCount: orderCount,
       orderItemCount: orderItemCount,
@@ -756,7 +771,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final readable = <String>[];
     for (final event in events.reversed.take(12)) {
       final normalized = event.toLowerCase();
-      if (normalized.contains('failed') || normalized.contains('error')) {
+      if (event.contains('[APP_UPDATE]')) {
+        readable.add('更新检查：${_compactDebugEvent(event)}');
+      } else if (normalized.contains('failed') ||
+          normalized.contains('error')) {
         readable.add('系统操作失败：$event');
       } else if (normalized.contains('show foreground dialog')) {
         readable.add('已弹出前台提醒：$event');
@@ -770,12 +788,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     return readable;
   }
+
+  String _latestUpdateCheckText(List<String> events) {
+    for (final event in events.reversed) {
+      if (!event.contains('[APP_UPDATE]')) {
+        continue;
+      }
+      final latestMatch = RegExp(r'latest=([^\s]+)').firstMatch(event);
+      final currentMatch = RegExp(r'current=([^\s]+)').firstMatch(event);
+      final hasUpdateMatch = RegExp(r'hasUpdate=([^\s]+)').firstMatch(event);
+      final latest = latestMatch?.group(1);
+      final current = currentMatch?.group(1);
+      final hasUpdate = hasUpdateMatch?.group(1);
+      if (latest != null && current != null) {
+        final suffix = hasUpdate == 'true' ? '发现新版本' : '已是最新版';
+        return '最新 $latest（本机 $current，$suffix）';
+      }
+      return _compactDebugEvent(event);
+    }
+    return '尚未检查';
+  }
+
+  String _compactDebugEvent(String event) {
+    final marker = event.indexOf('] ');
+    if (marker < 0 || marker + 2 >= event.length) {
+      return event;
+    }
+    return event.substring(marker + 2);
+  }
 }
 
 class _DebugLogReport {
   const _DebugLogReport({
     required this.appVersion,
     required this.dbStatus,
+    required this.updateCheckStatus,
     required this.sqliteSchemaVersion,
     required this.orderCount,
     required this.orderItemCount,
@@ -787,6 +834,7 @@ class _DebugLogReport {
 
   final String appVersion;
   final String dbStatus;
+  final String updateCheckStatus;
   final int sqliteSchemaVersion;
   final int? orderCount;
   final int? orderItemCount;
@@ -796,7 +844,7 @@ class _DebugLogReport {
   final String rawText;
 }
 
-class _DebugLogSheet extends StatelessWidget {
+class _DebugLogSheet extends StatefulWidget {
   const _DebugLogSheet({
     required this.report,
     required this.onCheckUpdate,
@@ -804,12 +852,38 @@ class _DebugLogSheet extends StatelessWidget {
   });
 
   final _DebugLogReport report;
-  final VoidCallback onCheckUpdate;
-  final VoidCallback onCopy;
+  final Future<_DebugLogReport> Function() onCheckUpdate;
+  final Future<void> Function(_DebugLogReport report) onCopy;
+
+  @override
+  State<_DebugLogSheet> createState() => _DebugLogSheetState();
+}
+
+class _DebugLogSheetState extends State<_DebugLogSheet> {
+  late _DebugLogReport _report = widget.report;
+  bool _checkingUpdate = false;
+
+  Future<void> _checkUpdate() async {
+    if (_checkingUpdate) {
+      return;
+    }
+    setState(() => _checkingUpdate = true);
+    final report = await widget.onCheckUpdate();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _report = report;
+      _checkingUpdate = false;
+    });
+  }
+
+  Future<void> _copy() => widget.onCopy(_report);
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final report = _report;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -833,7 +907,7 @@ class _DebugLogSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                '当前仅显示 AI 识别日志；定位/打卡相关日志已暂时屏蔽。',
+                '当前显示 AI 识别与更新检查日志；定位/打卡相关日志已暂时屏蔽。',
                 style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 12,
@@ -844,6 +918,11 @@ class _DebugLogSheet extends StatelessWidget {
               _DebugStatusCard(
                 label: '当前版本',
                 value: report.appVersion,
+              ),
+              const SizedBox(height: 8),
+              _DebugStatusCard(
+                label: '最新检查版本',
+                value: report.updateCheckStatus,
               ),
               const SizedBox(height: 8),
               _DebugStatusCard(
@@ -872,7 +951,7 @@ class _DebugLogSheet extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                '最近 AI 识别记录',
+                '最近可视化日志',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 14,
@@ -884,7 +963,7 @@ class _DebugLogSheet extends StatelessWidget {
                 child: report.readableEvents.isEmpty
                     ? const Center(
                         child: Text(
-                          '暂无 AI 识别日志',
+                          '暂无可视化日志',
                           style: TextStyle(
                             color: AppTheme.textSecondary,
                             fontWeight: FontWeight.w700,
@@ -916,16 +995,22 @@ class _DebugLogSheet extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: onCheckUpdate,
-                  icon: const Icon(Icons.system_update_alt_rounded),
-                  label: const Text('检查更新'),
+                  onPressed: _checkingUpdate ? null : _checkUpdate,
+                  icon: _checkingUpdate
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.system_update_alt_rounded),
+                  label: Text(_checkingUpdate ? '正在检查更新' : '检查更新'),
                 ),
               ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: onCopy,
+                  onPressed: _copy,
                   icon: const Icon(Icons.copy_all_rounded),
                   label: const Text('一键复制完整日志'),
                 ),
