@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -88,8 +89,10 @@ class AppUpdateService {
         : 'jiemei-${info.latestVersion}.apk';
     final file = File(p.join(updatesDir.path, fileName));
     AppUpdateException? lastError;
+    final candidates = appUpdateDownloadUris(info.apkUrl);
+    final uris = await _prioritizeDownloadUris(candidates);
 
-    for (final uri in appUpdateDownloadUris(info.apkUrl)) {
+    for (final uri in uris) {
       try {
         return await _downloadApkFromUri(uri, file, onProgress: onProgress);
       } on AppUpdateException catch (error) {
@@ -140,10 +143,11 @@ Future<File> _downloadApkFromUri(
   File file, {
   ValueChanged<double>? onProgress,
 }) async {
-  final client = HttpClient();
+  final client = HttpClient()..connectionTimeout = _downloadConnectTimeout;
   try {
-    final request = await client.getUrl(uri);
-    final response = await request.close();
+    final request = await client.getUrl(uri).timeout(_downloadConnectTimeout);
+    request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
+    final response = await request.close().timeout(_downloadConnectTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
     }
@@ -151,7 +155,7 @@ Future<File> _downloadApkFromUri(
     var received = 0;
     final total = response.contentLength;
     try {
-      await for (final chunk in response) {
+      await for (final chunk in response.timeout(_downloadIdleTimeout)) {
         received += chunk.length;
         sink.add(chunk);
         if (total > 0) {
@@ -218,6 +222,92 @@ List<Uri> appUpdateDownloadUris(String officialUrl) {
     for (final proxy in _githubDownloadProxyPrefixes) '$proxy$normalized',
   ].map(Uri.parse).toList(growable: false);
 }
+
+typedef AppUpdateDownloadProbe = Future<void> Function(Uri uri);
+
+Future<Uri> chooseFastestAppUpdateDownloadUri(
+  List<Uri> uris, {
+  AppUpdateDownloadProbe probe = _probeDownloadUri,
+}) async {
+  if (uris.isEmpty) {
+    throw const AppUpdateException('下载失败：没有可用下载线路');
+  }
+  if (uris.length == 1) {
+    return uris.first;
+  }
+
+  final completer = Completer<Uri>();
+  var pending = uris.length;
+  Object? lastError;
+
+  for (final uri in uris) {
+    unawaited(() async {
+      try {
+        await probe(uri).timeout(_downloadProbeTimeout);
+        if (!completer.isCompleted) {
+          completer.complete(uri);
+        }
+      } catch (error) {
+        lastError = error;
+      } finally {
+        pending -= 1;
+        if (pending == 0 && !completer.isCompleted) {
+          completer.completeError(
+            lastError ?? const AppUpdateException('下载失败：没有可用下载线路'),
+          );
+        }
+      }
+    }());
+  }
+
+  return completer.future;
+}
+
+Future<List<Uri>> _prioritizeDownloadUris(List<Uri> uris) async {
+  if (uris.length <= 1) {
+    return uris;
+  }
+  try {
+    final fastest = await chooseFastestAppUpdateDownloadUri(uris);
+    return [
+      fastest,
+      for (final uri in uris)
+        if (uri != fastest) uri,
+    ];
+  } on Object {
+    return uris;
+  }
+}
+
+Future<void> _probeDownloadUri(Uri uri) async {
+  final client = HttpClient()..connectionTimeout = _downloadConnectTimeout;
+  try {
+    final request = await client.getUrl(uri).timeout(_downloadConnectTimeout);
+    request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-65535');
+    final response = await request.close().timeout(_downloadProbeTimeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
+    }
+    var received = 0;
+    await for (final chunk in response.timeout(_downloadProbeTimeout)) {
+      received += chunk.length;
+      if (received >= _downloadProbeBytes) {
+        break;
+      }
+    }
+    if (received == 0) {
+      throw const AppUpdateException('下载失败：下载线路没有返回数据');
+    }
+  } finally {
+    client.close(force: true);
+  }
+}
+
+const _downloadConnectTimeout = Duration(seconds: 6);
+const _downloadProbeTimeout = Duration(seconds: 8);
+const _downloadIdleTimeout = Duration(seconds: 12);
+const _downloadProbeBytes = 64 * 1024;
 
 const _githubDownloadProxyPrefixes = [
   'https://gh-proxy.com/',

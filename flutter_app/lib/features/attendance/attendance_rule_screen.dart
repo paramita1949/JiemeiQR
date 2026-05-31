@@ -9,6 +9,9 @@ import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:share_plus/share_plus.dart';
 
+const _defaultOfficeRadiusMeters = 500;
+const _defaultProviderSummary = '系统融合定位（GPS/北斗/网络）';
+
 class AttendanceRuleScreen extends StatefulWidget {
   const AttendanceRuleScreen({
     super.key,
@@ -33,13 +36,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   final _lateController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
-  final _radiusController = TextEditingController();
 
   bool _geofenceEnabled = false;
-  bool _checkInRemindEnabled = true;
-  bool _checkOutRemindEnabled = false;
+  bool _showBackupRecords = false;
   String _weekendType = 'double';
-  String _providerSummary = '系统融合定位（GPS/北斗/网络）';
+  String _providerSummary = _defaultProviderSummary;
   List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
 
@@ -72,7 +73,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _lateController.dispose();
     _latController.dispose();
     _lngController.dispose();
-    _radiusController.dispose();
     super.dispose();
   }
 
@@ -83,21 +83,35 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _lateController.text = '${rule.lateGraceMinutes}';
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
-    _radiusController.text = '${rule.officeRadiusMeters}';
     _geofenceEnabled = rule.geofenceEnabled;
-    _checkInRemindEnabled = rule.checkinReminderEnabled;
-    _checkOutRemindEnabled = rule.checkoutReminderEnabled;
     _weekendType = rule.weekendType;
-    _backups = await _dao.listAttendanceBackups();
-    _todayGeofenceState = await _dao.getTodayGeofenceState();
-    _providerSummary = await AttendanceGeofenceBridge.providerSummary();
+
     if (!mounted) return;
     setState(() => _loading = false);
+
+    try {
+      _backups = await _dao.listAttendanceBackups();
+    } catch (e) {
+      DebugEventLog.add('ATTENDANCE_RULE_LOAD', 'list backups failed: $e');
+      _backups = const [];
+    }
+    try {
+      _todayGeofenceState = await _dao.getTodayGeofenceState();
+    } catch (e) {
+      DebugEventLog.add('ATTENDANCE_RULE_LOAD', 'load today state failed: $e');
+      _todayGeofenceState = null;
+    }
+    try {
+      _providerSummary = await AttendanceGeofenceBridge.providerSummary();
+    } catch (e) {
+      DebugEventLog.add('ATTENDANCE_RULE_LOAD', 'provider summary failed: $e');
+      _providerSummary = _defaultProviderSummary;
+    }
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _save() async {
-    final radius = int.tryParse(_radiusController.text.trim()) ?? 300;
-    final normalizedRadius = radius.clamp(50, 2000);
     await _dao.saveRule(
       AttendanceRulesCompanion(
         workStartTime: Value(_startController.text.trim()),
@@ -106,10 +120,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         weekendType: Value(_weekendType),
         officeLat: Value(double.tryParse(_latController.text.trim())),
         officeLng: Value(double.tryParse(_lngController.text.trim())),
-        officeRadiusMeters: Value(normalizedRadius),
+        officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
         geofenceEnabled: Value(_geofenceEnabled),
-        checkinReminderEnabled: Value(_checkInRemindEnabled),
-        checkoutReminderEnabled: Value(_checkOutRemindEnabled),
+        checkinReminderEnabled: const Value(true),
+        checkoutReminderEnabled: const Value(false),
       ),
     );
     try {
@@ -117,7 +131,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         enabled: _geofenceEnabled,
         lat: double.tryParse(_latController.text.trim()),
         lng: double.tryParse(_lngController.text.trim()),
-        radius: normalizedRadius,
+        radius: _defaultOfficeRadiusMeters,
       );
     } catch (_) {
       // Keep rule saving resilient when geofence registration fails on device.
@@ -129,23 +143,21 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   }
 
   Future<void> _saveGeofenceOnly({bool silent = true}) async {
-    final radius = int.tryParse(_radiusController.text.trim()) ?? 300;
-    final normalizedRadius = radius.clamp(50, 2000);
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
 
     DebugEventLog.add(
       'GEOFENCE_SAVE',
-      'start enabled=$_geofenceEnabled lat=$lat lng=$lng radius=$normalizedRadius',
+      'start enabled=$_geofenceEnabled lat=$lat lng=$lng radius=$_defaultOfficeRadiusMeters',
     );
     await _dao.saveRule(
       AttendanceRulesCompanion(
         officeLat: Value(lat),
         officeLng: Value(lng),
-        officeRadiusMeters: Value(normalizedRadius),
+        officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
         geofenceEnabled: Value(_geofenceEnabled),
-        checkinReminderEnabled: Value(_checkInRemindEnabled),
-        checkoutReminderEnabled: Value(_checkOutRemindEnabled),
+        checkinReminderEnabled: const Value(true),
+        checkoutReminderEnabled: const Value(false),
       ),
     );
 
@@ -154,7 +166,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         enabled: _geofenceEnabled,
         lat: lat,
         lng: lng,
-        radius: normalizedRadius,
+        radius: _defaultOfficeRadiusMeters,
       );
       DebugEventLog.add('GEOFENCE_SAVE', 'syncGeofence success');
     } catch (e) {
@@ -213,7 +225,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            '已使用${resolved.provider}定位更新围栏中心：${_latController.text}, ${_lngController.text}',
+            '已使用${resolved.provider}定位更新公司范围',
           ),
         ),
       );
@@ -327,7 +339,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFFF3F6FC);
+    const bg = Color(0xFFF5F7FB);
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -343,325 +355,18 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
         children: [
-          _glassCard(
-            title: '班次规则',
-            icon: Icons.schedule_rounded,
-            child: Column(
-              children: [
-                _rowField('上班时间', _startController),
-                _rowField('下班时间', _endController),
-                _rowField('迟到宽限(分钟)', _lateController,
-                    keyboardType: TextInputType.number),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'single', label: Text('单休')),
-                      ButtonSegment(value: 'double', label: Text('双休')),
-                    ],
-                    selected: {_weekendType},
-                    onSelectionChanged: (v) =>
-                        setState(() => _weekendType = v.first),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _glassCard(
-            title: '到公司自动签到',
-            icon: Icons.location_on_rounded,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7F9FE),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: _geofenceEnabled
-                              ? const Color(0xFFE0F2FE)
-                              : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          Icons.location_searching_rounded,
-                          color: _geofenceEnabled
-                              ? const Color(0xFF0369A1)
-                              : const Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '到公司自动签到',
-                              style: TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              '进入公司范围后自动记录上班',
-                              style: TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: _geofenceEnabled,
-                        activeThumbColor: const Color(0xFF1D4ED8),
-                        onChanged: (v) async {
-                          setState(() => _geofenceEnabled = v);
-                          await _saveGeofenceOnly();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F63F2),
-                          side: const BorderSide(color: Color(0xFFC7D8FF)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: _useCurrentLocation,
-                        icon: const Icon(Icons.my_location_rounded, size: 18),
-                        label: const Text(
-                          '当前位置',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0F766E),
-                          side: const BorderSide(color: Color(0xFF99F6E4)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          final state = await AttendanceGeofenceReminderService
-                              .ensureSystemPermissions(
-                            requestIfNeeded: true,
-                          );
-                          if (!mounted) return;
-                          final msg = state.ready
-                              ? '权限已就绪（定位/通知）'
-                              : '权限未完全开启：请检查定位服务、定位权限、通知权限（VIVO 还需自启动与后台高耗电白名单）';
-                          messenger.showSnackBar(SnackBar(content: Text(msg)));
-                        },
-                        icon:
-                            const Icon(Icons.verified_user_outlined, size: 18),
-                        label: const Text(
-                          '系统权限',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFF),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.sensors_rounded,
-                        size: 18,
-                        color: Color(0xFF4664C6),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _providerSummary,
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _rowField('纬度', _latController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true)),
-                _rowField('经度', _lngController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true)),
-                _rowField('范围半径(m)', _radiusController,
-                    keyboardType: TextInputType.number),
-                const SizedBox(height: 2),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _quickRadius(100),
-                    _quickRadius(200),
-                    _quickRadius(300),
-                    _quickRadius(500),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _switchTile('上班前通知', _checkInRemindEnabled,
-                    (v) => setState(() => _checkInRemindEnabled = v)),
-                _switchTile('下班通知', _checkOutRemindEnabled,
-                    (v) => setState(() => _checkOutRemindEnabled = v)),
-                if (_todayGeofenceState != null)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFF),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.radar_rounded,
-                            size: 18, color: Color(0xFF4664C6)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '今日：${_todayGeofenceState!.wasInside ? '围栏内' : '围栏外'} · 已触发${_todayGeofenceState!.triggeredCount}次',
-                            style: const TextStyle(
-                                fontSize: 13, color: Color(0xFF4B587C)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _glassCard(
-            title: '考勤备份',
-            icon: Icons.inventory_2_rounded,
-            child: Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1F63F2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _exportAttendanceBackup,
-                    icon: const Icon(Icons.ios_share_rounded, size: 18),
-                    label: const Text(
-                      '生成并分享备份',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_backups.isEmpty)
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '暂无本地备份记录',
-                      style: TextStyle(color: Color(0xFF74819E)),
-                    ),
-                  )
-                else
-                  ..._backups.map(_backupTile),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _glassCard(
-            title: '考勤云备份',
-            icon: Icons.cloud_done_rounded,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '当前账号：${widget.accountKey}',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _cloudActionButton(
-                        icon: Icons.cloud_upload_outlined,
-                        label: '上传云端',
-                        filled: true,
-                        onPressed: _cloudBusy ? null : _uploadAttendanceToCloud,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _cloudActionButton(
-                        icon: Icons.cloud_download_outlined,
-                        label: '云端恢复',
-                        filled: false,
-                        onPressed:
-                            _cloudBusy ? null : _downloadAttendanceFromCloud,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_cloudBusy) ...[
-                  const SizedBox(height: 10),
-                  const LinearProgressIndicator(minHeight: 3),
-                ],
-              ],
-            ),
-          ),
+          _workRuleCard(),
+          const SizedBox(height: 12),
+          _autoCheckInCard(),
+          const SizedBox(height: 12),
+          _dataBackupCard(),
           const SizedBox(height: 18),
           FilledButton(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: _save,
             child: const Text('保存设置'),
@@ -671,38 +376,341 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     );
   }
 
-  Widget _cloudActionButton({
+  Widget _workRuleCard() {
+    return _settingsCard(
+      title: '班次规则',
+      icon: Icons.schedule_rounded,
+      trailing: Text(
+        _weekendType == 'double' ? '双休' : '单休',
+        style: const TextStyle(
+          color: Color(0xFF475569),
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      child: Column(
+        children: [
+          _rowField('上班时间', _startController),
+          _rowField('下班时间', _endController),
+          _rowField(
+            '迟到宽限(分钟)',
+            _lateController,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 2),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              segments: const [
+                ButtonSegment(value: 'single', label: Text('单休')),
+                ButtonSegment(value: 'double', label: Text('双休')),
+              ],
+              selected: {_weekendType},
+              onSelectionChanged: (v) => setState(() => _weekendType = v.first),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _autoCheckInCard() {
+    return _settingsCard(
+      title: '签到',
+      icon: Icons.location_on_rounded,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '自动签到',
+            style: TextStyle(
+              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Switch(
+            value: _geofenceEnabled,
+            activeThumbColor: const Color(0xFF1D4ED8),
+            onChanged: (v) async {
+              setState(() => _geofenceEnabled = v);
+              await _saveGeofenceOnly();
+            },
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _statusStrip(
+            icon: Icons.radar_rounded,
+            text: _todayGeofenceState == null
+                ? '进入公司范围自动记录上班，自动签到后弹窗反馈'
+                : '今日：${_todayGeofenceState!.wasInside ? '范围内' : '范围外'} · 已触发${_todayGeofenceState!.triggeredCount}次 · 自动签到后弹窗反馈',
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _compactOutlineButton(
+                  icon: Icons.my_location_rounded,
+                  label: '当前位置',
+                  onPressed: _useCurrentLocation,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _compactOutlineButton(
+                  icon: Icons.verified_user_outlined,
+                  label: '系统权限',
+                  onPressed: _checkSystemPermissions,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _statusStrip(
+            icon: Icons.sensors_rounded,
+            text: _providerSummary,
+            muted: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dataBackupCard() {
+    final latestBackup = _backups.isEmpty ? null : _backups.first;
+    return _settingsCard(
+      title: '数据备份',
+      icon: Icons.inventory_2_rounded,
+      trailing: Text(
+        widget.accountKey,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF64748B),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _statusStrip(
+            icon: Icons.folder_copy_rounded,
+            text: latestBackup == null
+                ? '最近暂无本地备份'
+                : '最近备份：${latestBackup.fileName}',
+            muted: true,
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1F63F2),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+              ),
+              onPressed: _exportAttendanceBackup,
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: const Text(
+                '生成并分享备份',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _compactOutlineButton(
+                  icon: Icons.cloud_upload_outlined,
+                  label: '上传云端',
+                  onPressed: _cloudBusy ? null : _uploadAttendanceToCloud,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _compactOutlineButton(
+                  icon: Icons.cloud_download_outlined,
+                  label: '云端恢复',
+                  onPressed: _cloudBusy ? null : _downloadAttendanceFromCloud,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          TextButton.icon(
+            onPressed: () =>
+                setState(() => _showBackupRecords = !_showBackupRecords),
+            icon: Icon(
+              _showBackupRecords
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+            ),
+            label: const Text('备份记录'),
+          ),
+          if (_cloudBusy) ...[
+            const SizedBox(height: 4),
+            const LinearProgressIndicator(minHeight: 3),
+          ],
+          if (_showBackupRecords) ...[
+            const SizedBox(height: 4),
+            if (_backups.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '暂无本地备份记录',
+                  style: TextStyle(color: Color(0xFF74819E)),
+                ),
+              )
+            else
+              ..._backups.map(_backupTile),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _checkSystemPermissions() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final state =
+        await AttendanceGeofenceReminderService.ensureSystemPermissions(
+      requestIfNeeded: true,
+    );
+    if (!mounted) return;
+    final msg = state.ready
+        ? '权限已就绪（定位/通知）'
+        : '权限未完全开启：请检查定位服务、定位权限、通知权限（VIVO 还需自启动与后台高耗电白名单）';
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Widget _settingsCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    Widget? trailing,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5EAF3)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F0C235A),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF1FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: const Color(0xFF1F63F2), size: 17),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    color: Color(0xFF0F172A),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _statusStrip({
+    required IconData icon,
+    required String text,
+    bool muted = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: muted ? const Color(0xFFF8FAFC) : const Color(0xFFF1F6FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: muted ? const Color(0xFFE8EDF5) : const Color(0xFFDCE8FF),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: muted ? const Color(0xFF64748B) : const Color(0xFF1F63F2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color:
+                    muted ? const Color(0xFF64748B) : const Color(0xFF334155),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactOutlineButton({
     required IconData icon,
     required String label,
-    required bool filled,
     required VoidCallback? onPressed,
   }) {
-    final shape =
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
-    if (filled) {
-      return FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF1F63F2),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape: shape,
-          elevation: 0,
-        ),
-        onPressed: onPressed,
-        icon: Icon(icon, size: 19),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-      );
-    }
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF0F766E),
-        side: const BorderSide(color: Color(0xFF99F6E4)),
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        shape: shape,
+        foregroundColor: const Color(0xFF1F63F2),
+        side: const BorderSide(color: Color(0xFFC7D8FF)),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: onPressed,
-      icon: Icon(icon, size: 19),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
     );
   }
 
@@ -712,7 +720,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F9FE),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
@@ -751,95 +759,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             icon: const Icon(Icons.delete_outline_rounded),
             tooltip: '删除',
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _switchTile(String title, bool value, ValueChanged<bool> onChanged) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FE),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        activeThumbColor: const Color(0xFF1D4ED8),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        value: value,
-        onChanged: (v) async {
-          onChanged(v);
-          if (title == '到公司自动签到' || title == '上班前通知' || title == '下班通知') {
-            await _saveGeofenceOnly();
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _quickRadius(int radius) {
-    final selected = _radiusController.text.trim() == '$radius';
-    return ChoiceChip(
-      label: Text('${radius}m'),
-      selected: selected,
-      onSelected: (_) => setState(() => _radiusController.text = '$radius'),
-      side: BorderSide(
-          color: selected ? const Color(0xFF8DB0FF) : const Color(0xFFD7DDF0)),
-      showCheckmark: false,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      selectedColor: const Color(0xFFDDE8FF),
-      backgroundColor: Colors.white,
-      elevation: selected ? 0 : 0,
-      labelStyle: TextStyle(
-        color: selected ? const Color(0xFF224FD4) : const Color(0xFF45506A),
-        fontWeight: FontWeight.w700,
-        fontSize: 16,
-      ),
-    );
-  }
-
-  Widget _glassCard(
-      {required String title, required IconData icon, required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x140C235A),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2F57E8), Color(0xFF1D9DE8)],
-                  ),
-                ),
-                child: Icon(icon, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
         ],
       ),
     );
