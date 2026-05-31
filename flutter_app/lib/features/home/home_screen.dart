@@ -739,7 +739,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _DebugLogReport(
       appVersion: appVersion,
       dbStatus: dbStatus,
-      updateCheckStatus: _latestUpdateCheckText(events),
       sqliteSchemaVersion: _database.schemaVersion,
       orderCount: orderCount,
       orderItemCount: orderItemCount,
@@ -772,7 +771,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     for (final event in events.reversed.take(12)) {
       final normalized = event.toLowerCase();
       if (event.contains('[APP_UPDATE]')) {
-        readable.add('更新检查：${_compactDebugEvent(event)}');
+        readable.add(_humanReadableUpdateEvent(event));
       } else if (normalized.contains('failed') ||
           normalized.contains('error')) {
         readable.add('系统操作失败：$event');
@@ -789,24 +788,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return readable;
   }
 
-  String _latestUpdateCheckText(List<String> events) {
-    for (final event in events.reversed) {
-      if (!event.contains('[APP_UPDATE]')) {
-        continue;
+  String _humanReadableUpdateEvent(String event) {
+    final latestMatch = RegExp(r'latest=([^\s]+)').firstMatch(event);
+    final currentMatch = RegExp(r'current=([^\s]+)').firstMatch(event);
+    final hasUpdateMatch = RegExp(r'hasUpdate=([^\s]+)').firstMatch(event);
+    final latest = latestMatch?.group(1);
+    final current = currentMatch?.group(1);
+    final hasUpdate = hasUpdateMatch?.group(1);
+    if (latest != null && current != null) {
+      if (hasUpdate == 'true') {
+        return '发现新版本 $latest（本机 $current）';
       }
-      final latestMatch = RegExp(r'latest=([^\s]+)').firstMatch(event);
-      final currentMatch = RegExp(r'current=([^\s]+)').firstMatch(event);
-      final hasUpdateMatch = RegExp(r'hasUpdate=([^\s]+)').firstMatch(event);
-      final latest = latestMatch?.group(1);
-      final current = currentMatch?.group(1);
-      final hasUpdate = hasUpdateMatch?.group(1);
-      if (latest != null && current != null) {
-        final suffix = hasUpdate == 'true' ? '发现新版本' : '已是最新版';
-        return '最新 $latest（本机 $current，$suffix）';
-      }
-      return _compactDebugEvent(event);
+      return '已是最新版 $latest';
     }
-    return '尚未检查';
+    return '更新检查：${_compactDebugEvent(event)}';
   }
 
   String _compactDebugEvent(String event) {
@@ -822,7 +817,6 @@ class _DebugLogReport {
   const _DebugLogReport({
     required this.appVersion,
     required this.dbStatus,
-    required this.updateCheckStatus,
     required this.sqliteSchemaVersion,
     required this.orderCount,
     required this.orderItemCount,
@@ -834,7 +828,6 @@ class _DebugLogReport {
 
   final String appVersion;
   final String dbStatus;
-  final String updateCheckStatus;
   final int sqliteSchemaVersion;
   final int? orderCount;
   final int? orderItemCount;
@@ -918,11 +911,6 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
               _DebugStatusCard(
                 label: '当前版本',
                 value: report.appVersion,
-              ),
-              const SizedBox(height: 8),
-              _DebugStatusCard(
-                label: '最新检查版本',
-                value: report.updateCheckStatus,
               ),
               const SizedBox(height: 8),
               _DebugStatusCard(

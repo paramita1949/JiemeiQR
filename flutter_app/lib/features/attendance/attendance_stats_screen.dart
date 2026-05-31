@@ -146,6 +146,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
               _TableCard(
                 title: '上下班明细',
                 headers: const ['日期', '上班/下班', '状态'],
+                collapseWhenMoreThan: 5,
                 rows: _rows.map((r) {
                   final hasBoth = r.checkInAt != null && r.checkOutAt != null;
                   final status = (!r.isWorkday && hasBoth)
@@ -395,21 +396,45 @@ class _OverviewMetric extends StatelessWidget {
   }
 }
 
-class _TableCard extends StatelessWidget {
+class _TableCard extends StatefulWidget {
   const _TableCard({
     required this.title,
     required this.headers,
     required this.rows,
     required this.loading,
+    this.collapseWhenMoreThan,
   });
 
   final String title;
   final List<String> headers;
   final List<List<String>> rows;
   final bool loading;
+  final int? collapseWhenMoreThan;
+
+  @override
+  State<_TableCard> createState() => _TableCardState();
+}
+
+class _TableCardState extends State<_TableCard> {
+  bool _expanded = false;
+
+  bool get _canCollapse {
+    final limit = widget.collapseWhenMoreThan;
+    return limit != null && widget.rows.length > limit;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TableCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rows.length != widget.rows.length ||
+        oldWidget.collapseWhenMoreThan != widget.collapseWhenMoreThan) {
+      _expanded = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final collapsed = _canCollapse && !_expanded;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -420,40 +445,29 @@ class _TableCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
+          Text(widget.title,
               style:
                   const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: headers
-                  .map((h) => Expanded(
-                        child: Text(h,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF334155))),
-                      ))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (loading)
+          if (widget.loading)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (rows.isEmpty)
+          else if (widget.rows.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: Text('暂无数据')),
             )
-          else
-            ...rows.map(
+          else if (collapsed)
+            _CollapsedTableSummary(
+              count: widget.rows.length,
+              onExpand: () => setState(() => _expanded = true),
+            )
+          else ...[
+            _TableHeader(headers: widget.headers),
+            const SizedBox(height: 8),
+            ...widget.rows.map(
               (r) => Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding:
@@ -492,6 +506,78 @@ class _TableCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (_canCollapse)
+              TextButton(
+                onPressed: () => setState(() => _expanded = false),
+                child: const Text('收起'),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TableHeader extends StatelessWidget {
+  const _TableHeader({required this.headers});
+
+  final List<String> headers;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: headers
+            .map((h) => Expanded(
+                  child: Text(h,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155))),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _CollapsedTableSummary extends StatelessWidget {
+  const _CollapsedTableSummary({
+    required this.count,
+    required this.onExpand,
+  });
+
+  final int count;
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '已收起 $count 条明细',
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onExpand,
+            child: Text('展开全部 $count 条'),
+          ),
         ],
       ),
     );
