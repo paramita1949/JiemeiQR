@@ -150,6 +150,9 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               onRestoreBackup: _cloudSession == null
                   ? null
                   : (backup) => _confirmAndRestoreCloudBackup(backup: backup),
+              onManageAccounts: _cloudSession?.canUpload == true
+                  ? _showCloudAccountManager
+                  : null,
             ),
             const SizedBox(height: 16),
             Row(
@@ -705,6 +708,20 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       _loadingCloudBackups = false;
     });
     _showSnack('已退出云备份账号');
+  }
+
+  Future<void> _showCloudAccountManager() async {
+    final session = _cloudSession;
+    if (session == null || !session.canUpload) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _CloudAccountManagerDialog(
+        service: _cloudBackupService,
+        session: session,
+      ),
+    );
   }
 
   Future<void> _loadCloudBackups(CloudBackupSession session) async {
@@ -1426,6 +1443,384 @@ class _PairingCodeDialogState extends State<_PairingCodeDialog> {
   }
 }
 
+class _CloudAccountManagerDialog extends StatefulWidget {
+  const _CloudAccountManagerDialog({
+    required this.service,
+    required this.session,
+  });
+
+  final CloudBackupService service;
+  final CloudBackupSession session;
+
+  @override
+  State<_CloudAccountManagerDialog> createState() =>
+      _CloudAccountManagerDialogState();
+}
+
+class _CloudAccountManagerDialogState
+    extends State<_CloudAccountManagerDialog> {
+  var _loading = true;
+  var _saving = false;
+  String? _errorText;
+  List<CloudManagedAccount> _accounts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadAccounts());
+  }
+
+  Future<void> _loadAccounts() async {
+    setState(() {
+      _loading = true;
+      _errorText = null;
+    });
+    try {
+      final accounts =
+          await widget.service.listAccounts(session: widget.session);
+      if (mounted) {
+        setState(() => _accounts = accounts);
+      }
+    } on CloudBackupRequestException catch (error) {
+      if (mounted) {
+        setState(() => _errorText = error.debugMessage);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _errorText = '$error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _runAccountAction(Future<void> Function() action) async {
+    setState(() {
+      _saving = true;
+      _errorText = null;
+    });
+    try {
+      await action();
+      await _loadAccounts();
+    } on CloudBackupRequestException catch (error) {
+      if (mounted) {
+        setState(() => _errorText = error.debugMessage);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _errorText = '$error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _showCreateDialog() async {
+    final result = await showDialog<_CloudAccountFormResult>(
+      context: context,
+      builder: (context) => const _CloudAccountFormDialog(),
+    );
+    if (result == null) {
+      return;
+    }
+    await _runAccountAction(
+      () => widget.service.createAccount(
+        session: widget.session,
+        email: result.email,
+        password: result.password,
+        role: result.role,
+      ),
+    );
+  }
+
+  Future<void> _showPasswordDialog(CloudManagedAccount account) async {
+    final result = await showDialog<_CloudAccountFormResult>(
+      context: context,
+      builder: (context) => _CloudAccountFormDialog(
+        email: account.email,
+        fixedEmail: true,
+        title: '修改密码',
+        submitText: '保存密码',
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+    await _runAccountAction(
+      () => widget.service.updateAccountPassword(
+        session: widget.session,
+        email: account.email,
+        password: result.password,
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(CloudManagedAccount account) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除账号'),
+        content: Text('确定删除 ${account.email}？删除后该账号无法登录云备份。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _runAccountAction(
+        () => widget.service.deleteAccount(
+          session: widget.session,
+          email: account.email,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('账号管理'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_errorText != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1F2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _errorText!,
+                  style: const TextStyle(
+                    color: Color(0xFFBE123C),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _accounts.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final account = _accounts[index];
+                    final isSelf = account.email == widget.session.email;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(account.email),
+                      subtitle: Text(
+                        account.role == CloudBackupRole.admin
+                            ? '管理员：可上传、恢复、管理账号'
+                            : '普通账号：只能恢复云备份',
+                      ),
+                      trailing: Wrap(
+                        spacing: 4,
+                        children: [
+                          IconButton(
+                            tooltip: '复制默认密码',
+                            onPressed: () {
+                              Clipboard.setData(
+                                const ClipboardData(text: 'qqmima'),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('默认密码已复制')),
+                              );
+                            },
+                            icon: const Icon(Icons.key_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '修改密码',
+                            onPressed: _saving
+                                ? null
+                                : () => _showPasswordDialog(account),
+                            icon: const Icon(Icons.lock_reset_outlined),
+                          ),
+                          IconButton(
+                            tooltip: isSelf ? '不能删除当前登录账号' : '删除账号',
+                            onPressed: _saving || isSelf
+                                ? null
+                                : () => _confirmDelete(account),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _showCreateDialog,
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          label: const Text('新建账号'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CloudAccountFormResult {
+  const _CloudAccountFormResult({
+    required this.email,
+    required this.password,
+    required this.role,
+  });
+
+  final String email;
+  final String password;
+  final CloudBackupRole role;
+}
+
+class _CloudAccountFormDialog extends StatefulWidget {
+  const _CloudAccountFormDialog({
+    this.email = '',
+    this.fixedEmail = false,
+    this.title = '新建账号',
+    this.submitText = '创建',
+  });
+
+  final String email;
+  final bool fixedEmail;
+  final String title;
+  final String submitText;
+
+  @override
+  State<_CloudAccountFormDialog> createState() =>
+      _CloudAccountFormDialogState();
+}
+
+class _CloudAccountFormDialogState extends State<_CloudAccountFormDialog> {
+  late final TextEditingController _emailController;
+  final _passwordController = TextEditingController(text: 'qqmima');
+  var _role = CloudBackupRole.viewer;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.email);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+    if (!email.contains('@') || !email.contains('.')) {
+      setState(() => _errorText = '请输入正确邮箱账号');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _errorText = '密码至少 6 位');
+      return;
+    }
+    Navigator.of(context).pop(
+      _CloudAccountFormResult(
+        email: email,
+        password: password,
+        role: _role,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _emailController,
+              enabled: !widget.fixedEmail,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: '邮箱账号'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _passwordController,
+              decoration: const InputDecoration(labelText: '新密码'),
+            ),
+            if (!widget.fixedEmail) ...[
+              const SizedBox(height: 12),
+              SegmentedButton<CloudBackupRole>(
+                segments: const [
+                  ButtonSegment(
+                    value: CloudBackupRole.viewer,
+                    label: Text('只恢复'),
+                  ),
+                  ButtonSegment(
+                    value: CloudBackupRole.admin,
+                    label: Text('管理员'),
+                  ),
+                ],
+                selected: {_role},
+                onSelectionChanged: (value) {
+                  setState(() => _role = value.first);
+                },
+              ),
+            ],
+            if (_errorText != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _errorText!,
+                style: const TextStyle(color: Color(0xFFBE123C)),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.submitText),
+        ),
+      ],
+    );
+  }
+}
+
 class _CloudBackupPanel extends StatelessWidget {
   const _CloudBackupPanel({
     required this.loading,
@@ -1440,6 +1835,7 @@ class _CloudBackupPanel extends StatelessWidget {
     required this.onUpload,
     required this.onRestore,
     required this.onRestoreBackup,
+    required this.onManageAccounts,
   });
 
   final bool loading;
@@ -1454,6 +1850,7 @@ class _CloudBackupPanel extends StatelessWidget {
   final VoidCallback? onUpload;
   final VoidCallback? onRestore;
   final ValueChanged<CloudBackupRemoteBackup>? onRestoreBackup;
+  final VoidCallback? onManageAccounts;
 
   @override
   Widget build(BuildContext context) {
@@ -1542,6 +1939,17 @@ class _CloudBackupPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          if (current?.canUpload == true && onManageAccounts != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: uploading || restoring ? null : onManageAccounts,
+                icon: const Icon(Icons.manage_accounts_outlined),
+                label: const Text('账号管理'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (current == null)
             SizedBox(
               width: double.infinity,

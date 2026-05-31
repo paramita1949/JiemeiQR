@@ -62,7 +62,29 @@ class CloudBackupRemoteBackup {
   final int? sizeBytes;
 }
 
+class CloudManagedAccount {
+  const CloudManagedAccount({
+    required this.email,
+    required this.role,
+    this.id,
+  });
+
+  final String email;
+  final CloudBackupRole role;
+  final String? id;
+
+  factory CloudManagedAccount.fromJson(Map<String, Object?> json) {
+    return CloudManagedAccount(
+      email: json['email']?.toString() ?? '',
+      role: CloudBackupRole.fromValue(json['role']?.toString()),
+      id: json['id']?.toString(),
+    );
+  }
+}
+
 abstract class CloudBackupApi {
+  String get sessionScope;
+
   Future<CloudBackupSession> signIn({
     required String email,
     required String password,
@@ -92,6 +114,28 @@ abstract class CloudBackupApi {
     required CloudBackupSession session,
     required List<String> objectPaths,
   });
+
+  Future<List<CloudManagedAccount>> listAccounts({
+    required CloudBackupSession session,
+  });
+
+  Future<void> createAccount({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+    required CloudBackupRole role,
+  });
+
+  Future<void> updateAccountPassword({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+  });
+
+  Future<void> deleteAccount({
+    required CloudBackupSession session,
+    required String email,
+  });
 }
 
 class SupabaseCloudBackupApi implements CloudBackupApi {
@@ -108,12 +152,16 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
       'sb_publishable_t8bFXn5R3E4MCaMegvxEhw_3YW7ZOtV';
   static const defaultBucketName = 'qrscan-backups';
   static const defaultObjectPath = 'latest/jiemei-backup.jiemei';
+  static const accountManagerFunction = 'qrscan-account-admin';
 
   final String projectUrl;
   final String publishableKey;
   final String bucketName;
   final String objectPath;
   final HttpClient? _httpClient;
+
+  @override
+  String get sessionScope => '$projectUrl|$publishableKey';
 
   @override
   Future<CloudBackupSession> signIn({
@@ -278,6 +326,73 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
     );
   }
 
+  @override
+  Future<List<CloudManagedAccount>> listAccounts({
+    required CloudBackupSession session,
+  }) async {
+    final response = await _sendFunctionJson(
+      session: session,
+      body: {'action': 'list'},
+    );
+    final accounts = response['accounts'];
+    if (accounts is! List) {
+      return const [];
+    }
+    return accounts
+        .whereType<Map>()
+        .map((item) => CloudManagedAccount.fromJson(item.cast()))
+        .where((account) => account.email.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  Future<void> createAccount({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+    required CloudBackupRole role,
+  }) async {
+    await _sendFunctionJson(
+      session: session,
+      body: {
+        'action': 'create',
+        'email': email.trim(),
+        'password': password,
+        'role': role.name,
+      },
+    );
+  }
+
+  @override
+  Future<void> updateAccountPassword({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+  }) async {
+    await _sendFunctionJson(
+      session: session,
+      body: {
+        'action': 'updatePassword',
+        'email': email.trim(),
+        'password': password,
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteAccount({
+    required CloudBackupSession session,
+    required String email,
+  }) async {
+    await _sendFunctionJson(
+      session: session,
+      body: {
+        'action': 'delete',
+        'email': email.trim(),
+      },
+    );
+  }
+
   Future<Map<String, Object?>> _sendJson({
     required String method,
     required String path,
@@ -340,6 +455,21 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
         client.close(force: true);
       }
     }
+  }
+
+  Future<Map<String, Object?>> _sendFunctionJson({
+    required CloudBackupSession session,
+    required Map<String, Object?> body,
+  }) {
+    return _sendJson(
+      method: 'POST',
+      path: '/functions/v1/$accountManagerFunction',
+      headers: {
+        HttpHeaders.authorizationHeader: 'Bearer ${session.accessToken}',
+        'apikey': publishableKey,
+      },
+      body: body,
+    );
   }
 
   CloudBackupRemoteBackup? _remoteBackupFromJson(Map json) {
@@ -412,6 +542,10 @@ class CloudBackupService {
     try {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is Map<String, Object?>) {
+        if (decoded['sessionScope'] != api.sessionScope) {
+          await file.delete();
+          return null;
+        }
         final session = CloudBackupSession.fromJson(decoded);
         if (session.email.isNotEmpty && session.accessToken.isNotEmpty) {
           return session;
@@ -538,6 +672,60 @@ class CloudBackupService {
     );
   }
 
+  Future<List<CloudManagedAccount>> listAccounts({
+    required CloudBackupSession session,
+  }) {
+    return _withFreshSession(
+      session,
+      (freshSession) => api.listAccounts(session: freshSession),
+    );
+  }
+
+  Future<void> createAccount({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+    required CloudBackupRole role,
+  }) {
+    return _withFreshSession(
+      session,
+      (freshSession) => api.createAccount(
+        session: freshSession,
+        email: email,
+        password: password,
+        role: role,
+      ),
+    );
+  }
+
+  Future<void> updateAccountPassword({
+    required CloudBackupSession session,
+    required String email,
+    required String password,
+  }) {
+    return _withFreshSession(
+      session,
+      (freshSession) => api.updateAccountPassword(
+        session: freshSession,
+        email: email,
+        password: password,
+      ),
+    );
+  }
+
+  Future<void> deleteAccount({
+    required CloudBackupSession session,
+    required String email,
+  }) {
+    return _withFreshSession(
+      session,
+      (freshSession) => api.deleteAccount(
+        session: freshSession,
+        email: email,
+      ),
+    );
+  }
+
   Future<String> downloadAttendanceBackup({
     required CloudBackupSession session,
     required String accountKey,
@@ -555,7 +743,10 @@ class CloudBackupService {
   Future<void> _saveSession(CloudBackupSession session) async {
     final file = await _sessionFile();
     await file.parent.create(recursive: true);
-    await file.writeAsString(jsonEncode(session.toJson()));
+    await file.writeAsString(jsonEncode({
+      ...session.toJson(),
+      'sessionScope': api.sessionScope,
+    }));
   }
 
   Future<T> _withFreshSession<T>(
@@ -681,6 +872,9 @@ class CloudBackupRequestException implements Exception {
 
   String get debugMessage {
     final normalized = _compactMessage(message);
+    if (_looksLikeInvalidLogin(normalized)) {
+      return '账号或密码错误，请重新输入';
+    }
     final hint = normalized.toLowerCase().contains('exp')
         ? '。可能是云账号登录已过期，请退出云账号后重新登录'
         : '';
@@ -706,5 +900,12 @@ class CloudBackupRequestException implements Exception {
       }
     } catch (_) {}
     return value.trim().isEmpty ? '无返回内容' : value.trim();
+  }
+
+  static bool _looksLikeInvalidLogin(String value) {
+    final lower = value.toLowerCase();
+    return lower.contains('invalid login credentials') ||
+        lower.contains('invalid_grant') ||
+        lower.contains('email not confirmed');
   }
 }
