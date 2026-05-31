@@ -20,6 +20,45 @@ class AttendanceDao {
     return trimmed.isEmpty ? 'local' : trimmed;
   }
 
+  Future<bool> adoptLegacyLocalDataIfAccountEmpty() async {
+    if (accountKey == 'local') {
+      return false;
+    }
+    final currentRows = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.accountKey.equals(accountKey))
+          ..limit(1))
+        .get();
+    if (currentRows.isNotEmpty) {
+      return false;
+    }
+    final legacyRows = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.accountKey.equals('local'))
+          ..limit(1))
+        .get();
+    if (legacyRows.isEmpty) {
+      return false;
+    }
+
+    await _db.transaction(() async {
+      await (_db.delete(_db.attendanceRules)
+            ..where((t) => t.accountKey.equals(accountKey)))
+          .go();
+      await (_db.update(_db.attendanceRules)
+            ..where((t) => t.accountKey.equals('local')))
+          .write(AttendanceRulesCompanion(accountKey: Value(accountKey)));
+      await (_db.update(_db.attendanceRecords)
+            ..where((t) => t.accountKey.equals('local')))
+          .write(AttendanceRecordsCompanion(accountKey: Value(accountKey)));
+      await (_db.update(_db.patchRequests)
+            ..where((t) => t.accountKey.equals('local')))
+          .write(PatchRequestsCompanion(accountKey: Value(accountKey)));
+      await (_db.update(_db.geofenceDailyStates)
+            ..where((t) => t.accountKey.equals('local')))
+          .write(GeofenceDailyStatesCompanion(accountKey: Value(accountKey)));
+    });
+    return true;
+  }
+
   Future<AttendanceRule> getRule() async {
     final existing = await (_db.select(
       _db.attendanceRules,

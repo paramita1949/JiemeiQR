@@ -28,6 +28,7 @@ class DatabaseMergeService {
     final db = sqlite.sqlite3.open(output.path);
     try {
       db.execute("ATTACH DATABASE '${_escape(cloud.path)}' AS cloud;");
+      _ensureCloudSchemaCompatibility(db);
       db.execute('PRAGMA foreign_keys = OFF;');
       db.execute('BEGIN IMMEDIATE;');
       try {
@@ -51,6 +52,58 @@ class DatabaseMergeService {
       db.close();
     }
     return output;
+  }
+
+  void _ensureCloudSchemaCompatibility(sqlite.Database db) {
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'batches',
+      column: 'frozen_boxes',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'batches',
+      column: 'stacking_pattern',
+      definition: 'TEXT',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'batches',
+      column: 'ts_required',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'orders',
+      column: 'is_urgent',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'orders',
+      column: 'scanner_gun',
+      definition: 'TEXT',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'order_items',
+      column: 'is_picked',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      schema: 'cloud',
+      table: 'order_items',
+      column: 'is_exception',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
   }
 
   void _mergeScannerGuns(sqlite.Database db) {
@@ -285,6 +338,31 @@ class DatabaseMergeService {
       "SELECT name FROM $schema.sqlite_master WHERE type = 'table' AND name = ?;",
       [table],
     ).isNotEmpty;
+  }
+
+  bool _hasColumn(
+    sqlite.Database db, {
+    required String schema,
+    required String table,
+    required String column,
+  }) {
+    return db
+        .select('PRAGMA $schema.table_info($table);')
+        .any((row) => row['name'] == column);
+  }
+
+  void _addColumnIfMissing(
+    sqlite.Database db, {
+    required String schema,
+    required String table,
+    required String column,
+    required String definition,
+  }) {
+    if (!_hasTable(db, schema: schema, table: table) ||
+        _hasColumn(db, schema: schema, table: table, column: column)) {
+      return;
+    }
+    db.execute('ALTER TABLE $schema.$table ADD COLUMN $column $definition;');
   }
 
   String _escape(String value) => value.replaceAll("'", "''");

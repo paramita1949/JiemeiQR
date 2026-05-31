@@ -446,8 +446,29 @@ class CloudBackupService {
   Future<List<CloudBackupRemoteBackup>> listBackups({
     required CloudBackupSession session,
     int limit = 5,
-  }) {
-    return api.listBackups(session: session, limit: limit);
+  }) async {
+    final backups = await api.listBackups(session: session, limit: limit);
+    if (backups.isNotEmpty) {
+      return backups;
+    }
+    try {
+      await api.downloadPackage(
+        session: session,
+        objectPath: SupabaseCloudBackupApi.defaultObjectPath,
+      );
+      return [
+        CloudBackupRemoteBackup(
+          objectPath: SupabaseCloudBackupApi.defaultObjectPath,
+          fileName: p.basename(SupabaseCloudBackupApi.defaultObjectPath),
+          createdAt: (nowProvider ?? DateTime.now)(),
+        ),
+      ];
+    } on CloudBackupRequestException catch (error) {
+      if (error.statusCode == 404) {
+        return const [];
+      }
+      rethrow;
+    }
   }
 
   Future<void> uploadAttendanceBackup({

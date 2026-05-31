@@ -48,6 +48,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (!mounted) return;
     _accountKey = accountKey;
     _dao = AttendanceDao(widget.database, accountKey: accountKey);
+    await _dao.adoptLegacyLocalDataIfAccountEmpty();
     await _reload();
     unawaited(_runForegroundAutoCheckIn());
     unawaited(_consumeInitialImport());
