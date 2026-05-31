@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_account_resolver.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_record_edit_screen.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_rule_screen.dart';
@@ -25,7 +26,8 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  late final AttendanceDao _dao;
+  late AttendanceDao _dao;
+  String _accountKey = AttendanceAccountResolver.localAccountKey;
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
   MonthAttendanceStats? _stats;
   List<AttendanceRecord> _rows = const [];
@@ -37,8 +39,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   void initState() {
     super.initState();
-    _dao = AttendanceDao(widget.database);
-    unawaited(_reload());
+    _dao = AttendanceDao(widget.database, accountKey: _accountKey);
+    unawaited(_loadAccountAndStart());
+  }
+
+  Future<void> _loadAccountAndStart() async {
+    final accountKey = await const AttendanceAccountResolver().resolve();
+    if (!mounted) return;
+    _accountKey = accountKey;
+    _dao = AttendanceDao(widget.database, accountKey: accountKey);
+    await _reload();
     unawaited(_runForegroundAutoCheckIn());
     unawaited(_consumeInitialImport());
   }
@@ -47,6 +57,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     try {
       await AttendanceGeofenceReminderService.checkAndMaybeNotify(
         database: widget.database,
+        accountKey: _accountKey,
       );
       await _reload();
     } catch (_) {
@@ -65,9 +76,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         title: const Text('导入考勤备份'),
         content: Text('检测到备份文件：\n$path\n\n选择导入方式'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('合并导入')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('覆盖导入')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('合并导入')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('覆盖导入')),
         ],
       ),
     );
@@ -114,7 +131,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _openRules() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => AttendanceRuleScreen(database: widget.database),
+        builder: (_) => AttendanceRuleScreen(
+          database: widget.database,
+          accountKey: _accountKey,
+        ),
       ),
     );
     await _reload();
@@ -126,6 +146,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         builder: (_) => AttendanceStatsScreen(
           database: widget.database,
           initialMonth: _month,
+          accountKey: _accountKey,
         ),
       ),
     );
@@ -199,24 +220,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF1F63F2),
                           side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18)),
                         ),
                         onPressed: _openRules,
                         icon: const Icon(Icons.tune_rounded, size: 18),
-                        label: const Text('规则设置', style: TextStyle(fontWeight: FontWeight.w700)),
+                        label: const Text('规则设置',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF1F63F2),
                           side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18)),
                         ),
                         onPressed: _openStats,
                         icon: const Icon(Icons.bar_chart_rounded, size: 18),
-                        label: const Text('统计', style: TextStyle(fontWeight: FontWeight.w700)),
+                        label: const Text('统计',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -250,7 +277,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       children: [
                         const Text(
                           '签到明细',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w800),
                         ),
                         Text(monthLabel, style: const TextStyle(fontSize: 34)),
                       ],
@@ -330,7 +358,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           color: bg,
           borderRadius: BorderRadius.circular(999),
         ),
-        child: Text(text, style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
+        child: Text(text,
+            style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -391,9 +420,17 @@ class _HeroCheckInCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(nowText, style: const TextStyle(color: Color(0xFFDBEAFE), fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(nowText,
+              style: const TextStyle(
+                  color: Color(0xFFDBEAFE),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          Text(statusText, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+          Text(statusText,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -402,10 +439,13 @@ class _HeroCheckInCard extends StatelessWidget {
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF2A4FD0),
                 padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: onCheckIn,
-              child: Text(actionText, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+              child: Text(actionText,
+                  style: const TextStyle(
+                      fontSize: 30, fontWeight: FontWeight.w900)),
             ),
           ),
         ],
@@ -435,13 +475,20 @@ class _MonthSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(monthLabel, style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(monthLabel,
+              style: const TextStyle(
+                  color: Color(0xFF93C5FD),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text(
             s == null
                 ? '--'
                 : '${s.presentDays}天  迟到${s.lateCount}  加班${s.overtimeHours.toStringAsFixed(1)}h',
-            style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 16, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                color: Color(0xFFE2E8F0),
+                fontSize: 16,
+                fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -469,17 +516,19 @@ class _DetailCard extends StatelessWidget {
         ? const Color(0xFFFEF2F2)
         : isHoliday
             ? const Color(0xFFEFF6FF)
-        : isLate
-            ? const Color(0xFFFFF7ED)
-            : const Color(0xFFF8FAFC);
+            : isLate
+                ? const Color(0xFFFFF7ED)
+                : const Color(0xFFF8FAFC);
     final fg = isAbsent
         ? const Color(0xFF991B1B)
         : isHoliday
             ? const Color(0xFF1D4ED8)
             : isLate
-            ? const Color(0xFF9A3412)
-            : const Color(0xFF334155);
-    final overtimeText = row.overtimeHoursRounded > 0 ? '+${row.overtimeHoursRounded.toStringAsFixed(1)}h' : '';
+                ? const Color(0xFF9A3412)
+                : const Color(0xFF334155);
+    final overtimeText = row.overtimeHoursRounded > 0
+        ? '+${row.overtimeHoursRounded.toStringAsFixed(1)}h'
+        : '';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -495,14 +544,20 @@ class _DetailCard extends StatelessWidget {
             Expanded(
               child: Text(
                 '${_md(row.day)}  ${_timeRange(row)}',
-                style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 16),
+                style: TextStyle(
+                    color: fg, fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
             if (overtimeText.isNotEmpty)
-              Text(overtimeText, style: const TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.w800, fontSize: 16)),
+              Text(overtimeText,
+                  style: const TextStyle(
+                      color: Color(0xFF1D4ED8),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16)),
             if (overtimeText.isEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: isAbsent
                       ? const Color(0xFFDC2626)
@@ -513,7 +568,11 @@ class _DetailCard extends StatelessWidget {
                               : const Color(0xFF94A3B8),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+                child: Text(status,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14)),
               ),
           ],
         ),
@@ -523,7 +582,9 @@ class _DetailCard extends StatelessWidget {
 
   String _status(AttendanceRecord r) {
     final now = DateTime.now();
-    final isToday = r.day.year == now.year && r.day.month == now.month && r.day.day == now.day;
+    final isToday = r.day.year == now.year &&
+        r.day.month == now.month &&
+        r.day.day == now.day;
     final hasCheckIn = r.checkInAt != null;
     final hasCheckOut = r.checkOutAt != null;
     if (r.isLeave) return '请假';
@@ -531,7 +592,9 @@ class _DetailCard extends StatelessWidget {
     if (r.isLate) return '迟到';
     if (isToday && hasCheckIn && !hasCheckOut) return '待下班';
     if (hasCheckIn ^ hasCheckOut) return '未完成';
-    if (hasCheckIn && hasCheckOut && r.checkOutAt!.isBefore(r.checkInAt!)) return '异常';
+    if (hasCheckIn && hasCheckOut && r.checkOutAt!.isBefore(r.checkInAt!)) {
+      return '异常';
+    }
     if (hasCheckIn && hasCheckOut) return '正常';
     if (r.isException) return '异常';
     return '无记录';
@@ -551,7 +614,8 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(18),
-      child: Center(child: Text(text, style: const TextStyle(color: Color(0xFF64748B)))),
+      child: Center(
+          child: Text(text, style: const TextStyle(color: Color(0xFF64748B)))),
     );
   }
 }

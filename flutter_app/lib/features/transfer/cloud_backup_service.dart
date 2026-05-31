@@ -450,6 +450,39 @@ class CloudBackupService {
     return api.listBackups(session: session, limit: limit);
   }
 
+  Future<void> uploadAttendanceBackup({
+    required CloudBackupSession session,
+    required String accountKey,
+    required String jsonText,
+  }) async {
+    final documentsDir = await _documentsDirectory();
+    final cloudDir = Directory(p.join(documentsDir.path, 'cloud_backups'));
+    await cloudDir.create(recursive: true);
+    final file = File(
+      p.join(
+        cloudDir.path,
+        'attendance-${_safeAccountPath(accountKey)}-${_fileStamp((nowProvider ?? DateTime.now)())}.json',
+      ),
+    );
+    await file.writeAsString(jsonText, flush: true);
+    await api.uploadPackage(
+      session: session,
+      packageFile: file,
+      objectPath: attendanceObjectPath(accountKey),
+    );
+  }
+
+  Future<String> downloadAttendanceBackup({
+    required CloudBackupSession session,
+    required String accountKey,
+  }) async {
+    final bytes = await api.downloadPackage(
+      session: session,
+      objectPath: attendanceObjectPath(accountKey),
+    );
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
   Future<void> _saveSession(CloudBackupSession session) async {
     final file = await _sessionFile();
     await file.parent.create(recursive: true);
@@ -477,6 +510,15 @@ class CloudBackupService {
 
   String _historyObjectPath(DateTime value) =>
       'history/${_fileStamp(value)}-jiemei-backup.jiemei';
+
+  static String attendanceObjectPath(String accountKey) =>
+      'attendance/${_safeAccountPath(accountKey)}/latest.attendance.json';
+
+  static String _safeAccountPath(String accountKey) {
+    final normalized = accountKey.trim().toLowerCase();
+    final effective = normalized.isEmpty ? 'local' : normalized;
+    return Uri.encodeComponent(effective);
+  }
 
   Future<void> _pruneHistory(CloudBackupSession session) async {
     final backups = await api.listBackups(session: session, limit: 100);

@@ -46,7 +46,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -159,6 +159,9 @@ class AppDatabase extends _$AppDatabase {
               await m.createTable(scannerGuns);
             }
           }
+          if (from < 20) {
+            await _migrateAttendanceAccountScope(m);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('''
@@ -223,14 +226,68 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _createAttendanceIndexes(Migrator m) async {
     await m.database.customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_attendance_day ON attendance_records(day);',
+      'CREATE INDEX IF NOT EXISTS idx_attendance_account_day ON attendance_records(account_key, day);',
     );
     await m.database.customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance_records(is_absent, is_late, needs_patch);',
+      'CREATE INDEX IF NOT EXISTS idx_attendance_account_status ON attendance_records(account_key, is_absent, is_late, needs_patch);',
     );
     await m.database.customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_patch_day_status ON patch_requests(day, status);',
+      'CREATE INDEX IF NOT EXISTS idx_patch_account_day_status ON patch_requests(account_key, day, status);',
     );
+  }
+
+  Future<void> _migrateAttendanceAccountScope(Migrator m) async {
+    if (await _hasTable('attendance_rules') &&
+        !await _hasColumn('attendance_rules', 'account_key')) {
+      await m.addColumn(attendanceRules, attendanceRules.accountKey);
+    }
+    if (await _hasTable('attendance_records') &&
+        !await _hasColumn('attendance_records', 'account_key')) {
+      await m.addColumn(attendanceRecords, attendanceRecords.accountKey);
+    }
+    if (await _hasTable('patch_requests') &&
+        !await _hasColumn('patch_requests', 'account_key')) {
+      await m.addColumn(patchRequests, patchRequests.accountKey);
+    }
+    await _rebuildGeofenceDailyStatesForAccountScope(m);
+    await _createAttendanceIndexes(m);
+  }
+
+  Future<void> _rebuildGeofenceDailyStatesForAccountScope(Migrator m) async {
+    if (!await _hasTable('geofence_daily_states')) {
+      await m.createTable(geofenceDailyStates);
+      return;
+    }
+    final hasAccountKey =
+        await _hasColumn('geofence_daily_states', 'account_key');
+    await m.database.customStatement(
+        'ALTER TABLE geofence_daily_states RENAME TO geofence_daily_states_old;');
+    await m.createTable(geofenceDailyStates);
+    final accountKeyExpression =
+        hasAccountKey ? "COALESCE(account_key, 'local')" : "'local'";
+    await m.database.customStatement('''
+      INSERT INTO geofence_daily_states (
+        id,
+        account_key,
+        day,
+        was_inside,
+        triggered,
+        triggered_count,
+        last_triggered_at,
+        updated_at
+      )
+      SELECT
+        id,
+        $accountKeyExpression,
+        day,
+        was_inside,
+        triggered,
+        triggered_count,
+        last_triggered_at,
+        updated_at
+      FROM geofence_daily_states_old;
+    ''');
+    await m.database.customStatement('DROP TABLE geofence_daily_states_old;');
   }
 
   Future<void> _createStocktakeIndexes(Migrator m) async {

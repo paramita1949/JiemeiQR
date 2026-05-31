@@ -9,12 +9,15 @@ class AttendancePatchListScreen extends StatefulWidget {
   const AttendancePatchListScreen({
     super.key,
     required this.database,
+    this.accountKey = 'local',
   });
 
   final AppDatabase database;
+  final String accountKey;
 
   @override
-  State<AttendancePatchListScreen> createState() => _AttendancePatchListScreenState();
+  State<AttendancePatchListScreen> createState() =>
+      _AttendancePatchListScreenState();
 }
 
 class _AttendancePatchListScreenState extends State<AttendancePatchListScreen> {
@@ -25,7 +28,7 @@ class _AttendancePatchListScreenState extends State<AttendancePatchListScreen> {
   @override
   void initState() {
     super.initState();
-    _dao = AttendanceDao(widget.database);
+    _dao = AttendanceDao(widget.database, accountKey: widget.accountKey);
     unawaited(_reload());
   }
 
@@ -67,7 +70,8 @@ class _AttendancePatchListScreenState extends State<AttendancePatchListScreen> {
                     return Card(
                       child: ListTile(
                         title: Text(_md(row.day)),
-                        subtitle: Text('${row.checkInAt == null ? '--:--' : _hhmm(row.checkInAt!)} / ${row.checkOutAt == null ? '--:--' : _hhmm(row.checkOutAt!)}'),
+                        subtitle: Text(
+                            '${row.checkInAt == null ? '--:--' : _hhmm(row.checkInAt!)} / ${row.checkOutAt == null ? '--:--' : _hhmm(row.checkOutAt!)}'),
                         trailing: const Text('编辑'),
                         onTap: () => _openEdit(row),
                       ),

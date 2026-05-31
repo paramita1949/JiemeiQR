@@ -10,10 +10,12 @@ class AttendanceStatsScreen extends StatefulWidget {
     super.key,
     required this.database,
     required this.initialMonth,
+    this.accountKey = 'local',
   });
 
   final AppDatabase database;
   final DateTime initialMonth;
+  final String accountKey;
 
   @override
   State<AttendanceStatsScreen> createState() => _AttendanceStatsScreenState();
@@ -31,7 +33,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   @override
   void initState() {
     super.initState();
-    _dao = AttendanceDao(widget.database);
+    _dao = AttendanceDao(widget.database, accountKey: widget.accountKey);
     _month = DateTime(widget.initialMonth.year, widget.initialMonth.month, 1);
     unawaited(_reload());
   }
@@ -85,6 +87,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                               builder: (_) => AttendanceCalendarScreen(
                                 database: widget.database,
                                 initialMonth: _month,
+                                accountKey: widget.accountKey,
                               ),
                             ),
                           );

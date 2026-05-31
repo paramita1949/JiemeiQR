@@ -14,16 +14,20 @@ class AttendanceGeofenceReminderService {
 
   static Future<void> checkAndMaybeNotify({
     required AppDatabase database,
+    String accountKey = 'local',
   }) async {
-    final dao = AttendanceDao(database);
+    final dao = AttendanceDao(database, accountKey: accountKey);
     final rule = await dao.getRule();
-    if (!rule.geofenceEnabled || rule.officeLat == null || rule.officeLng == null) {
+    if (!rule.geofenceEnabled ||
+        rule.officeLat == null ||
+        rule.officeLng == null) {
       return;
     }
 
     await _initNotification();
 
-    final permissionState = await ensureSystemPermissions(requestIfNeeded: true);
+    final permissionState =
+        await ensureSystemPermissions(requestIfNeeded: true);
     final serviceEnabled = permissionState.locationServiceEnabled;
     if (!serviceEnabled) return;
 
@@ -50,10 +54,11 @@ class AttendanceGeofenceReminderService {
     DebugEventLog.add(
       'GEOFENCE_AUTO',
       'current=${location.latitude.toStringAsFixed(6)},${location.longitude.toStringAsFixed(6)} '
-      'center=${rule.officeLat!.toStringAsFixed(6)},${rule.officeLng!.toStringAsFixed(6)} '
-      'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
+          'center=${rule.officeLat!.toStringAsFixed(6)},${rule.officeLng!.toStringAsFixed(6)} '
+          'distance=${distance.toStringAsFixed(1)} radius=${rule.officeRadiusMeters} inside=$isInsideNow',
     );
-    final decision = await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
+    final decision =
+        await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
     DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
     if (!decision.triggered) return;
 
@@ -169,7 +174,8 @@ class AttendanceGeofenceReminderService {
     bool requestIfNeeded = true,
   }) async {
     await _initNotification();
-    DebugEventLog.add('PERMISSION', 'ensureSystemPermissions request=$requestIfNeeded');
+    DebugEventLog.add(
+        'PERMISSION', 'ensureSystemPermissions request=$requestIfNeeded');
     final locationServiceEnabled = await Geolocator.isLocationServiceEnabled();
     var locationPermission = await Geolocator.checkPermission();
     if (requestIfNeeded && locationPermission == LocationPermission.denied) {
@@ -177,12 +183,13 @@ class AttendanceGeofenceReminderService {
     }
 
     bool? notificationGranted;
-    final androidPlugin =
-        _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
       notificationGranted = await androidPlugin.areNotificationsEnabled();
       if (requestIfNeeded && notificationGranted != true) {
-        notificationGranted = await androidPlugin.requestNotificationsPermission();
+        notificationGranted =
+            await androidPlugin.requestNotificationsPermission();
       }
     }
     DebugEventLog.add(

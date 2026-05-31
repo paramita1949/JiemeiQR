@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
+import 'database_merge_service.dart';
+
 typedef DocumentsDirectoryProvider = Future<Directory> Function();
 typedef DatabaseDirectoryProvider = Future<Directory> Function();
 typedef NowProvider = DateTime Function();
@@ -61,8 +63,8 @@ class BackupService {
   final int sqliteSchemaVersion;
   static const int maxSnapshotCount = 90;
   static const String aiConfigFileName = 'ai_ocr_config.json';
-  static const String defaultAppVersion = '4.0.10';
-  static const int currentSqliteSchemaVersion = 19;
+  static const String defaultAppVersion = '4.0.11';
+  static const int currentSqliteSchemaVersion = 20;
   static const Duration dailyAutoBackupInterval = Duration(hours: 24);
   static const Duration weeklyAutoBackupInterval = Duration(days: 7);
 
@@ -384,6 +386,97 @@ class BackupService {
       filePath: packageFile.path,
       createdAt: now,
     );
+  }
+
+  Future<SharePackageResult> createMergedSharePackage({
+    required String cloudPackagePath,
+    DatabaseMergeService mergeService = const DatabaseMergeService(),
+  }) async {
+    final documentsDir = await _documentsDirectory();
+    final stamp = _fileStamp((nowProvider ?? DateTime.now)());
+    final mergeDir =
+        Directory(p.join(documentsDir.path, 'cloud_merges', stamp));
+    await mergeDir.create(recursive: true);
+    final cloudDatabase = await extractDatabaseFromSharePackage(
+      cloudPackagePath,
+      outputDirectoryPath: mergeDir.path,
+      outputFileName: 'cloud-$databaseFileName',
+    );
+    final mergedDatabase =
+        File(p.join(mergeDir.path, 'merged-$databaseFileName'));
+    final localDatabase = await _databaseFile();
+    await mergeService.mergeDatabases(
+      localDatabasePath: localDatabase.path,
+      cloudDatabasePath: cloudDatabase.path,
+      outputDatabasePath: mergedDatabase.path,
+    );
+    return createSharePackage(snapshotPath: mergedDatabase.path);
+  }
+
+  Future<File> extractDatabaseFromSharePackage(
+    String incomingPath, {
+    String? outputDirectoryPath,
+    String? outputFileName,
+  }) async {
+    if (p.extension(incomingPath).toLowerCase() == '.sqlite') {
+      final incoming = await _resolveIncomingFile(incomingPath);
+      if (incoming == null) {
+        throw ImportSourceMissingException(incomingPath);
+      }
+      _checkDatabaseCompatibility(incoming, incomingPath);
+      return incoming;
+    }
+
+    final incoming = File(incomingPath);
+    if (!await incoming.exists()) {
+      throw ImportSourceMissingException(incomingPath);
+    }
+    late final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(await incoming.readAsBytes());
+    } on Object {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+    ArchiveFile? manifestFile;
+    ArchiveFile? databaseFile;
+    for (final file in archive.files) {
+      if (file.name == 'manifest.json') {
+        manifestFile = file;
+      } else if (p.basename(file.name) == databaseFileName) {
+        databaseFile = file;
+      }
+    }
+    if (manifestFile == null || databaseFile == null) {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+    try {
+      final decoded = jsonDecode(
+        utf8.decode(_archiveContentBytes(manifestFile)),
+      );
+      if (decoded is! Map<String, dynamic> ||
+          decoded['type'] != 'jiemei-backup-share') {
+        throw const FormatException('invalid manifest');
+      }
+      _checkManifestCompatibility(decoded);
+    } on Object {
+      throw InvalidImportDatabaseException(incomingPath);
+    }
+    final outputDir = outputDirectoryPath == null
+        ? Directory(p.join(
+            (await _documentsDirectory()).path,
+            'imports',
+            _fileStamp((nowProvider ?? DateTime.now)()),
+          ))
+        : Directory(outputDirectoryPath);
+    await outputDir.create(recursive: true);
+    final extractedDatabase =
+        File(p.join(outputDir.path, outputFileName ?? databaseFileName));
+    await extractedDatabase.writeAsBytes(
+      _archiveContentBytes(databaseFile),
+      flush: true,
+    );
+    _checkDatabaseCompatibility(extractedDatabase, incomingPath);
+    return extractedDatabase;
   }
 
   Future<ImportResult> importSharedBackupPackage(String incomingPath) async {

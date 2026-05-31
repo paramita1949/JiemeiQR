@@ -7,25 +7,41 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 
 class AttendanceDao {
-  AttendanceDao(this._db);
+  AttendanceDao(
+    this._db, {
+    String accountKey = 'local',
+  }) : accountKey = _normalizeAccountKey(accountKey);
 
   final AppDatabase _db;
+  final String accountKey;
+
+  static String _normalizeAccountKey(String value) {
+    final trimmed = value.trim().toLowerCase();
+    return trimmed.isEmpty ? 'local' : trimmed;
+  }
 
   Future<AttendanceRule> getRule() async {
     final existing = await (_db.select(
       _db.attendanceRules,
-    )..limit(1))
+    )
+          ..where((t) => t.accountKey.equals(accountKey))
+          ..limit(1))
         .getSingleOrNull();
     if (existing != null) return existing;
     await _db
         .into(_db.attendanceRules)
-        .insert(const AttendanceRulesCompanion());
-    return (_db.select(_db.attendanceRules)..limit(1)).getSingle();
+        .insert(AttendanceRulesCompanion(accountKey: Value(accountKey)));
+    return (_db.select(_db.attendanceRules)
+          ..where((t) => t.accountKey.equals(accountKey))
+          ..limit(1))
+        .getSingle();
   }
 
   Future<void> saveRule(AttendanceRulesCompanion companion) async {
     final rule = await getRule();
-    await (_db.update(_db.attendanceRules)..where((t) => t.id.equals(rule.id)))
+    await (_db.update(_db.attendanceRules)
+          ..where(
+              (t) => t.id.equals(rule.id) & t.accountKey.equals(accountKey)))
         .write(
       companion.copyWith(updatedAt: Value(DateTime.now())),
     );
@@ -36,11 +52,12 @@ class AttendanceDao {
     final day = DateTime(ts.year, ts.month, ts.day);
     final rule = await getRule();
     final existing = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.equals(day)))
+          ..where((t) => t.accountKey.equals(accountKey) & t.day.equals(day)))
         .getSingleOrNull();
     if (existing == null) {
       final id = await _db.into(_db.attendanceRecords).insert(
             AttendanceRecordsCompanion.insert(
+              accountKey: Value(accountKey),
               day: day,
               checkInAt: Value(ts),
               updatedAt: Value(ts),
@@ -86,13 +103,13 @@ class AttendanceDao {
     }
 
     final daily = await (_db.select(_db.geofenceDailyStates)
-          ..where((t) => t.day.equals(day)))
+          ..where((t) => t.accountKey.equals(accountKey) & t.day.equals(day)))
         .getSingleOrNull();
     final wasInside = daily?.wasInside ?? false;
     final hasTriggered = daily?.triggered ?? false;
 
     final todayRecord = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.equals(day)))
+          ..where((t) => t.accountKey.equals(accountKey) & t.day.equals(day)))
         .getSingleOrNull();
     final alreadyCheckedIn = todayRecord?.checkInAt != null;
 
@@ -105,6 +122,7 @@ class AttendanceDao {
     if (daily == null) {
       await _db.into(_db.geofenceDailyStates).insert(
             GeofenceDailyStatesCompanion.insert(
+              accountKey: Value(accountKey),
               day: day,
               wasInside: Value(isInsideNow),
               triggered: Value(shouldTrigger),
@@ -153,12 +171,13 @@ class AttendanceDao {
   }) async {
     final day = DateTime(ts.year, ts.month, ts.day);
     final existing = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.equals(day)))
+          ..where((t) => t.accountKey.equals(accountKey) & t.day.equals(day)))
         .getSingleOrNull();
 
     if (existing == null) {
       final id = await _db.into(_db.attendanceRecords).insert(
             AttendanceRecordsCompanion.insert(
+              accountKey: Value(accountKey),
               day: day,
               checkInAt: Value(ts),
               source: const Value('geofence_auto'),
@@ -185,7 +204,7 @@ class AttendanceDao {
     final ts = now ?? DateTime.now();
     final day = DateTime(ts.year, ts.month, ts.day);
     return (_db.select(_db.geofenceDailyStates)
-          ..where((t) => t.day.equals(day)))
+          ..where((t) => t.accountKey.equals(accountKey) & t.day.equals(day)))
         .getSingleOrNull();
   }
 
@@ -194,7 +213,9 @@ class AttendanceDao {
     final to = DateTime(month.year, month.month + 1, 1);
     final rows = await (_db.select(_db.attendanceRecords)
           ..where((t) =>
-              t.day.isBiggerOrEqualValue(from) & t.day.isSmallerThanValue(to))
+              t.accountKey.equals(accountKey) &
+              t.day.isBiggerOrEqualValue(from) &
+              t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
     return _applyWeekendOvertime(rows);
@@ -248,7 +269,9 @@ class AttendanceDao {
   String _dayKey(DateTime day) => '${day.year}-${day.month}-${day.day}';
 
   Future<List<DateTime>> recordedMonths() async {
-    final rows = await _db.select(_db.attendanceRecords).get();
+    final rows = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.accountKey.equals(accountKey)))
+        .get();
     final keys = <String, DateTime>{};
     for (final row in rows) {
       final month = DateTime(row.day.year, row.day.month, 1);
@@ -302,17 +325,28 @@ class AttendanceDao {
   }
 
   Future<String> exportAttendanceJson() async {
-    final rules = await _db.select(_db.attendanceRules).get();
-    final records = await _db.select(_db.attendanceRecords).get();
-    final requests = await _db.select(_db.patchRequests).get();
+    final rules = await (_db.select(_db.attendanceRules)
+          ..where((t) => t.accountKey.equals(accountKey)))
+        .get();
+    final records = await (_db.select(_db.attendanceRecords)
+          ..where((t) => t.accountKey.equals(accountKey)))
+        .get();
+    final requests = await (_db.select(_db.patchRequests)
+          ..where((t) => t.accountKey.equals(accountKey)))
+        .get();
+    final geofenceStates = await (_db.select(_db.geofenceDailyStates)
+          ..where((t) => t.accountKey.equals(accountKey)))
+        .get();
     return jsonEncode({
       'type': 'attendance-backup',
-      'version': 2,
+      'version': 3,
       'schemaVersion': _db.schemaVersion,
+      'accountKey': accountKey,
       'exportedAt': DateTime.now().toIso8601String(),
       'rules': rules.map((e) => e.toJson()).toList(),
       'records': records.map((e) => e.toJson()).toList(),
       'patchRequests': requests.map((e) => e.toJson()).toList(),
+      'geofenceDailyStates': geofenceStates.map((e) => e.toJson()).toList(),
     });
   }
 
@@ -379,7 +413,8 @@ class AttendanceDao {
     String? note,
   }) async {
     final row = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.id.equals(recordId)))
+          ..where(
+              (t) => t.id.equals(recordId) & t.accountKey.equals(accountKey)))
         .getSingle();
     final rule = await getRule();
     final updated = row.copyWith(
@@ -396,18 +431,23 @@ class AttendanceDao {
 
   Future<void> deleteRecordById(int recordId) async {
     await (_db.delete(_db.attendanceRecords)
-          ..where((t) => t.id.equals(recordId)))
+          ..where(
+              (t) => t.id.equals(recordId) & t.accountKey.equals(accountKey)))
         .go();
   }
 
   Future<AttendanceRecord> getOrCreateRecordByDay(DateTime day) async {
     final normalized = DateTime(day.year, day.month, day.day);
     final existing = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.day.equals(normalized)))
+          ..where((t) =>
+              t.accountKey.equals(accountKey) & t.day.equals(normalized)))
         .getSingleOrNull();
     if (existing != null) return existing;
     final id = await _db.into(_db.attendanceRecords).insert(
-          AttendanceRecordsCompanion.insert(day: normalized),
+          AttendanceRecordsCompanion.insert(
+            accountKey: Value(accountKey),
+            day: normalized,
+          ),
         );
     return (_db.select(_db.attendanceRecords)..where((t) => t.id.equals(id)))
         .getSingle();
@@ -425,12 +465,23 @@ class AttendanceDao {
     final rules = (map['rules'] as List<dynamic>? ?? const []);
     final records = (map['records'] as List<dynamic>? ?? const []);
     final requests = (map['patchRequests'] as List<dynamic>? ?? const []);
+    final geofenceStates =
+        (map['geofenceDailyStates'] as List<dynamic>? ?? const []);
 
     await _db.transaction(() async {
       if (overwrite) {
-        await _db.delete(_db.patchRequests).go();
-        await _db.delete(_db.attendanceRecords).go();
-        await _db.delete(_db.attendanceRules).go();
+        await (_db.delete(_db.geofenceDailyStates)
+              ..where((t) => t.accountKey.equals(accountKey)))
+            .go();
+        await (_db.delete(_db.patchRequests)
+              ..where((t) => t.accountKey.equals(accountKey)))
+            .go();
+        await (_db.delete(_db.attendanceRecords)
+              ..where((t) => t.accountKey.equals(accountKey)))
+            .go();
+        await (_db.delete(_db.attendanceRules)
+              ..where((t) => t.accountKey.equals(accountKey)))
+            .go();
       }
 
       for (final raw in rules) {
@@ -438,6 +489,7 @@ class AttendanceDao {
         if (overwrite) {
           await _db.into(_db.attendanceRules).insert(
                 AttendanceRulesCompanion.insert(
+                  accountKey: Value(accountKey),
                   workStartTime: Value(row.workStartTime),
                   workEndTime: Value(row.workEndTime),
                   lateGraceMinutes: Value(row.lateGraceMinutes),
@@ -453,11 +505,14 @@ class AttendanceDao {
                 ),
               );
         } else {
-          final existing = await (_db.select(_db.attendanceRules)..limit(1))
+          final existing = await (_db.select(_db.attendanceRules)
+                ..where((t) => t.accountKey.equals(accountKey))
+                ..limit(1))
               .getSingleOrNull();
           if (existing == null) {
             await _db.into(_db.attendanceRules).insert(
                   AttendanceRulesCompanion.insert(
+                    accountKey: Value(accountKey),
                     workStartTime: Value(row.workStartTime),
                     workEndTime: Value(row.workEndTime),
                     lateGraceMinutes: Value(row.lateGraceMinutes),
@@ -481,11 +536,13 @@ class AttendanceDao {
         rawMap.putIfAbsent('isHoliday', () => false);
         final row = AttendanceRecord.fromJson(rawMap);
         final sameDay = await (_db.select(_db.attendanceRecords)
-              ..where((t) => t.day.equals(row.day)))
+              ..where((t) =>
+                  t.accountKey.equals(accountKey) & t.day.equals(row.day)))
             .getSingleOrNull();
         if (sameDay == null || overwrite) {
           await _db.into(_db.attendanceRecords).insert(
                 AttendanceRecordsCompanion.insert(
+                  accountKey: Value(accountKey),
                   day: row.day,
                   checkInAt: Value(row.checkInAt),
                   checkOutAt: Value(row.checkOutAt),
@@ -515,6 +572,7 @@ class AttendanceDao {
         final row = PatchRequest.fromJson(raw as Map<String, dynamic>);
         await _db.into(_db.patchRequests).insert(
               PatchRequestsCompanion.insert(
+                accountKey: Value(accountKey),
                 day: row.day,
                 patchType: row.patchType,
                 requestedCheckInAt: Value(row.requestedCheckInAt),
@@ -526,6 +584,28 @@ class AttendanceDao {
               ),
               mode: overwrite ? InsertMode.insertOrReplace : InsertMode.insert,
             );
+      }
+
+      for (final raw in geofenceStates) {
+        final row = GeofenceDailyState.fromJson(raw as Map<String, dynamic>);
+        final sameDay = await (_db.select(_db.geofenceDailyStates)
+              ..where((t) =>
+                  t.accountKey.equals(accountKey) & t.day.equals(row.day)))
+            .getSingleOrNull();
+        if (sameDay == null || overwrite) {
+          await _db.into(_db.geofenceDailyStates).insert(
+                GeofenceDailyStatesCompanion.insert(
+                  accountKey: Value(accountKey),
+                  day: row.day,
+                  wasInside: Value(row.wasInside),
+                  triggered: Value(row.triggered),
+                  triggeredCount: Value(row.triggeredCount),
+                  lastTriggeredAt: Value(row.lastTriggeredAt),
+                  updatedAt: Value(row.updatedAt),
+                ),
+                mode: InsertMode.insertOrReplace,
+              );
+        }
       }
     });
   }

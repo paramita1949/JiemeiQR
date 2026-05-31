@@ -10,10 +10,12 @@ class AttendanceCalendarScreen extends StatefulWidget {
     super.key,
     required this.database,
     required this.initialMonth,
+    this.accountKey = 'local',
   });
 
   final AppDatabase database;
   final DateTime initialMonth;
+  final String accountKey;
 
   @override
   State<AttendanceCalendarScreen> createState() =>
@@ -32,7 +34,7 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _dao = AttendanceDao(widget.database);
+    _dao = AttendanceDao(widget.database, accountKey: widget.accountKey);
     _month = DateTime(widget.initialMonth.year, widget.initialMonth.month, 1);
     final now = DateTime.now();
     _selectedDay =
@@ -74,7 +76,8 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final yearMonth = '${_month.year}-${_month.month.toString().padLeft(2, '0')}';
+    final yearMonth =
+        '${_month.year}-${_month.month.toString().padLeft(2, '0')}';
     final firstWeekday = DateTime(_month.year, _month.month, 1).weekday;
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final today = DateTime.now();
@@ -157,7 +160,9 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: day == selectedDay ? Colors.white : const Color(0xFF2563EB),
+                        color: day == selectedDay
+                            ? Colors.white
+                            : const Color(0xFF2563EB),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -195,7 +200,8 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
                           });
                           await _reloadMonth();
                         },
-                        icon: const Icon(Icons.chevron_left, color: Color(0xFF334155)),
+                        icon: const Icon(Icons.chevron_left,
+                            color: Color(0xFF334155)),
                       ),
                       Expanded(
                         child: Center(
@@ -217,14 +223,16 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
                           });
                           await _reloadMonth();
                         },
-                        icon: const Icon(Icons.chevron_right, color: Color(0xFF334155)),
+                        icon: const Icon(Icons.chevron_right,
+                            color: Color(0xFF334155)),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -243,7 +251,8 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
                       const Spacer(),
                       const Text(
                         '点日期可补录',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        style:
+                            TextStyle(color: Color(0xFF64748B), fontSize: 12),
                       ),
                     ],
                   ),

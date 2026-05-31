@@ -2532,6 +2532,14 @@ class $AttendanceRulesTable extends AttendanceRules
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _accountKeyMeta =
+      const VerificationMeta('accountKey');
+  @override
+  late final GeneratedColumn<String> accountKey = GeneratedColumn<String>(
+      'account_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('local'));
   static const VerificationMeta _workStartTimeMeta =
       const VerificationMeta('workStartTime');
   @override
@@ -2633,6 +2641,7 @@ class $AttendanceRulesTable extends AttendanceRules
   @override
   List<GeneratedColumn> get $columns => [
         id,
+        accountKey,
         workStartTime,
         workEndTime,
         lateGraceMinutes,
@@ -2658,6 +2667,12 @@ class $AttendanceRulesTable extends AttendanceRules
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('account_key')) {
+      context.handle(
+          _accountKeyMeta,
+          accountKey.isAcceptableOrUnknown(
+              data['account_key']!, _accountKeyMeta));
     }
     if (data.containsKey('work_start_time')) {
       context.handle(
@@ -2738,6 +2753,8 @@ class $AttendanceRulesTable extends AttendanceRules
     return AttendanceRule(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      accountKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}account_key'])!,
       workStartTime: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}work_start_time'])!,
       workEndTime: attachedDatabase.typeMapping
@@ -2776,6 +2793,7 @@ class $AttendanceRulesTable extends AttendanceRules
 
 class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   final int id;
+  final String accountKey;
   final String workStartTime;
   final String workEndTime;
   final int lateGraceMinutes;
@@ -2790,6 +2808,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   final DateTime updatedAt;
   const AttendanceRule(
       {required this.id,
+      required this.accountKey,
       required this.workStartTime,
       required this.workEndTime,
       required this.lateGraceMinutes,
@@ -2806,6 +2825,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['account_key'] = Variable<String>(accountKey);
     map['work_start_time'] = Variable<String>(workStartTime);
     map['work_end_time'] = Variable<String>(workEndTime);
     map['late_grace_minutes'] = Variable<int>(lateGraceMinutes);
@@ -2828,6 +2848,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   AttendanceRulesCompanion toCompanion(bool nullToAbsent) {
     return AttendanceRulesCompanion(
       id: Value(id),
+      accountKey: Value(accountKey),
       workStartTime: Value(workStartTime),
       workEndTime: Value(workEndTime),
       lateGraceMinutes: Value(lateGraceMinutes),
@@ -2852,6 +2873,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return AttendanceRule(
       id: serializer.fromJson<int>(json['id']),
+      accountKey: serializer.fromJson<String>(json['accountKey']),
       workStartTime: serializer.fromJson<String>(json['workStartTime']),
       workEndTime: serializer.fromJson<String>(json['workEndTime']),
       lateGraceMinutes: serializer.fromJson<int>(json['lateGraceMinutes']),
@@ -2874,6 +2896,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'accountKey': serializer.toJson<String>(accountKey),
       'workStartTime': serializer.toJson<String>(workStartTime),
       'workEndTime': serializer.toJson<String>(workEndTime),
       'lateGraceMinutes': serializer.toJson<int>(lateGraceMinutes),
@@ -2893,6 +2916,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
 
   AttendanceRule copyWith(
           {int? id,
+          String? accountKey,
           String? workStartTime,
           String? workEndTime,
           int? lateGraceMinutes,
@@ -2907,6 +2931,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           DateTime? updatedAt}) =>
       AttendanceRule(
         id: id ?? this.id,
+        accountKey: accountKey ?? this.accountKey,
         workStartTime: workStartTime ?? this.workStartTime,
         workEndTime: workEndTime ?? this.workEndTime,
         lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
@@ -2926,6 +2951,8 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   AttendanceRule copyWithCompanion(AttendanceRulesCompanion data) {
     return AttendanceRule(
       id: data.id.present ? data.id.value : this.id,
+      accountKey:
+          data.accountKey.present ? data.accountKey.value : this.accountKey,
       workStartTime: data.workStartTime.present
           ? data.workStartTime.value
           : this.workStartTime,
@@ -2961,6 +2988,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   String toString() {
     return (StringBuffer('AttendanceRule(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
@@ -2980,6 +3008,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   @override
   int get hashCode => Object.hash(
       id,
+      accountKey,
       workStartTime,
       workEndTime,
       lateGraceMinutes,
@@ -2997,6 +3026,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       identical(this, other) ||
       (other is AttendanceRule &&
           other.id == this.id &&
+          other.accountKey == this.accountKey &&
           other.workStartTime == this.workStartTime &&
           other.workEndTime == this.workEndTime &&
           other.lateGraceMinutes == this.lateGraceMinutes &&
@@ -3013,6 +3043,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
 
 class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   final Value<int> id;
+  final Value<String> accountKey;
   final Value<String> workStartTime;
   final Value<String> workEndTime;
   final Value<int> lateGraceMinutes;
@@ -3027,6 +3058,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   final Value<DateTime> updatedAt;
   const AttendanceRulesCompanion({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
@@ -3042,6 +3074,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   });
   AttendanceRulesCompanion.insert({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
@@ -3057,6 +3090,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   });
   static Insertable<AttendanceRule> custom({
     Expression<int>? id,
+    Expression<String>? accountKey,
     Expression<String>? workStartTime,
     Expression<String>? workEndTime,
     Expression<int>? lateGraceMinutes,
@@ -3072,6 +3106,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (accountKey != null) 'account_key': accountKey,
       if (workStartTime != null) 'work_start_time': workStartTime,
       if (workEndTime != null) 'work_end_time': workEndTime,
       if (lateGraceMinutes != null) 'late_grace_minutes': lateGraceMinutes,
@@ -3093,6 +3128,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
 
   AttendanceRulesCompanion copyWith(
       {Value<int>? id,
+      Value<String>? accountKey,
       Value<String>? workStartTime,
       Value<String>? workEndTime,
       Value<int>? lateGraceMinutes,
@@ -3107,6 +3143,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       Value<DateTime>? updatedAt}) {
     return AttendanceRulesCompanion(
       id: id ?? this.id,
+      accountKey: accountKey ?? this.accountKey,
       workStartTime: workStartTime ?? this.workStartTime,
       workEndTime: workEndTime ?? this.workEndTime,
       lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
@@ -3130,6 +3167,9 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (accountKey.present) {
+      map['account_key'] = Variable<String>(accountKey.value);
     }
     if (workStartTime.present) {
       map['work_start_time'] = Variable<String>(workStartTime.value);
@@ -3177,6 +3217,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   String toString() {
     return (StringBuffer('AttendanceRulesCompanion(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
@@ -3209,6 +3250,14 @@ class $AttendanceRecordsTable extends AttendanceRecords
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _accountKeyMeta =
+      const VerificationMeta('accountKey');
+  @override
+  late final GeneratedColumn<String> accountKey = GeneratedColumn<String>(
+      'account_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('local'));
   static const VerificationMeta _dayMeta = const VerificationMeta('day');
   @override
   late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
@@ -3370,6 +3419,7 @@ class $AttendanceRecordsTable extends AttendanceRecords
   @override
   List<GeneratedColumn> get $columns => [
         id,
+        accountKey,
         day,
         checkInAt,
         checkOutAt,
@@ -3402,6 +3452,12 @@ class $AttendanceRecordsTable extends AttendanceRecords
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('account_key')) {
+      context.handle(
+          _accountKeyMeta,
+          accountKey.isAcceptableOrUnknown(
+              data['account_key']!, _accountKeyMeta));
     }
     if (data.containsKey('day')) {
       context.handle(
@@ -3508,6 +3564,8 @@ class $AttendanceRecordsTable extends AttendanceRecords
     return AttendanceRecord(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      accountKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}account_key'])!,
       day: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
       checkInAt: attachedDatabase.typeMapping
@@ -3559,6 +3617,7 @@ class $AttendanceRecordsTable extends AttendanceRecords
 class AttendanceRecord extends DataClass
     implements Insertable<AttendanceRecord> {
   final int id;
+  final String accountKey;
   final DateTime day;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
@@ -3580,6 +3639,7 @@ class AttendanceRecord extends DataClass
   final DateTime updatedAt;
   const AttendanceRecord(
       {required this.id,
+      required this.accountKey,
       required this.day,
       this.checkInAt,
       this.checkOutAt,
@@ -3603,6 +3663,7 @@ class AttendanceRecord extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['account_key'] = Variable<String>(accountKey);
     map['day'] = Variable<DateTime>(day);
     if (!nullToAbsent || checkInAt != null) {
       map['check_in_at'] = Variable<DateTime>(checkInAt);
@@ -3634,6 +3695,7 @@ class AttendanceRecord extends DataClass
   AttendanceRecordsCompanion toCompanion(bool nullToAbsent) {
     return AttendanceRecordsCompanion(
       id: Value(id),
+      accountKey: Value(accountKey),
       day: Value(day),
       checkInAt: checkInAt == null && nullToAbsent
           ? const Value.absent()
@@ -3665,6 +3727,7 @@ class AttendanceRecord extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return AttendanceRecord(
       id: serializer.fromJson<int>(json['id']),
+      accountKey: serializer.fromJson<String>(json['accountKey']),
       day: serializer.fromJson<DateTime>(json['day']),
       checkInAt: serializer.fromJson<DateTime?>(json['checkInAt']),
       checkOutAt: serializer.fromJson<DateTime?>(json['checkOutAt']),
@@ -3692,6 +3755,7 @@ class AttendanceRecord extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'accountKey': serializer.toJson<String>(accountKey),
       'day': serializer.toJson<DateTime>(day),
       'checkInAt': serializer.toJson<DateTime?>(checkInAt),
       'checkOutAt': serializer.toJson<DateTime?>(checkOutAt),
@@ -3716,6 +3780,7 @@ class AttendanceRecord extends DataClass
 
   AttendanceRecord copyWith(
           {int? id,
+          String? accountKey,
           DateTime? day,
           Value<DateTime?> checkInAt = const Value.absent(),
           Value<DateTime?> checkOutAt = const Value.absent(),
@@ -3737,6 +3802,7 @@ class AttendanceRecord extends DataClass
           DateTime? updatedAt}) =>
       AttendanceRecord(
         id: id ?? this.id,
+        accountKey: accountKey ?? this.accountKey,
         day: day ?? this.day,
         checkInAt: checkInAt.present ? checkInAt.value : this.checkInAt,
         checkOutAt: checkOutAt.present ? checkOutAt.value : this.checkOutAt,
@@ -3760,6 +3826,8 @@ class AttendanceRecord extends DataClass
   AttendanceRecord copyWithCompanion(AttendanceRecordsCompanion data) {
     return AttendanceRecord(
       id: data.id.present ? data.id.value : this.id,
+      accountKey:
+          data.accountKey.present ? data.accountKey.value : this.accountKey,
       day: data.day.present ? data.day.value : this.day,
       checkInAt: data.checkInAt.present ? data.checkInAt.value : this.checkInAt,
       checkOutAt:
@@ -3797,6 +3865,7 @@ class AttendanceRecord extends DataClass
   String toString() {
     return (StringBuffer('AttendanceRecord(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('checkInAt: $checkInAt, ')
           ..write('checkOutAt: $checkOutAt, ')
@@ -3821,32 +3890,35 @@ class AttendanceRecord extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      day,
-      checkInAt,
-      checkOutAt,
-      isWorkday,
-      isLate,
-      isEarlyLeave,
-      isAbsent,
-      isLeave,
-      isHoliday,
-      isException,
-      needsPatch,
-      patched,
-      overtimeMinutesRaw,
-      leaveMinutes,
-      overtimeHoursRounded,
-      source,
-      note,
-      createdAt,
-      updatedAt);
+  int get hashCode => Object.hashAll([
+        id,
+        accountKey,
+        day,
+        checkInAt,
+        checkOutAt,
+        isWorkday,
+        isLate,
+        isEarlyLeave,
+        isAbsent,
+        isLeave,
+        isHoliday,
+        isException,
+        needsPatch,
+        patched,
+        overtimeMinutesRaw,
+        leaveMinutes,
+        overtimeHoursRounded,
+        source,
+        note,
+        createdAt,
+        updatedAt
+      ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is AttendanceRecord &&
           other.id == this.id &&
+          other.accountKey == this.accountKey &&
           other.day == this.day &&
           other.checkInAt == this.checkInAt &&
           other.checkOutAt == this.checkOutAt &&
@@ -3870,6 +3942,7 @@ class AttendanceRecord extends DataClass
 
 class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   final Value<int> id;
+  final Value<String> accountKey;
   final Value<DateTime> day;
   final Value<DateTime?> checkInAt;
   final Value<DateTime?> checkOutAt;
@@ -3891,6 +3964,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   final Value<DateTime> updatedAt;
   const AttendanceRecordsCompanion({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     this.day = const Value.absent(),
     this.checkInAt = const Value.absent(),
     this.checkOutAt = const Value.absent(),
@@ -3913,6 +3987,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   });
   AttendanceRecordsCompanion.insert({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     required DateTime day,
     this.checkInAt = const Value.absent(),
     this.checkOutAt = const Value.absent(),
@@ -3935,6 +4010,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   }) : day = Value(day);
   static Insertable<AttendanceRecord> custom({
     Expression<int>? id,
+    Expression<String>? accountKey,
     Expression<DateTime>? day,
     Expression<DateTime>? checkInAt,
     Expression<DateTime>? checkOutAt,
@@ -3957,6 +4033,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (accountKey != null) 'account_key': accountKey,
       if (day != null) 'day': day,
       if (checkInAt != null) 'check_in_at': checkInAt,
       if (checkOutAt != null) 'check_out_at': checkOutAt,
@@ -3983,6 +4060,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
 
   AttendanceRecordsCompanion copyWith(
       {Value<int>? id,
+      Value<String>? accountKey,
       Value<DateTime>? day,
       Value<DateTime?>? checkInAt,
       Value<DateTime?>? checkOutAt,
@@ -4004,6 +4082,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       Value<DateTime>? updatedAt}) {
     return AttendanceRecordsCompanion(
       id: id ?? this.id,
+      accountKey: accountKey ?? this.accountKey,
       day: day ?? this.day,
       checkInAt: checkInAt ?? this.checkInAt,
       checkOutAt: checkOutAt ?? this.checkOutAt,
@@ -4031,6 +4110,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (accountKey.present) {
+      map['account_key'] = Variable<String>(accountKey.value);
     }
     if (day.present) {
       map['day'] = Variable<DateTime>(day.value);
@@ -4097,6 +4179,7 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   String toString() {
     return (StringBuffer('AttendanceRecordsCompanion(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('checkInAt: $checkInAt, ')
           ..write('checkOutAt: $checkOutAt, ')
@@ -4136,6 +4219,14 @@ class $PatchRequestsTable extends PatchRequests
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _accountKeyMeta =
+      const VerificationMeta('accountKey');
+  @override
+  late final GeneratedColumn<String> accountKey = GeneratedColumn<String>(
+      'account_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('local'));
   static const VerificationMeta _dayMeta = const VerificationMeta('day');
   @override
   late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
@@ -4190,6 +4281,7 @@ class $PatchRequestsTable extends PatchRequests
   @override
   List<GeneratedColumn> get $columns => [
         id,
+        accountKey,
         day,
         patchType,
         requestedCheckInAt,
@@ -4211,6 +4303,12 @@ class $PatchRequestsTable extends PatchRequests
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('account_key')) {
+      context.handle(
+          _accountKeyMeta,
+          accountKey.isAcceptableOrUnknown(
+              data['account_key']!, _accountKeyMeta));
     }
     if (data.containsKey('day')) {
       context.handle(
@@ -4265,6 +4363,8 @@ class $PatchRequestsTable extends PatchRequests
     return PatchRequest(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      accountKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}account_key'])!,
       day: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
       patchType: attachedDatabase.typeMapping
@@ -4294,6 +4394,7 @@ class $PatchRequestsTable extends PatchRequests
 
 class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   final int id;
+  final String accountKey;
   final DateTime day;
   final String patchType;
   final DateTime? requestedCheckInAt;
@@ -4304,6 +4405,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   final DateTime? reviewedAt;
   const PatchRequest(
       {required this.id,
+      required this.accountKey,
       required this.day,
       required this.patchType,
       this.requestedCheckInAt,
@@ -4316,6 +4418,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['account_key'] = Variable<String>(accountKey);
     map['day'] = Variable<DateTime>(day);
     map['patch_type'] = Variable<String>(patchType);
     if (!nullToAbsent || requestedCheckInAt != null) {
@@ -4336,6 +4439,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   PatchRequestsCompanion toCompanion(bool nullToAbsent) {
     return PatchRequestsCompanion(
       id: Value(id),
+      accountKey: Value(accountKey),
       day: Value(day),
       patchType: Value(patchType),
       requestedCheckInAt: requestedCheckInAt == null && nullToAbsent
@@ -4358,6 +4462,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return PatchRequest(
       id: serializer.fromJson<int>(json['id']),
+      accountKey: serializer.fromJson<String>(json['accountKey']),
       day: serializer.fromJson<DateTime>(json['day']),
       patchType: serializer.fromJson<String>(json['patchType']),
       requestedCheckInAt:
@@ -4375,6 +4480,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'accountKey': serializer.toJson<String>(accountKey),
       'day': serializer.toJson<DateTime>(day),
       'patchType': serializer.toJson<String>(patchType),
       'requestedCheckInAt': serializer.toJson<DateTime?>(requestedCheckInAt),
@@ -4388,6 +4494,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
 
   PatchRequest copyWith(
           {int? id,
+          String? accountKey,
           DateTime? day,
           String? patchType,
           Value<DateTime?> requestedCheckInAt = const Value.absent(),
@@ -4398,6 +4505,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
           Value<DateTime?> reviewedAt = const Value.absent()}) =>
       PatchRequest(
         id: id ?? this.id,
+        accountKey: accountKey ?? this.accountKey,
         day: day ?? this.day,
         patchType: patchType ?? this.patchType,
         requestedCheckInAt: requestedCheckInAt.present
@@ -4414,6 +4522,8 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   PatchRequest copyWithCompanion(PatchRequestsCompanion data) {
     return PatchRequest(
       id: data.id.present ? data.id.value : this.id,
+      accountKey:
+          data.accountKey.present ? data.accountKey.value : this.accountKey,
       day: data.day.present ? data.day.value : this.day,
       patchType: data.patchType.present ? data.patchType.value : this.patchType,
       requestedCheckInAt: data.requestedCheckInAt.present
@@ -4434,6 +4544,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   String toString() {
     return (StringBuffer('PatchRequest(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('patchType: $patchType, ')
           ..write('requestedCheckInAt: $requestedCheckInAt, ')
@@ -4447,13 +4558,23 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
   }
 
   @override
-  int get hashCode => Object.hash(id, day, patchType, requestedCheckInAt,
-      requestedCheckOutAt, reason, status, createdAt, reviewedAt);
+  int get hashCode => Object.hash(
+      id,
+      accountKey,
+      day,
+      patchType,
+      requestedCheckInAt,
+      requestedCheckOutAt,
+      reason,
+      status,
+      createdAt,
+      reviewedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is PatchRequest &&
           other.id == this.id &&
+          other.accountKey == this.accountKey &&
           other.day == this.day &&
           other.patchType == this.patchType &&
           other.requestedCheckInAt == this.requestedCheckInAt &&
@@ -4466,6 +4587,7 @@ class PatchRequest extends DataClass implements Insertable<PatchRequest> {
 
 class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
   final Value<int> id;
+  final Value<String> accountKey;
   final Value<DateTime> day;
   final Value<String> patchType;
   final Value<DateTime?> requestedCheckInAt;
@@ -4476,6 +4598,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
   final Value<DateTime?> reviewedAt;
   const PatchRequestsCompanion({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     this.day = const Value.absent(),
     this.patchType = const Value.absent(),
     this.requestedCheckInAt = const Value.absent(),
@@ -4487,6 +4610,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
   });
   PatchRequestsCompanion.insert({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     required DateTime day,
     required String patchType,
     this.requestedCheckInAt = const Value.absent(),
@@ -4499,6 +4623,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
         patchType = Value(patchType);
   static Insertable<PatchRequest> custom({
     Expression<int>? id,
+    Expression<String>? accountKey,
     Expression<DateTime>? day,
     Expression<String>? patchType,
     Expression<DateTime>? requestedCheckInAt,
@@ -4510,6 +4635,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (accountKey != null) 'account_key': accountKey,
       if (day != null) 'day': day,
       if (patchType != null) 'patch_type': patchType,
       if (requestedCheckInAt != null)
@@ -4525,6 +4651,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
 
   PatchRequestsCompanion copyWith(
       {Value<int>? id,
+      Value<String>? accountKey,
       Value<DateTime>? day,
       Value<String>? patchType,
       Value<DateTime?>? requestedCheckInAt,
@@ -4535,6 +4662,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
       Value<DateTime?>? reviewedAt}) {
     return PatchRequestsCompanion(
       id: id ?? this.id,
+      accountKey: accountKey ?? this.accountKey,
       day: day ?? this.day,
       patchType: patchType ?? this.patchType,
       requestedCheckInAt: requestedCheckInAt ?? this.requestedCheckInAt,
@@ -4551,6 +4679,9 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (accountKey.present) {
+      map['account_key'] = Variable<String>(accountKey.value);
     }
     if (day.present) {
       map['day'] = Variable<DateTime>(day.value);
@@ -4585,6 +4716,7 @@ class PatchRequestsCompanion extends UpdateCompanion<PatchRequest> {
   String toString() {
     return (StringBuffer('PatchRequestsCompanion(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('patchType: $patchType, ')
           ..write('requestedCheckInAt: $requestedCheckInAt, ')
@@ -4613,13 +4745,19 @@ class $GeofenceDailyStatesTable extends GeofenceDailyStates
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _accountKeyMeta =
+      const VerificationMeta('accountKey');
+  @override
+  late final GeneratedColumn<String> accountKey = GeneratedColumn<String>(
+      'account_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('local'));
   static const VerificationMeta _dayMeta = const VerificationMeta('day');
   @override
   late final GeneratedColumn<DateTime> day = GeneratedColumn<DateTime>(
       'day', aliasedName, false,
-      type: DriftSqlType.dateTime,
-      requiredDuringInsert: true,
-      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
   static const VerificationMeta _wasInsideMeta =
       const VerificationMeta('wasInside');
   @override
@@ -4665,6 +4803,7 @@ class $GeofenceDailyStatesTable extends GeofenceDailyStates
   @override
   List<GeneratedColumn> get $columns => [
         id,
+        accountKey,
         day,
         wasInside,
         triggered,
@@ -4684,6 +4823,12 @@ class $GeofenceDailyStatesTable extends GeofenceDailyStates
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('account_key')) {
+      context.handle(
+          _accountKeyMeta,
+          accountKey.isAcceptableOrUnknown(
+              data['account_key']!, _accountKeyMeta));
     }
     if (data.containsKey('day')) {
       context.handle(
@@ -4721,11 +4866,17 @@ class $GeofenceDailyStatesTable extends GeofenceDailyStates
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+        {accountKey, day},
+      ];
+  @override
   GeofenceDailyState map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return GeofenceDailyState(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      accountKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}account_key'])!,
       day: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}day'])!,
       wasInside: attachedDatabase.typeMapping
@@ -4750,6 +4901,7 @@ class $GeofenceDailyStatesTable extends GeofenceDailyStates
 class GeofenceDailyState extends DataClass
     implements Insertable<GeofenceDailyState> {
   final int id;
+  final String accountKey;
   final DateTime day;
   final bool wasInside;
   final bool triggered;
@@ -4758,6 +4910,7 @@ class GeofenceDailyState extends DataClass
   final DateTime updatedAt;
   const GeofenceDailyState(
       {required this.id,
+      required this.accountKey,
       required this.day,
       required this.wasInside,
       required this.triggered,
@@ -4768,6 +4921,7 @@ class GeofenceDailyState extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['account_key'] = Variable<String>(accountKey);
     map['day'] = Variable<DateTime>(day);
     map['was_inside'] = Variable<bool>(wasInside);
     map['triggered'] = Variable<bool>(triggered);
@@ -4782,6 +4936,7 @@ class GeofenceDailyState extends DataClass
   GeofenceDailyStatesCompanion toCompanion(bool nullToAbsent) {
     return GeofenceDailyStatesCompanion(
       id: Value(id),
+      accountKey: Value(accountKey),
       day: Value(day),
       wasInside: Value(wasInside),
       triggered: Value(triggered),
@@ -4798,6 +4953,7 @@ class GeofenceDailyState extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return GeofenceDailyState(
       id: serializer.fromJson<int>(json['id']),
+      accountKey: serializer.fromJson<String>(json['accountKey']),
       day: serializer.fromJson<DateTime>(json['day']),
       wasInside: serializer.fromJson<bool>(json['wasInside']),
       triggered: serializer.fromJson<bool>(json['triggered']),
@@ -4811,6 +4967,7 @@ class GeofenceDailyState extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'accountKey': serializer.toJson<String>(accountKey),
       'day': serializer.toJson<DateTime>(day),
       'wasInside': serializer.toJson<bool>(wasInside),
       'triggered': serializer.toJson<bool>(triggered),
@@ -4822,6 +4979,7 @@ class GeofenceDailyState extends DataClass
 
   GeofenceDailyState copyWith(
           {int? id,
+          String? accountKey,
           DateTime? day,
           bool? wasInside,
           bool? triggered,
@@ -4830,6 +4988,7 @@ class GeofenceDailyState extends DataClass
           DateTime? updatedAt}) =>
       GeofenceDailyState(
         id: id ?? this.id,
+        accountKey: accountKey ?? this.accountKey,
         day: day ?? this.day,
         wasInside: wasInside ?? this.wasInside,
         triggered: triggered ?? this.triggered,
@@ -4842,6 +5001,8 @@ class GeofenceDailyState extends DataClass
   GeofenceDailyState copyWithCompanion(GeofenceDailyStatesCompanion data) {
     return GeofenceDailyState(
       id: data.id.present ? data.id.value : this.id,
+      accountKey:
+          data.accountKey.present ? data.accountKey.value : this.accountKey,
       day: data.day.present ? data.day.value : this.day,
       wasInside: data.wasInside.present ? data.wasInside.value : this.wasInside,
       triggered: data.triggered.present ? data.triggered.value : this.triggered,
@@ -4859,6 +5020,7 @@ class GeofenceDailyState extends DataClass
   String toString() {
     return (StringBuffer('GeofenceDailyState(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('wasInside: $wasInside, ')
           ..write('triggered: $triggered, ')
@@ -4870,13 +5032,14 @@ class GeofenceDailyState extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(id, day, wasInside, triggered, triggeredCount,
-      lastTriggeredAt, updatedAt);
+  int get hashCode => Object.hash(id, accountKey, day, wasInside, triggered,
+      triggeredCount, lastTriggeredAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is GeofenceDailyState &&
           other.id == this.id &&
+          other.accountKey == this.accountKey &&
           other.day == this.day &&
           other.wasInside == this.wasInside &&
           other.triggered == this.triggered &&
@@ -4887,6 +5050,7 @@ class GeofenceDailyState extends DataClass
 
 class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   final Value<int> id;
+  final Value<String> accountKey;
   final Value<DateTime> day;
   final Value<bool> wasInside;
   final Value<bool> triggered;
@@ -4895,6 +5059,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   final Value<DateTime> updatedAt;
   const GeofenceDailyStatesCompanion({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     this.day = const Value.absent(),
     this.wasInside = const Value.absent(),
     this.triggered = const Value.absent(),
@@ -4904,6 +5069,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   });
   GeofenceDailyStatesCompanion.insert({
     this.id = const Value.absent(),
+    this.accountKey = const Value.absent(),
     required DateTime day,
     this.wasInside = const Value.absent(),
     this.triggered = const Value.absent(),
@@ -4913,6 +5079,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   }) : day = Value(day);
   static Insertable<GeofenceDailyState> custom({
     Expression<int>? id,
+    Expression<String>? accountKey,
     Expression<DateTime>? day,
     Expression<bool>? wasInside,
     Expression<bool>? triggered,
@@ -4922,6 +5089,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (accountKey != null) 'account_key': accountKey,
       if (day != null) 'day': day,
       if (wasInside != null) 'was_inside': wasInside,
       if (triggered != null) 'triggered': triggered,
@@ -4933,6 +5101,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
 
   GeofenceDailyStatesCompanion copyWith(
       {Value<int>? id,
+      Value<String>? accountKey,
       Value<DateTime>? day,
       Value<bool>? wasInside,
       Value<bool>? triggered,
@@ -4941,6 +5110,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
       Value<DateTime>? updatedAt}) {
     return GeofenceDailyStatesCompanion(
       id: id ?? this.id,
+      accountKey: accountKey ?? this.accountKey,
       day: day ?? this.day,
       wasInside: wasInside ?? this.wasInside,
       triggered: triggered ?? this.triggered,
@@ -4955,6 +5125,9 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (accountKey.present) {
+      map['account_key'] = Variable<String>(accountKey.value);
     }
     if (day.present) {
       map['day'] = Variable<DateTime>(day.value);
@@ -4981,6 +5154,7 @@ class GeofenceDailyStatesCompanion extends UpdateCompanion<GeofenceDailyState> {
   String toString() {
     return (StringBuffer('GeofenceDailyStatesCompanion(')
           ..write('id: $id, ')
+          ..write('accountKey: $accountKey, ')
           ..write('day: $day, ')
           ..write('wasInside: $wasInside, ')
           ..write('triggered: $triggered, ')
@@ -8571,6 +8745,7 @@ typedef $$StockMovementsTableProcessedTableManager = ProcessedTableManager<
 typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
     Function({
   Value<int> id,
+  Value<String> accountKey,
   Value<String> workStartTime,
   Value<String> workEndTime,
   Value<int> lateGraceMinutes,
@@ -8587,6 +8762,7 @@ typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
 typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
     Function({
   Value<int> id,
+  Value<String> accountKey,
   Value<String> workStartTime,
   Value<String> workEndTime,
   Value<int> lateGraceMinutes,
@@ -8612,6 +8788,9 @@ class $$AttendanceRulesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get workStartTime => $composableBuilder(
       column: $table.workStartTime, builder: (column) => ColumnFilters(column));
@@ -8668,6 +8847,9 @@ class $$AttendanceRulesTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get workStartTime => $composableBuilder(
       column: $table.workStartTime,
       builder: (column) => ColumnOrderings(column));
@@ -8723,6 +8905,9 @@ class $$AttendanceRulesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => column);
 
   GeneratedColumn<String> get workStartTime => $composableBuilder(
       column: $table.workStartTime, builder: (column) => column);
@@ -8789,6 +8974,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
               $$AttendanceRulesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
@@ -8804,6 +8990,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
           }) =>
               AttendanceRulesCompanion(
             id: id,
+            accountKey: accountKey,
             workStartTime: workStartTime,
             workEndTime: workEndTime,
             lateGraceMinutes: lateGraceMinutes,
@@ -8819,6 +9006,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
@@ -8834,6 +9022,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
           }) =>
               AttendanceRulesCompanion.insert(
             id: id,
+            accountKey: accountKey,
             workStartTime: workStartTime,
             workEndTime: workEndTime,
             lateGraceMinutes: lateGraceMinutes,
@@ -8872,6 +9061,7 @@ typedef $$AttendanceRulesTableProcessedTableManager = ProcessedTableManager<
 typedef $$AttendanceRecordsTableCreateCompanionBuilder
     = AttendanceRecordsCompanion Function({
   Value<int> id,
+  Value<String> accountKey,
   required DateTime day,
   Value<DateTime?> checkInAt,
   Value<DateTime?> checkOutAt,
@@ -8895,6 +9085,7 @@ typedef $$AttendanceRecordsTableCreateCompanionBuilder
 typedef $$AttendanceRecordsTableUpdateCompanionBuilder
     = AttendanceRecordsCompanion Function({
   Value<int> id,
+  Value<String> accountKey,
   Value<DateTime> day,
   Value<DateTime?> checkInAt,
   Value<DateTime?> checkOutAt,
@@ -8927,6 +9118,9 @@ class $$AttendanceRecordsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnFilters(column));
@@ -8999,6 +9193,9 @@ class $$AttendanceRecordsTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnOrderings(column));
@@ -9073,6 +9270,9 @@ class $$AttendanceRecordsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => column);
 
   GeneratedColumn<DateTime> get day =>
       $composableBuilder(column: $table.day, builder: (column) => column);
@@ -9161,6 +9361,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
                   $db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             Value<DateTime> day = const Value.absent(),
             Value<DateTime?> checkInAt = const Value.absent(),
             Value<DateTime?> checkOutAt = const Value.absent(),
@@ -9183,6 +9384,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
           }) =>
               AttendanceRecordsCompanion(
             id: id,
+            accountKey: accountKey,
             day: day,
             checkInAt: checkInAt,
             checkOutAt: checkOutAt,
@@ -9205,6 +9407,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             required DateTime day,
             Value<DateTime?> checkInAt = const Value.absent(),
             Value<DateTime?> checkOutAt = const Value.absent(),
@@ -9227,6 +9430,7 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
           }) =>
               AttendanceRecordsCompanion.insert(
             id: id,
+            accountKey: accountKey,
             day: day,
             checkInAt: checkInAt,
             checkOutAt: checkOutAt,
@@ -9272,6 +9476,7 @@ typedef $$AttendanceRecordsTableProcessedTableManager = ProcessedTableManager<
 typedef $$PatchRequestsTableCreateCompanionBuilder = PatchRequestsCompanion
     Function({
   Value<int> id,
+  Value<String> accountKey,
   required DateTime day,
   required String patchType,
   Value<DateTime?> requestedCheckInAt,
@@ -9284,6 +9489,7 @@ typedef $$PatchRequestsTableCreateCompanionBuilder = PatchRequestsCompanion
 typedef $$PatchRequestsTableUpdateCompanionBuilder = PatchRequestsCompanion
     Function({
   Value<int> id,
+  Value<String> accountKey,
   Value<DateTime> day,
   Value<String> patchType,
   Value<DateTime?> requestedCheckInAt,
@@ -9305,6 +9511,9 @@ class $$PatchRequestsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnFilters(column));
@@ -9345,6 +9554,9 @@ class $$PatchRequestsTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnOrderings(column));
 
@@ -9383,6 +9595,9 @@ class $$PatchRequestsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => column);
 
   GeneratedColumn<DateTime> get day =>
       $composableBuilder(column: $table.day, builder: (column) => column);
@@ -9436,6 +9651,7 @@ class $$PatchRequestsTableTableManager extends RootTableManager<
               $$PatchRequestsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             Value<DateTime> day = const Value.absent(),
             Value<String> patchType = const Value.absent(),
             Value<DateTime?> requestedCheckInAt = const Value.absent(),
@@ -9447,6 +9663,7 @@ class $$PatchRequestsTableTableManager extends RootTableManager<
           }) =>
               PatchRequestsCompanion(
             id: id,
+            accountKey: accountKey,
             day: day,
             patchType: patchType,
             requestedCheckInAt: requestedCheckInAt,
@@ -9458,6 +9675,7 @@ class $$PatchRequestsTableTableManager extends RootTableManager<
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             required DateTime day,
             required String patchType,
             Value<DateTime?> requestedCheckInAt = const Value.absent(),
@@ -9469,6 +9687,7 @@ class $$PatchRequestsTableTableManager extends RootTableManager<
           }) =>
               PatchRequestsCompanion.insert(
             id: id,
+            accountKey: accountKey,
             day: day,
             patchType: patchType,
             requestedCheckInAt: requestedCheckInAt,
@@ -9503,6 +9722,7 @@ typedef $$PatchRequestsTableProcessedTableManager = ProcessedTableManager<
 typedef $$GeofenceDailyStatesTableCreateCompanionBuilder
     = GeofenceDailyStatesCompanion Function({
   Value<int> id,
+  Value<String> accountKey,
   required DateTime day,
   Value<bool> wasInside,
   Value<bool> triggered,
@@ -9513,6 +9733,7 @@ typedef $$GeofenceDailyStatesTableCreateCompanionBuilder
 typedef $$GeofenceDailyStatesTableUpdateCompanionBuilder
     = GeofenceDailyStatesCompanion Function({
   Value<int> id,
+  Value<String> accountKey,
   Value<DateTime> day,
   Value<bool> wasInside,
   Value<bool> triggered,
@@ -9532,6 +9753,9 @@ class $$GeofenceDailyStatesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnFilters(column));
@@ -9566,6 +9790,9 @@ class $$GeofenceDailyStatesTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get day => $composableBuilder(
       column: $table.day, builder: (column) => ColumnOrderings(column));
 
@@ -9598,6 +9825,9 @@ class $$GeofenceDailyStatesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accountKey => $composableBuilder(
+      column: $table.accountKey, builder: (column) => column);
 
   GeneratedColumn<DateTime> get day =>
       $composableBuilder(column: $table.day, builder: (column) => column);
@@ -9649,6 +9879,7 @@ class $$GeofenceDailyStatesTableTableManager extends RootTableManager<
                   $db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             Value<DateTime> day = const Value.absent(),
             Value<bool> wasInside = const Value.absent(),
             Value<bool> triggered = const Value.absent(),
@@ -9658,6 +9889,7 @@ class $$GeofenceDailyStatesTableTableManager extends RootTableManager<
           }) =>
               GeofenceDailyStatesCompanion(
             id: id,
+            accountKey: accountKey,
             day: day,
             wasInside: wasInside,
             triggered: triggered,
@@ -9667,6 +9899,7 @@ class $$GeofenceDailyStatesTableTableManager extends RootTableManager<
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
+            Value<String> accountKey = const Value.absent(),
             required DateTime day,
             Value<bool> wasInside = const Value.absent(),
             Value<bool> triggered = const Value.absent(),
@@ -9676,6 +9909,7 @@ class $$GeofenceDailyStatesTableTableManager extends RootTableManager<
           }) =>
               GeofenceDailyStatesCompanion.insert(
             id: id,
+            accountKey: accountKey,
             day: day,
             wasInside: wasInside,
             triggered: triggered,

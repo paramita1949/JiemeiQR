@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 class PatchRequests extends Table {
   IntColumn get id => integer().autoIncrement()();
 
+  TextColumn get accountKey => text().withDefault(const Constant('local'))();
   DateTimeColumn get day => dateTime()();
   TextColumn get patchType => text()(); // checkin / checkout / both
   DateTimeColumn get requestedCheckInAt => dateTime().nullable()();

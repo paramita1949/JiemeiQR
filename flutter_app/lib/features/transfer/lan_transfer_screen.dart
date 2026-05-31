@@ -761,26 +761,29 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
 
     setState(() {
       _cloudUploading = true;
-      _statusText = '正在上传云备份...';
+      _statusText = '正在合并云端数据...';
     });
     try {
-      final package = await _backupService.createSharePackage();
+      final package = await _createMergedCloudPackageOrLocal(session);
       await _cloudBackupService.uploadPackage(
         session: session,
         packageFile: File(package.filePath),
       );
+      await widget.onPrepareImport?.call();
+      await _backupService.importSharedBackupPackage(package.filePath);
+      await widget.onImportCompleted?.call(seedIfEmpty: false);
       if (!mounted) {
         return;
       }
       await _loadCloudBackups(session);
-      setState(() => _statusText = '云备份上传完成：${package.fileName}');
-      _showSnack('云备份已上传');
+      setState(() => _statusText = '合并同步完成：${package.fileName}');
+      _showSnack('合并同步已完成');
     } on BackupSourceMissingException {
       _showSnack('当前数据库不存在，无法上传');
     } on CloudBackupPermissionException {
       _showSnack('当前账号没有上传权限');
     } catch (_) {
-      _showSnack('云备份上传失败');
+      _showSnack('合并同步失败');
     } finally {
       if (mounted) {
         setState(() => _cloudUploading = false);
@@ -832,10 +835,13 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         session: session,
         backup: backup,
       );
+      final mergedPackage = await _backupService.createMergedSharePackage(
+        cloudPackagePath: packageFile.path,
+      );
       await widget.onPrepareImport?.call();
       prepared = true;
       final result =
-          await _backupService.importSharedBackupPackage(packageFile.path);
+          await _backupService.importSharedBackupPackage(mergedPackage.filePath);
       await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
       if (!mounted) {
@@ -883,6 +889,24 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (mounted) {
         setState(() => _cloudRestoring = false);
       }
+    }
+  }
+
+  Future<SharePackageResult> _createMergedCloudPackageOrLocal(
+    CloudBackupSession session,
+  ) async {
+    try {
+      final cloudPackage = await _cloudBackupService.downloadPackage(
+        session: session,
+      );
+      return _backupService.createMergedSharePackage(
+        cloudPackagePath: cloudPackage.path,
+      );
+    } on CloudBackupRequestException catch (error) {
+      if (error.statusCode == 404) {
+        return _backupService.createSharePackage();
+      }
+      rethrow;
     }
   }
 

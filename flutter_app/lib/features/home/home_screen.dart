@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_account_resolver.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_precheckin_guard_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
@@ -319,8 +320,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _runAttendanceReminderCheck() async {
     try {
+      final accountKey = await const AttendanceAccountResolver().resolve();
       await AttendanceGeofenceReminderService.checkAndMaybeNotify(
         database: _database,
+        accountKey: accountKey,
       );
     } catch (_) {
       // Keep home resilient when location/notification fails on some devices.
@@ -336,8 +339,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _runPrecheckinGuard({required bool forForeground}) async {
     try {
+      final accountKey = await const AttendanceAccountResolver().resolve();
       final decision = await AttendancePrecheckinGuardService.evaluate(
         database: _database,
+        accountKey: accountKey,
       );
       if (!decision.shouldRemind) return;
 

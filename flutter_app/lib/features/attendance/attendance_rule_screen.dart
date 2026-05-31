@@ -6,6 +6,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
+import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -13,9 +14,11 @@ class AttendanceRuleScreen extends StatefulWidget {
   const AttendanceRuleScreen({
     super.key,
     required this.database,
+    this.accountKey = 'local',
   });
 
   final AppDatabase database;
+  final String accountKey;
 
   @override
   State<AttendanceRuleScreen> createState() => _AttendanceRuleScreenState();
@@ -23,7 +26,9 @@ class AttendanceRuleScreen extends StatefulWidget {
 
 class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   late final AttendanceDao _dao;
+  final _cloudBackupService = CloudBackupService(api: SupabaseCloudBackupApi());
   bool _loading = true;
+  bool _cloudBusy = false;
   final _startController = TextEditingController();
   final _endController = TextEditingController();
   final _lateController = TextEditingController();
@@ -59,7 +64,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   @override
   void initState() {
     super.initState();
-    _dao = AttendanceDao(widget.database);
+    _dao = AttendanceDao(widget.database, accountKey: widget.accountKey);
     _load();
   }
 
@@ -89,7 +94,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _backups = await _dao.listAttendanceBackups();
     _todayGeofenceState = await _dao.getTodayGeofenceState();
     _providerSummary = await AttendanceGeofenceBridge.providerSummary();
-    _permissionState = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+    _permissionState =
+        await AttendanceGeofenceReminderService.ensureSystemPermissions(
       requestIfNeeded: false,
     );
     if (!mounted) return;
@@ -171,7 +177,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   Future<void> _useCurrentLocation() async {
     final messenger = ScaffoldMessenger.of(context);
     DebugEventLog.add('GEOFENCE_LOCATE', 'tap 获取当前位置');
-    final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+    final state =
+        await AttendanceGeofenceReminderService.ensureSystemPermissions(
       requestIfNeeded: true,
     );
     DebugEventLog.add(
@@ -231,13 +238,15 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     setState(() => _geofenceTesting = true);
     final messenger = ScaffoldMessenger.of(context);
     DebugEventLog.add('GEOFENCE_TEST', 'tap 围栏测试');
-    final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+    final state =
+        await AttendanceGeofenceReminderService.ensureSystemPermissions(
       requestIfNeeded: true,
     );
     if (!state.locationServiceEnabled ||
         state.locationPermission == LocationPermission.denied ||
         state.locationPermission == LocationPermission.deniedForever) {
-      DebugEventLog.add('GEOFENCE_TEST', 'permission/location_service_not_ready');
+      DebugEventLog.add(
+          'GEOFENCE_TEST', 'permission/location_service_not_ready');
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('定位服务或定位权限未就绪，无法执行围栏测试')),
@@ -248,7 +257,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
     final fenceLat = double.tryParse(_latController.text.trim());
     final fenceLng = double.tryParse(_lngController.text.trim());
-    final radius = (int.tryParse(_radiusController.text.trim()) ?? 300).clamp(50, 2000);
+    final radius =
+        (int.tryParse(_radiusController.text.trim()) ?? 300).clamp(50, 2000);
     if (fenceLat == null || fenceLng == null) {
       DebugEventLog.add('GEOFENCE_TEST', 'fence_center_missing');
       if (!mounted) return;
@@ -299,7 +309,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
           '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
           '${inside ? '判定：已进入围栏（打开APP会自动上班签到）' : '判定：未进入围栏（不会自动签到）'}',
-          style: const TextStyle(fontSize: 18, height: 1.35, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+              fontSize: 18, height: 1.35, fontWeight: FontWeight.w600),
         ),
         actions: [
           TextButton(
@@ -362,6 +373,73 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     );
   }
 
+  Future<void> _uploadAttendanceToCloud() async {
+    await _runCloudAttendanceAction(() async {
+      final session = await _cloudBackupService.loadSavedSession();
+      if (session == null) {
+        throw const _AttendanceCloudLoginRequiredException();
+      }
+      final jsonText = await _dao.exportAttendanceJson();
+      await _cloudBackupService.uploadAttendanceBackup(
+        session: session,
+        accountKey: widget.accountKey,
+        jsonText: jsonText,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('签到数据已上传云端')),
+      );
+    });
+  }
+
+  Future<void> _downloadAttendanceFromCloud() async {
+    await _runCloudAttendanceAction(() async {
+      final session = await _cloudBackupService.loadSavedSession();
+      if (session == null) {
+        throw const _AttendanceCloudLoginRequiredException();
+      }
+      final jsonText = await _cloudBackupService.downloadAttendanceBackup(
+        session: session,
+        accountKey: widget.accountKey,
+      );
+      await _dao.importAttendanceJson(jsonText, overwrite: true);
+      _backups = await _dao.listAttendanceBackups();
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('云端签到数据已下载覆盖')),
+      );
+    });
+  }
+
+  Future<void> _runCloudAttendanceAction(Future<void> Function() action) async {
+    if (_cloudBusy) return;
+    setState(() => _cloudBusy = true);
+    try {
+      await action();
+    } on _AttendanceCloudLoginRequiredException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先在数据备份里登录云账号')),
+      );
+    } on CloudBackupRequestException catch (e) {
+      if (!mounted) return;
+      final notFound = e.statusCode == 404;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(notFound ? '云端还没有这个账号的签到备份' : '云同步失败：$e')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('云同步失败：$e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _cloudBusy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFFF3F6FC);
@@ -387,7 +465,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
               children: [
                 _rowField('上班时间', _startController),
                 _rowField('下班时间', _endController),
-                _rowField('迟到宽限(分钟)', _lateController, keyboardType: TextInputType.number),
+                _rowField('迟到宽限(分钟)', _lateController,
+                    keyboardType: TextInputType.number),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -397,7 +476,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                       ButtonSegment(value: 'double', label: Text('双休')),
                     ],
                     selected: {_weekendType},
-                    onSelectionChanged: (v) => setState(() => _weekendType = v.first),
+                    onSelectionChanged: (v) =>
+                        setState(() => _weekendType = v.first),
                   ),
                 ),
               ],
@@ -409,7 +489,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             icon: Icons.location_on_rounded,
             child: Column(
               children: [
-                _switchTile('到公司自动签到', _geofenceEnabled, (v) => setState(() => _geofenceEnabled = v)),
+                _switchTile('到公司自动签到', _geofenceEnabled,
+                    (v) => setState(() => _geofenceEnabled = v)),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -423,7 +504,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                   child: TextButton.icon(
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
-                      final state = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+                      final state = await AttendanceGeofenceReminderService
+                          .ensureSystemPermissions(
                         requestIfNeeded: true,
                       );
                       if (!mounted) return;
@@ -442,13 +524,19 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       _providerSummary,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF64748B)),
                     ),
                   ),
                 ),
-                _rowField('纬度', _latController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                _rowField('经度', _lngController, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                _rowField('范围半径(m)', _radiusController, keyboardType: TextInputType.number),
+                _rowField('纬度', _latController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true)),
+                _rowField('经度', _lngController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true)),
+                _rowField('范围半径(m)', _radiusController,
+                    keyboardType: TextInputType.number),
                 const SizedBox(height: 2),
                 Wrap(
                   spacing: 8,
@@ -460,24 +548,29 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _switchTile('上班前通知', _checkInRemindEnabled, (v) => setState(() => _checkInRemindEnabled = v)),
-                _switchTile('下班通知', _checkOutRemindEnabled, (v) => setState(() => _checkOutRemindEnabled = v)),
+                _switchTile('上班前通知', _checkInRemindEnabled,
+                    (v) => setState(() => _checkInRemindEnabled = v)),
+                _switchTile('下班通知', _checkOutRemindEnabled,
+                    (v) => setState(() => _checkOutRemindEnabled = v)),
                 if (_todayGeofenceState != null)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFF),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.radar_rounded, size: 18, color: Color(0xFF4664C6)),
+                        const Icon(Icons.radar_rounded,
+                            size: 18, color: Color(0xFF4664C6)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '今日：${_todayGeofenceState!.wasInside ? '围栏内' : '围栏外'} · 已触发${_todayGeofenceState!.triggeredCount}次',
-                            style: const TextStyle(fontSize: 13, color: Color(0xFF4B587C)),
+                            style: const TextStyle(
+                                fontSize: 13, color: Color(0xFF4B587C)),
                           ),
                         ),
                       ],
@@ -499,12 +592,14 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                       backgroundColor: const Color(0xFF1F63F2),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
                     onPressed: _exportAttendanceBackup,
                     icon: const Icon(Icons.ios_share_rounded, size: 18),
-                    label: const Text('生成并分享备份', style: TextStyle(fontWeight: FontWeight.w700)),
+                    label: const Text('生成并分享备份',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -516,11 +611,15 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                           foregroundColor: const Color(0xFF1F63F2),
                           side: const BorderSide(color: Color(0xFFBFD1FF)),
                           padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
-                        onPressed: () => _importAttendanceBackup(overwrite: true),
-                        icon: const Icon(Icons.file_download_outlined, size: 18),
-                        label: const Text('导入覆盖', style: TextStyle(fontWeight: FontWeight.w700)),
+                        onPressed: () =>
+                            _importAttendanceBackup(overwrite: true),
+                        icon:
+                            const Icon(Icons.file_download_outlined, size: 18),
+                        label: const Text('导入覆盖',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -530,20 +629,66 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                           foregroundColor: const Color(0xFF1F63F2),
                           side: const BorderSide(color: Color(0xFFBFD1FF)),
                           padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
-                        onPressed: () => _importAttendanceBackup(overwrite: false),
+                        onPressed: () =>
+                            _importAttendanceBackup(overwrite: false),
                         icon: const Icon(Icons.merge_type_rounded, size: 18),
-                        label: const Text('导入合并', style: TextStyle(fontWeight: FontWeight.w700)),
+                        label: const Text('导入合并',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0F766E),
+                          side: const BorderSide(color: Color(0xFF99F6E4)),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: _cloudBusy ? null : _uploadAttendanceToCloud,
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                        label: const Text('上传云端',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0F766E),
+                          side: const BorderSide(color: Color(0xFF99F6E4)),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed:
+                            _cloudBusy ? null : _downloadAttendanceFromCloud,
+                        icon:
+                            const Icon(Icons.cloud_download_outlined, size: 18),
+                        label: const Text('云端下载',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_cloudBusy) ...[
+                  const SizedBox(height: 10),
+                  const LinearProgressIndicator(minHeight: 3),
+                ],
+                const SizedBox(height: 12),
                 if (_backups.isEmpty)
                   const Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('暂无备份记录', style: TextStyle(color: Color(0xFF74819E))),
+                    child: Text('暂无备份记录',
+                        style: TextStyle(color: Color(0xFF74819E))),
                   )
                 else
                   ..._backups.map(_backupTile),
@@ -554,7 +699,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           FilledButton(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: _save,
             child: const Text('保存设置'),
@@ -569,7 +715,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   Widget _debugPanel() {
     final p = _permissionState;
     final notify = p == null ? '--' : (p.notificationGranted ? '已开启' : '未开启');
-    final service = p == null ? '--' : (p.locationServiceEnabled ? '已开启' : '未开启');
+    final service =
+        p == null ? '--' : (p.locationServiceEnabled ? '已开启' : '未开启');
     String location = '--';
     if (p != null) {
       switch (p.locationPermission) {
@@ -596,20 +743,26 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('通知权限：$notify', style: const TextStyle(color: Color(0xFF475569))),
-          Text('定位权限：$location', style: const TextStyle(color: Color(0xFF475569))),
-          Text('定位服务：$service', style: const TextStyle(color: Color(0xFF475569))),
-          Text(_providerSummary, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+          Text('通知权限：$notify',
+              style: const TextStyle(color: Color(0xFF475569))),
+          Text('定位权限：$location',
+              style: const TextStyle(color: Color(0xFF475569))),
+          Text('定位服务：$service',
+              style: const TextStyle(color: Color(0xFF475569))),
+          Text(_providerSummary,
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final next = await AttendanceGeofenceReminderService.ensureSystemPermissions(
+                    final next = await AttendanceGeofenceReminderService
+                        .ensureSystemPermissions(
                       requestIfNeeded: false,
                     );
-                    final provider = await AttendanceGeofenceBridge.providerSummary();
+                    final provider =
+                        await AttendanceGeofenceBridge.providerSummary();
                     if (!mounted) return;
                     setState(() {
                       _permissionState = next;
@@ -624,7 +777,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: _geofenceTesting ? null : _runGeofenceTest,
-                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  icon:
+                      const Icon(Icons.notifications_active_outlined, size: 18),
                   label: Text(_geofenceTesting ? '测试中...' : '围栏测试'),
                 ),
               ),
@@ -658,7 +812,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${b.createdAt.toLocal()} · ${b.sizeBytes}B',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF74819E)),
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF74819E)),
                 ),
               ],
             ),
@@ -708,7 +863,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       label: Text('${radius}m'),
       selected: selected,
       onSelected: (_) => setState(() => _radiusController.text = '$radius'),
-      side: BorderSide(color: selected ? const Color(0xFF8DB0FF) : const Color(0xFFD7DDF0)),
+      side: BorderSide(
+          color: selected ? const Color(0xFF8DB0FF) : const Color(0xFFD7DDF0)),
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       selectedColor: const Color(0xFFDDE8FF),
@@ -722,7 +878,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     );
   }
 
-  Widget _glassCard({required String title, required IconData icon, required Widget child}) {
+  Widget _glassCard(
+      {required String title, required IconData icon, required Widget child}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -753,7 +910,9 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                 child: Icon(icon, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 12),
@@ -794,4 +953,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       ),
     );
   }
+}
+
+class _AttendanceCloudLoginRequiredException implements Exception {
+  const _AttendanceCloudLoginRequiredException();
 }
