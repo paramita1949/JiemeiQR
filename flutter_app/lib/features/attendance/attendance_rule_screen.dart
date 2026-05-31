@@ -7,6 +7,7 @@ import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.da
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
+import 'package:share_plus/share_plus.dart';
 
 class AttendanceRuleScreen extends StatefulWidget {
   const AttendanceRuleScreen({
@@ -39,6 +40,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _checkOutRemindEnabled = false;
   String _weekendType = 'double';
   String _providerSummary = '系统融合定位（GPS/北斗/网络）';
+  List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
 
   Future<({double lat, double lng, String provider, double? accuracy})?>
@@ -86,6 +88,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _checkInRemindEnabled = rule.checkinReminderEnabled;
     _checkOutRemindEnabled = rule.checkoutReminderEnabled;
     _weekendType = rule.weekendType;
+    _backups = await _dao.listAttendanceBackups();
     _todayGeofenceState = await _dao.getTodayGeofenceState();
     _providerSummary = await AttendanceGeofenceBridge.providerSummary();
     if (!mounted) return;
@@ -223,6 +226,35 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
   }
 
+  Future<void> _exportAttendanceBackup() async {
+    final file = await _dao.createAttendanceBackup();
+    _backups = await _dao.listAttendanceBackups();
+    if (!mounted) return;
+    setState(() {});
+    await SharePlus.instance.share(
+      ShareParams(
+        text: '考勤备份',
+        files: [XFile(file.filePath)],
+      ),
+    );
+  }
+
+  Future<void> _deleteBackup(AttendanceBackupSnapshot row) async {
+    await _dao.deleteAttendanceBackup(row.filePath);
+    _backups = await _dao.listAttendanceBackups();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _shareBackup(AttendanceBackupSnapshot row) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        text: '考勤备份',
+        files: [XFile(row.filePath)],
+      ),
+    );
+  }
+
   Future<void> _uploadAttendanceToCloud() async {
     await _runCloudAttendanceAction(() async {
       final session = await _cloudBackupService.loadSavedSession();
@@ -341,47 +373,154 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             title: '到公司自动签到',
             icon: Icons.location_on_rounded,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _switchTile('到公司自动签到', _geofenceEnabled,
-                    (v) => setState(() => _geofenceEnabled = v)),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _useCurrentLocation,
-                    icon: const Icon(Icons.my_location_rounded, size: 18),
-                    label: const Text('获取当前位置'),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FE),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: _geofenceEnabled
+                              ? const Color(0xFFE0F2FE)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          Icons.location_searching_rounded,
+                          color: _geofenceEnabled
+                              ? const Color(0xFF0369A1)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '到公司自动签到',
+                              style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              '进入公司范围后自动记录上班',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _geofenceEnabled,
+                        activeThumbColor: const Color(0xFF1D4ED8),
+                        onChanged: (v) async {
+                          setState(() => _geofenceEnabled = v);
+                          await _saveGeofenceOnly();
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final state = await AttendanceGeofenceReminderService
-                          .ensureSystemPermissions(
-                        requestIfNeeded: true,
-                      );
-                      if (!mounted) return;
-                      final msg = state.ready
-                          ? '权限已就绪（定位/通知）'
-                          : '权限未完全开启：请检查定位服务、定位权限、通知权限（VIVO 还需自启动与后台高耗电白名单）';
-                      messenger.showSnackBar(SnackBar(content: Text(msg)));
-                    },
-                    icon: const Icon(Icons.verified_user_outlined, size: 18),
-                    label: const Text('检测并开启系统权限'),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      _providerSummary,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF64748B)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1F63F2),
+                          side: const BorderSide(color: Color(0xFFC7D8FF)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: _useCurrentLocation,
+                        icon: const Icon(Icons.my_location_rounded, size: 18),
+                        label: const Text(
+                          '当前位置',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0F766E),
+                          side: const BorderSide(color: Color(0xFF99F6E4)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final state = await AttendanceGeofenceReminderService
+                              .ensureSystemPermissions(
+                            requestIfNeeded: true,
+                          );
+                          if (!mounted) return;
+                          final msg = state.ready
+                              ? '权限已就绪（定位/通知）'
+                              : '权限未完全开启：请检查定位服务、定位权限、通知权限（VIVO 还需自启动与后台高耗电白名单）';
+                          messenger.showSnackBar(SnackBar(content: Text(msg)));
+                        },
+                        icon:
+                            const Icon(Icons.verified_user_outlined, size: 18),
+                        label: const Text(
+                          '系统权限',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.sensors_rounded,
+                        size: 18,
+                        color: Color(0xFF4664C6),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _providerSummary,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 10),
                 _rowField('纬度', _latController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true)),
@@ -429,6 +568,46 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                       ],
                     ),
                   ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _glassCard(
+            title: '考勤备份',
+            icon: Icons.inventory_2_rounded,
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1F63F2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _exportAttendanceBackup,
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: const Text(
+                      '生成并分享备份',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_backups.isEmpty)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '暂无本地备份记录',
+                      style: TextStyle(color: Color(0xFF74819E)),
+                    ),
+                  )
+                else
+                  ..._backups.map(_backupTile),
               ],
             ),
           ),
@@ -524,6 +703,56 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       onPressed: onPressed,
       icon: Icon(icon, size: 19),
       label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+    );
+  }
+
+  Widget _backupTile(AttendanceBackupSnapshot b) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FE),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  b.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${b.createdAt.toLocal()} · ${b.sizeBytes}B',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF74819E),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _shareBackup(b),
+            icon: const Icon(Icons.share_rounded),
+            tooltip: '分享',
+          ),
+          IconButton(
+            onPressed: () => _deleteBackup(b),
+            icon: const Icon(Icons.delete_outline_rounded),
+            tooltip: '删除',
+          ),
+        ],
+      ),
     );
   }
 

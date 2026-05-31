@@ -175,15 +175,14 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
     String? objectPath,
   }) async {
     final targetPath = objectPath ?? this.objectPath;
-    final uri = _uri('/storage/v1/object/$bucketName/$targetPath', {
-      'upsert': 'true',
-    });
+    final uri = _uri('/storage/v1/object/$bucketName/$targetPath');
     final client = _httpClient ?? HttpClient();
     try {
       final request = await client.postUrl(uri);
       request.headers
         ..set(HttpHeaders.authorizationHeader, 'Bearer ${session.accessToken}')
         ..set('apikey', publishableKey)
+        ..set('x-upsert', 'true')
         ..set(HttpHeaders.contentTypeHeader, 'application/octet-stream');
       request.add(await packageFile.readAsBytes());
       final response = await request.close();
