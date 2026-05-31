@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/attendance_workday_policy.dart';
 
 class AttendanceDao {
   AttendanceDao(
@@ -248,6 +249,7 @@ class AttendanceDao {
   }
 
   Future<List<AttendanceRecord>> recordsByMonth(DateTime month) async {
+    final rule = await getRule();
     final from = DateTime(month.year, month.month, 1);
     final to = DateTime(month.year, month.month + 1, 1);
     final rows = await (_db.select(_db.attendanceRecords)
@@ -257,55 +259,8 @@ class AttendanceDao {
               t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
-    return _applyWeekendOvertime(rows);
+    return rows.map((row) => _deriveRecordForRule(row, rule, rows)).toList();
   }
-
-  List<AttendanceRecord> _applyWeekendOvertime(List<AttendanceRecord> rows) {
-    if (rows.isEmpty) return rows;
-    final byDay = <String, AttendanceRecord>{};
-    for (final row in rows) {
-      byDay[_dayKey(row.day)] = row;
-    }
-
-    final result = <AttendanceRecord>[];
-    for (final row in rows) {
-      final normalized = DateTime(row.day.year, row.day.month, row.day.day);
-      if (normalized.weekday != DateTime.sunday ||
-          row.checkInAt == null ||
-          row.checkOutAt == null) {
-        result.add(row);
-        continue;
-      }
-      final sat = normalized.subtract(const Duration(days: 1));
-      final satRow = byDay[_dayKey(sat)];
-      final bothWeekendWorked = satRow != null &&
-          satRow.checkInAt != null &&
-          satRow.checkOutAt != null;
-      if (!bothWeekendWorked) {
-        result.add(row);
-        continue;
-      }
-
-      final workedMinutes = row.checkOutAt!.isAfter(row.checkInAt!)
-          ? row.checkOutAt!.difference(row.checkInAt!).inMinutes
-          : 0;
-      final weekendOvertimeHours = (workedMinutes ~/ 30) * 0.5;
-      if (weekendOvertimeHours <= row.overtimeHoursRounded) {
-        result.add(row);
-        continue;
-      }
-
-      result.add(
-        row.copyWith(
-          overtimeMinutesRaw: workedMinutes,
-          overtimeHoursRounded: weekendOvertimeHours,
-        ),
-      );
-    }
-    return result;
-  }
-
-  String _dayKey(DateTime day) => '${day.year}-${day.month}-${day.day}';
 
   Future<List<DateTime>> recordedMonths() async {
     final rows = await (_db.select(_db.attendanceRecords)
@@ -674,20 +629,129 @@ class AttendanceDao {
     final first = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     var count = 0;
+    final singleWeekendPairs = <String>{};
     for (var i = 0; i < daysInMonth; i++) {
       final day = first.add(Duration(days: i));
-      if (_isWorkday(day, weekendType)) {
+      if (weekendType == 'single' && isAttendanceWeekend(day)) {
+        final saturday = day.weekday == DateTime.saturday
+            ? day
+            : day.subtract(const Duration(days: 1));
+        singleWeekendPairs
+            .add('${saturday.year}-${saturday.month}-${saturday.day}');
+      } else if (_isWorkday(day, weekendType)) {
         count += 1;
       }
     }
-    return count;
+    return count + singleWeekendPairs.length;
   }
 
   bool _isWorkday(DateTime day, String weekendType) {
     if (weekendType == 'single') {
-      return day.weekday != DateTime.sunday;
+      return !isAttendanceWeekend(day);
     }
-    return day.weekday != DateTime.saturday && day.weekday != DateTime.sunday;
+    return isAttendanceWeekday(day);
+  }
+
+  AttendanceRecord _deriveRecordForRule(
+    AttendanceRecord row,
+    AttendanceRule rule,
+    List<AttendanceRecord> rows,
+  ) {
+    final day = DateTime(row.day.year, row.day.month, row.day.day);
+    final workStartBase = _mergeDayTime(day, rule.workStartTime);
+    final workStart = workStartBase.add(
+      Duration(minutes: rule.lateGraceMinutes),
+    );
+    final workEnd = _mergeDayTime(day, rule.workEndTime);
+
+    final checkIn = row.checkInAt;
+    final checkOut = row.checkOutAt;
+    final isWorkdayByRule = _isWorkdayForRecord(day, rule.weekendType, rows);
+    final effectiveHoliday = row.isHoliday;
+    final hasCheckIn = checkIn != null;
+    final hasCheckOut = checkOut != null;
+    final exception = (hasCheckIn ^ hasCheckOut) ||
+        (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
+    final needsPatch =
+        exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
+    final patched = row.patched || (row.needsPatch && !needsPatch);
+    final late = row.isLeave || effectiveHoliday || !isWorkdayByRule
+        ? false
+        : (checkIn != null ? checkIn.isAfter(workStart) : false);
+    final early = (effectiveHoliday || !isWorkdayByRule)
+        ? false
+        : (checkOut != null ? checkOut.isBefore(workEnd) : false);
+    final leaveMinutes = row.isLeave &&
+            !effectiveHoliday &&
+            checkIn != null &&
+            checkIn.isAfter(workStartBase)
+        ? checkIn.difference(workStartBase).inMinutes
+        : 0;
+    final rawMinutes = (effectiveHoliday || !isWorkdayByRule)
+        ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
+            ? checkOut.difference(checkIn).inMinutes
+            : 0
+        : checkOut != null && checkOut.isAfter(workEnd)
+            ? checkOut.difference(workEnd).inMinutes
+            : 0;
+    final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
+
+    return row.copyWith(
+      isLate: late,
+      isEarlyLeave: early,
+      isException: exception,
+      needsPatch: needsPatch,
+      overtimeMinutesRaw: rawMinutes,
+      leaveMinutes: leaveMinutes,
+      overtimeHoursRounded: roundedHours,
+      isWorkday: isWorkdayByRule,
+      isAbsent: effectiveHoliday ? false : row.isAbsent,
+      isLeave: effectiveHoliday ? false : row.isLeave,
+      isHoliday: effectiveHoliday,
+      patched: patched,
+    );
+  }
+
+  bool _isWorkdayForRecord(
+    DateTime day,
+    String weekendType,
+    List<AttendanceRecord> rows,
+  ) {
+    if (weekendType != 'single') {
+      return _isWorkday(day, weekendType);
+    }
+    if (!isAttendanceWeekend(day)) {
+      return true;
+    }
+
+    final current = _rowForDay(rows, day);
+    final otherDay = day.weekday == DateTime.saturday
+        ? day.add(const Duration(days: 1))
+        : day.subtract(const Duration(days: 1));
+    final other = _rowForDay(rows, otherDay);
+    final currentWorked = current == null || _hasAttendanceSignal(current);
+    final otherWorked = other != null && _hasAttendanceSignal(other);
+    if (!otherWorked) {
+      return currentWorked;
+    }
+    return day.weekday == DateTime.saturday;
+  }
+
+  AttendanceRecord? _rowForDay(List<AttendanceRecord> rows, DateTime day) {
+    final normalized = DateTime(day.year, day.month, day.day);
+    for (final row in rows) {
+      final rowDay = DateTime(row.day.year, row.day.month, row.day.day);
+      if (rowDay == normalized) return row;
+    }
+    return null;
+  }
+
+  bool _hasAttendanceSignal(AttendanceRecord row) {
+    return row.checkInAt != null ||
+        row.checkOutAt != null ||
+        row.isAbsent ||
+        row.isLeave ||
+        row.isHoliday;
   }
 
   Future<void> _saveNormalizedRecord(
@@ -703,7 +767,31 @@ class AttendanceDao {
 
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
-    final isWorkdayByRule = _isWorkday(day, rule.weekendType);
+    final pairRows = <AttendanceRecord>[row];
+    if (rule.weekendType == 'single' && isAttendanceWeekend(day)) {
+      final otherDay = day.weekday == DateTime.saturday
+          ? day.add(const Duration(days: 1))
+          : day.subtract(const Duration(days: 1));
+      final other = await (_db.select(_db.attendanceRecords)
+            ..where(
+              (t) =>
+                  t.accountKey.equals(accountKey) &
+                  t.day.equals(DateTime(
+                    otherDay.year,
+                    otherDay.month,
+                    otherDay.day,
+                  )),
+            ))
+          .getSingleOrNull();
+      if (other != null) {
+        pairRows.add(other);
+      }
+    }
+    final isWorkdayByRule = _isWorkdayForRecord(
+      day,
+      rule.weekendType,
+      pairRows,
+    );
     final effectiveHoliday = row.isHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;

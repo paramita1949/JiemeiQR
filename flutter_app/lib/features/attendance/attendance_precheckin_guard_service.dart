@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:qrscan_flutter/data/attendance_workday_policy.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
@@ -20,7 +21,7 @@ class AttendancePrecheckinGuardService {
     final day = DateTime(ts.year, ts.month, ts.day);
     final dayKey = '${day.year}-${day.month}-${day.day}';
 
-    if (!_isWorkday(day, rule.weekendType)) {
+    if (isAttendanceDefinitelyRestDay(day, rule.weekendType)) {
       return PrecheckinDecision.none(dayKey);
     }
 
@@ -65,13 +66,6 @@ class AttendancePrecheckinGuardService {
     final hour = int.tryParse(parts.first) ?? 8;
     final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
     return DateTime(day.year, day.month, day.day, hour, minute);
-  }
-
-  static bool _isWorkday(DateTime day, String weekendType) {
-    if (weekendType == 'single') {
-      return day.weekday != DateTime.sunday;
-    }
-    return day.weekday != DateTime.saturday && day.weekday != DateTime.sunday;
   }
 }
 

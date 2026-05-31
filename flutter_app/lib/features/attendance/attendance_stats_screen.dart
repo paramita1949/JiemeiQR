@@ -25,7 +25,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   late final AttendanceDao _dao;
   late DateTime _month;
   List<DateTime> _months = const [];
-  AttendanceRule? _rule;
   MonthAttendanceStats? _stats;
   List<AttendanceRecord> _rows = const [];
   bool _loading = true;
@@ -45,14 +44,12 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     if (allMonths.isNotEmpty && !_containsMonth(allMonths, _month)) {
       effectiveMonth = allMonths.last;
     }
-    final rule = await _dao.getRule();
     final stats = await _dao.monthStats(effectiveMonth);
     final rows = await _dao.recordsByMonth(effectiveMonth);
     if (!mounted) return;
     setState(() {
       _months = allMonths;
       _month = effectiveMonth;
-      _rule = rule;
       _stats = stats;
       _rows = rows;
       _loading = false;
@@ -116,7 +113,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                   }
                 },
                 child: SizedBox(
-                  height: 48,
+                  height: 42,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: monthChips.length,
@@ -151,7 +148,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                 headers: const ['日期', '上班/下班', '状态'],
                 rows: _rows.map((r) {
                   final hasBoth = r.checkInAt != null && r.checkOutAt != null;
-                  final status = (!_isWorkdayByRule(r.day) && hasBoth)
+                  final status = (!r.isWorkday && hasBoth)
                       ? '休息日'
                       : r.isHoliday
                           ? '假期'
@@ -184,7 +181,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                     .where((r) => r.overtimeHoursRounded > 0)
                     .map((r) => [
                           _md(r.day),
-                          (!_isWorkdayByRule(r.day) || r.isHoliday)
+                          (!r.isWorkday || r.isHoliday)
                               ? '${r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!)}-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}'
                               : '17:00-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
                           r.overtimeHoursRounded.toStringAsFixed(1),
@@ -201,22 +198,44 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
   Widget _monthChip(DateTime month) {
     final selected = month.year == _month.year && month.month == _month.month;
-    return InkWell(
-      onTap: () {
-        setState(() => _month = month);
-        unawaited(_reload());
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1D4ED8) : const Color(0xFFE2E8F0),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          '${month.year}-${month.month.toString().padLeft(2, '0')}',
-          style: TextStyle(
-            color: selected ? Colors.white : const Color(0xFF334155),
-            fontWeight: FontWeight.w700,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(21),
+        onTap: () {
+          setState(() => _month = month);
+          unawaited(_reload());
+        },
+        child: Container(
+          height: 42,
+          constraints: const BoxConstraints(minWidth: 108),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFF2563EB) : Colors.white,
+            borderRadius: BorderRadius.circular(21),
+            border: Border.all(
+              color:
+                  selected ? const Color(0xFF2563EB) : const Color(0xFFD7DEE8),
+              width: 1.2,
+            ),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x1F2563EB),
+                      blurRadius: 12,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            '${month.year}-${month.month.toString().padLeft(2, '0')}',
+            style: TextStyle(
+              color: selected ? Colors.white : const Color(0xFF334155),
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -273,14 +292,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     setState(() => _month = asc[next]);
     unawaited(_reload());
   }
-
-  bool _isWorkdayByRule(DateTime day) {
-    final weekendType = _rule?.weekendType ?? 'double';
-    if (weekendType == 'single') {
-      return day.weekday != DateTime.sunday;
-    }
-    return day.weekday != DateTime.saturday && day.weekday != DateTime.sunday;
-  }
 }
 
 class _Overview extends StatelessWidget {
@@ -296,26 +307,89 @@ class _Overview extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = stats;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
         color: const Color(0xFF0B153A),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${month.month}月概览',
-              style: const TextStyle(
-                  color: Color(0xFF93C5FD), fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
           Text(
-            s == null
-                ? '--'
-                : '出勤${s.presentDays}  请假${s.leaveDays}  迟到${s.lateCount}',
+            '${month.month}月概览',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
+              color: Color(0xFF93C5FD),
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _OverviewMetric(label: '出勤', value: s?.presentDays),
+              const SizedBox(width: 10),
+              _OverviewMetric(label: '请假', value: s?.leaveDays),
+              const SizedBox(width: 10),
+              _OverviewMetric(label: '迟到', value: s?.lateCount),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final int? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 78),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111C46),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF24315F)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Color(0xFF93C5FD),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value == null ? '--' : value.toString(),
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

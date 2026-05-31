@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -148,7 +149,10 @@ Future<File> _downloadApkFromUri(
     final request = await client.getUrl(uri).timeout(_downloadConnectTimeout);
     request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
     final response = await request.close().timeout(_downloadConnectTimeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode == HttpStatus.partialContent) {
+      throw const AppUpdateException('下载失败：下载线路只返回了部分安装包');
+    }
+    if (response.statusCode != HttpStatus.ok) {
       throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
     }
     final sink = file.openWrite();
@@ -165,6 +169,14 @@ Future<File> _downloadApkFromUri(
     } finally {
       await sink.close();
     }
+    if (total > 0 && received != total) {
+      await _deleteIncompleteApk(file);
+      throw AppUpdateException('下载失败：安装包不完整（$received/$total）');
+    }
+    if (!await _hasApkZipHeader(file)) {
+      await _deleteIncompleteApk(file);
+      throw const AppUpdateException('下载失败：安装包格式无效');
+    }
     onProgress?.call(1);
     return file;
   } on AppUpdateException {
@@ -174,6 +186,38 @@ Future<File> _downloadApkFromUri(
   } finally {
     client.close(force: true);
   }
+}
+
+@visibleForTesting
+Future<File> downloadAppUpdateApkFromUriForTesting(
+  Uri uri,
+  File file, {
+  ValueChanged<double>? onProgress,
+}) {
+  return _downloadApkFromUri(uri, file, onProgress: onProgress);
+}
+
+Future<void> _deleteIncompleteApk(File file) async {
+  try {
+    if (await file.exists()) {
+      await file.delete();
+    }
+  } catch (_) {
+    // Best-effort cleanup. The caller still receives the download failure.
+  }
+}
+
+Future<bool> _hasApkZipHeader(File file) async {
+  final stream = file.openRead(0, 4);
+  final bytes = <int>[];
+  await for (final chunk in stream) {
+    bytes.addAll(chunk);
+  }
+  return bytes.length >= 4 &&
+      bytes[0] == 0x50 &&
+      bytes[1] == 0x4B &&
+      bytes[2] == 0x03 &&
+      bytes[3] == 0x04;
 }
 
 class AppUpdateException implements Exception {
