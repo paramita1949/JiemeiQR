@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart' hide Column;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
@@ -8,7 +7,6 @@ import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.da
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
-import 'package:share_plus/share_plus.dart';
 
 class AttendanceRuleScreen extends StatefulWidget {
   const AttendanceRuleScreen({
@@ -41,10 +39,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _checkOutRemindEnabled = false;
   String _weekendType = 'double';
   String _providerSummary = '系统融合定位（GPS/北斗/网络）';
-  AttendancePermissionState? _permissionState;
-  List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
-  bool _geofenceTesting = false;
 
   Future<({double lat, double lng, String provider, double? accuracy})?>
       _resolveFenceLocation() async {
@@ -91,13 +86,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _checkInRemindEnabled = rule.checkinReminderEnabled;
     _checkOutRemindEnabled = rule.checkoutReminderEnabled;
     _weekendType = rule.weekendType;
-    _backups = await _dao.listAttendanceBackups();
     _todayGeofenceState = await _dao.getTodayGeofenceState();
     _providerSummary = await AttendanceGeofenceBridge.providerSummary();
-    _permissionState =
-        await AttendanceGeofenceReminderService.ensureSystemPermissions(
-      requestIfNeeded: false,
-    );
     if (!mounted) return;
     setState(() => _loading = false);
   }
@@ -233,146 +223,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
   }
 
-  Future<void> _runGeofenceTest() async {
-    if (_geofenceTesting) return;
-    setState(() => _geofenceTesting = true);
-    final messenger = ScaffoldMessenger.of(context);
-    DebugEventLog.add('GEOFENCE_TEST', 'tap 围栏测试');
-    final state =
-        await AttendanceGeofenceReminderService.ensureSystemPermissions(
-      requestIfNeeded: true,
-    );
-    if (!state.locationServiceEnabled ||
-        state.locationPermission == LocationPermission.denied ||
-        state.locationPermission == LocationPermission.deniedForever) {
-      DebugEventLog.add(
-          'GEOFENCE_TEST', 'permission/location_service_not_ready');
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('定位服务或定位权限未就绪，无法执行围栏测试')),
-      );
-      setState(() => _geofenceTesting = false);
-      return;
-    }
-
-    final fenceLat = double.tryParse(_latController.text.trim());
-    final fenceLng = double.tryParse(_lngController.text.trim());
-    final radius =
-        (int.tryParse(_radiusController.text.trim()) ?? 300).clamp(50, 2000);
-    if (fenceLat == null || fenceLng == null) {
-      DebugEventLog.add('GEOFENCE_TEST', 'fence_center_missing');
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('请先设置围栏经纬度')),
-      );
-      setState(() => _geofenceTesting = false);
-      return;
-    }
-
-    final resolved = await _resolveFenceLocation();
-    if (resolved == null) {
-      DebugEventLog.add('GEOFENCE_TEST', 'position_null');
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('定位失败，请稍后重试')),
-      );
-      setState(() => _geofenceTesting = false);
-      return;
-    }
-
-    final distance = Geolocator.distanceBetween(
-      resolved.lat,
-      resolved.lng,
-      fenceLat,
-      fenceLng,
-    );
-    final inside = distance <= radius;
-    DebugEventLog.add(
-      'GEOFENCE_TEST',
-      'distance=${distance.toStringAsFixed(1)} radius=$radius inside=$inside provider=${resolved.provider} lat=${resolved.lat} lng=${resolved.lng}',
-    );
-
-    if (inside) {
-      await AttendanceGeofenceReminderService.showCheckinReminderNotification();
-    }
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text(
-          '围栏测试结果',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-        ),
-        content: Text(
-          '当前定位（${resolved.provider}）：${resolved.lat.toStringAsFixed(6)}, ${resolved.lng.toStringAsFixed(6)}\n'
-          '围栏中心：${fenceLat.toStringAsFixed(6)}, ${fenceLng.toStringAsFixed(6)}\n'
-          '距离：${distance.toStringAsFixed(1)}m  半径：${radius}m\n'
-          '${inside ? '判定：已进入围栏（打开APP会自动上班签到）' : '判定：未进入围栏（不会自动签到）'}',
-          style: const TextStyle(
-              fontSize: 18, height: 1.35, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              '知道了',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (mounted) {
-      setState(() => _geofenceTesting = false);
-    }
-  }
-
-  Future<void> _exportAttendanceBackup() async {
-    final file = await _dao.createAttendanceBackup();
-    _backups = await _dao.listAttendanceBackups();
-    if (!mounted) return;
-    setState(() {});
-    await SharePlus.instance.share(
-      ShareParams(
-        text: '考勤备份',
-        files: [XFile(file.filePath)],
-      ),
-    );
-  }
-
-  Future<void> _importAttendanceBackup({required bool overwrite}) async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-    );
-    final path = picked?.files.single.path;
-    if (path == null) return;
-    await _dao.importAttendanceFromFilePath(path, overwrite: overwrite);
-    _backups = await _dao.listAttendanceBackups();
-    if (!mounted) return;
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(overwrite ? '考勤备份已覆盖导入' : '考勤备份已合并导入')),
-    );
-  }
-
-  Future<void> _deleteBackup(AttendanceBackupSnapshot row) async {
-    await _dao.deleteAttendanceBackup(row.filePath);
-    _backups = await _dao.listAttendanceBackups();
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _shareBackup(AttendanceBackupSnapshot row) async {
-    await SharePlus.instance.share(
-      ShareParams(
-        text: '考勤备份',
-        files: [XFile(row.filePath)],
-      ),
-    );
-  }
-
   Future<void> _uploadAttendanceToCloud() async {
     await _runCloudAttendanceAction(() async {
       final session = await _cloudBackupService.loadSavedSession();
@@ -403,11 +253,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         accountKey: widget.accountKey,
       );
       await _dao.importAttendanceJson(jsonText, overwrite: true);
-      _backups = await _dao.listAttendanceBackups();
       if (!mounted) return;
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('云端签到数据已下载覆盖')),
+        const SnackBar(content: Text('云端签到数据已恢复')),
       );
     });
   }
@@ -426,7 +275,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       if (!mounted) return;
       final notFound = e.statusCode == 404;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(notFound ? '云端还没有这个账号的签到备份' : '云同步失败：$e')),
+        SnackBar(
+          content: Text(
+            notFound ? '云端还没有这个账号的签到备份' : '云同步失败：${e.debugMessage}',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -581,100 +434,38 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           ),
           const SizedBox(height: 14),
           _glassCard(
-            title: '考勤备份',
-            icon: Icons.inventory_2_rounded,
+            title: '考勤云备份',
+            icon: Icons.cloud_done_rounded,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1F63F2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    onPressed: _exportAttendanceBackup,
-                    icon: const Icon(Icons.ios_share_rounded, size: 18),
-                    label: const Text('生成并分享备份',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  '当前账号：${widget.accountKey}',
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F63F2),
-                          side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () =>
-                            _importAttendanceBackup(overwrite: true),
-                        icon:
-                            const Icon(Icons.file_download_outlined, size: 18),
-                        label: const Text('导入覆盖',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F63F2),
-                          side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () =>
-                            _importAttendanceBackup(overwrite: false),
-                        icon: const Icon(Icons.merge_type_rounded, size: 18),
-                        label: const Text('导入合并',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0F766E),
-                          side: const BorderSide(color: Color(0xFF99F6E4)),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
+                      child: _cloudActionButton(
+                        icon: Icons.cloud_upload_outlined,
+                        label: '上传云端',
+                        filled: true,
                         onPressed: _cloudBusy ? null : _uploadAttendanceToCloud,
-                        icon: const Icon(Icons.cloud_upload_outlined, size: 18),
-                        label: const Text('上传云端',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0F766E),
-                          side: const BorderSide(color: Color(0xFF99F6E4)),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
+                      child: _cloudActionButton(
+                        icon: Icons.cloud_download_outlined,
+                        label: '云端恢复',
+                        filled: false,
                         onPressed:
                             _cloudBusy ? null : _downloadAttendanceFromCloud,
-                        icon:
-                            const Icon(Icons.cloud_download_outlined, size: 18),
-                        label: const Text('云端下载',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ],
@@ -683,15 +474,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                   const SizedBox(height: 10),
                   const LinearProgressIndicator(minHeight: 3),
                 ],
-                const SizedBox(height: 12),
-                if (_backups.isEmpty)
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('暂无备份记录',
-                        style: TextStyle(color: Color(0xFF74819E))),
-                  )
-                else
-                  ..._backups.map(_backupTile),
               ],
             ),
           ),
@@ -705,131 +487,43 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             onPressed: _save,
             child: const Text('保存设置'),
           ),
-          const SizedBox(height: 14),
-          _debugPanel(),
         ],
       ),
     );
   }
 
-  Widget _debugPanel() {
-    final p = _permissionState;
-    final notify = p == null ? '--' : (p.notificationGranted ? '已开启' : '未开启');
-    final service =
-        p == null ? '--' : (p.locationServiceEnabled ? '已开启' : '未开启');
-    String location = '--';
-    if (p != null) {
-      switch (p.locationPermission) {
-        case LocationPermission.always:
-          location = '始终允许';
-          break;
-        case LocationPermission.whileInUse:
-          location = '仅使用时允许';
-          break;
-        case LocationPermission.denied:
-          location = '已拒绝';
-          break;
-        case LocationPermission.deniedForever:
-          location = '永久拒绝';
-          break;
-        case LocationPermission.unableToDetermine:
-          location = '未知';
-          break;
-      }
+  Widget _cloudActionButton({
+    required IconData icon,
+    required String label,
+    required bool filled,
+    required VoidCallback? onPressed,
+  }) {
+    final shape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+    if (filled) {
+      return FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF1F63F2),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: shape,
+          elevation: 0,
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon, size: 19),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      );
     }
-    return _glassCard(
-      title: '临时调试',
-      icon: Icons.bug_report_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('通知权限：$notify',
-              style: const TextStyle(color: Color(0xFF475569))),
-          Text('定位权限：$location',
-              style: const TextStyle(color: Color(0xFF475569))),
-          Text('定位服务：$service',
-              style: const TextStyle(color: Color(0xFF475569))),
-          Text(_providerSummary,
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final next = await AttendanceGeofenceReminderService
-                        .ensureSystemPermissions(
-                      requestIfNeeded: false,
-                    );
-                    final provider =
-                        await AttendanceGeofenceBridge.providerSummary();
-                    if (!mounted) return;
-                    setState(() {
-                      _permissionState = next;
-                      _providerSummary = provider;
-                    });
-                  },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('刷新状态'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _geofenceTesting ? null : _runGeofenceTest,
-                  icon:
-                      const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: Text(_geofenceTesting ? '测试中...' : '围栏测试'),
-                ),
-              ),
-            ],
-          ),
-        ],
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF0F766E),
+        side: const BorderSide(color: Color(0xFF99F6E4)),
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        shape: shape,
       ),
-    );
-  }
-
-  Widget _backupTile(AttendanceBackupSnapshot b) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FE),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  b.fileName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${b.createdAt.toLocal()} · ${b.sizeBytes}B',
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xFF74819E)),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => _shareBackup(b),
-            icon: const Icon(Icons.share_rounded),
-            tooltip: '分享',
-          ),
-          IconButton(
-            onPressed: () => _deleteBackup(b),
-            icon: const Icon(Icons.delete_outline_rounded),
-            tooltip: '删除',
-          ),
-        ],
-      ),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 19),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     );
   }
 

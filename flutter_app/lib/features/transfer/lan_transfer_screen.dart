@@ -782,8 +782,18 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       _showSnack('当前数据库不存在，无法上传');
     } on CloudBackupPermissionException {
       _showSnack('当前账号没有上传权限');
-    } catch (_) {
-      _showSnack('合并同步失败');
+    } on CloudBackupRequestException catch (error) {
+      final message = '合并同步失败：${error.debugMessage}';
+      _showSnack(message);
+      if (mounted) {
+        setState(() => _statusText = message);
+      }
+    } catch (error) {
+      final message = '合并同步失败：$error';
+      _showSnack(message);
+      if (mounted) {
+        setState(() => _statusText = message);
+      }
     } finally {
       if (mounted) {
         setState(() => _cloudUploading = false);
@@ -840,8 +850,8 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       );
       await widget.onPrepareImport?.call();
       prepared = true;
-      final result =
-          await _backupService.importSharedBackupPackage(mergedPackage.filePath);
+      final result = await _backupService
+          .importSharedBackupPackage(mergedPackage.filePath);
       await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
       if (!mounted) {
@@ -873,10 +883,23 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (mounted) {
         setState(() => _receiveStage = _ReceiveStage.error);
       }
-    } catch (_) {
-      _showSnack('云备份恢复失败');
+    } on CloudBackupRequestException catch (error) {
+      final message = '云备份恢复失败：${error.debugMessage}';
+      _showSnack(message);
       if (mounted) {
-        setState(() => _receiveStage = _ReceiveStage.error);
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = message;
+        });
+      }
+    } catch (error) {
+      final message = '云备份恢复失败：$error';
+      _showSnack(message);
+      if (mounted) {
+        setState(() {
+          _receiveStage = _ReceiveStage.error;
+          _statusText = message;
+        });
       }
     } finally {
       if (prepared) {

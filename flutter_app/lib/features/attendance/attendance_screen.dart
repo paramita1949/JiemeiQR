@@ -71,31 +71,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (path == null || path.isEmpty) return;
     await Future<void>.delayed(const Duration(milliseconds: 200));
     if (!mounted) return;
-    final overwrite = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('导入考勤备份'),
-        content: Text('检测到备份文件：\n$path\n\n选择导入方式'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('取消')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('合并导入')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('覆盖导入')),
-        ],
-      ),
-    );
-    if (overwrite == null) return;
     try {
-      await _dao.importAttendanceFromFilePath(path, overwrite: overwrite);
+      await _dao.importAttendanceFromFilePath(path, overwrite: true);
       await _reload();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(overwrite ? '覆盖导入完成' : '合并导入完成')),
+        const SnackBar(content: Text('签到备份已恢复')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -202,73 +183,67 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final heroStatus = crossDay ? '未签到' : _heroStatusText(_rows);
     final heroAction = crossDay ? '上班签到' : _heroActionText(_rows);
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FB),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _reload,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     '签到',
-                    style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900),
+                    style: TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   Row(
                     children: [
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F63F2),
-                          side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18)),
-                        ),
+                      _HeaderIconButton(
+                        icon: Icons.tune_rounded,
+                        label: '规则',
                         onPressed: _openRules,
-                        icon: const Icon(Icons.tune_rounded, size: 18),
-                        label: const Text('规则设置',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                       const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F63F2),
-                          side: const BorderSide(color: Color(0xFFBFD1FF)),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18)),
-                        ),
+                      _HeaderIconButton(
+                        icon: Icons.bar_chart_rounded,
+                        label: '统计',
                         onPressed: _openStats,
-                        icon: const Icon(Icons.bar_chart_rounded, size: 18),
-                        label: const Text('统计',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               _HeroCheckInCard(
                 nowText: _hhmm(DateTime.now()),
                 statusText: heroStatus,
                 actionText: heroAction,
                 onCheckIn: todayCompleted ? null : _checkIn,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _MonthSummaryCard(
                 monthLabel: monthLabel,
                 stats: stats,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0D0F172A),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,9 +254,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         const Text(
                           '签到明细',
                           style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800),
+                            color: Color(0xFF0F172A),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                        Text(monthLabel, style: const TextStyle(fontSize: 34)),
+                        Text(
+                          monthLabel,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -393,6 +378,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 }
 
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF1F63F2),
+          side: const BorderSide(color: Color(0xFFC7D8FF)),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          minimumSize: const Size(68, 44),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          backgroundColor: Colors.white,
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      ),
+    );
+  }
+}
+
 class _HeroCheckInCard extends StatelessWidget {
   const _HeroCheckInCard({
     required this.nowText,
@@ -409,30 +427,55 @@ class _HeroCheckInCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF2A4FD0), Color(0xFF1292D0)],
+          colors: [Color(0xFF1D4ED8), Color(0xFF0EA5E9)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x332563EB),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(nowText,
-              style: const TextStyle(
-                  color: Color(0xFFDBEAFE),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(statusText,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                nowText,
+                style: const TextStyle(
+                  color: Color(0xFFE0F2FE),
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -441,12 +484,12 @@ class _HeroCheckInCard extends StatelessWidget {
                 foregroundColor: const Color(0xFF2A4FD0),
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
+                    borderRadius: BorderRadius.circular(20)),
               ),
               onPressed: onCheckIn,
               child: Text(actionText,
                   style: const TextStyle(
-                      fontSize: 30, fontWeight: FontWeight.w900)),
+                      fontSize: 28, fontWeight: FontWeight.w900)),
             ),
           ),
         ],
@@ -470,28 +513,80 @@ class _MonthSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B153A),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(monthLabel,
-              style: const TextStyle(
-                  color: Color(0xFF93C5FD),
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text(
-            s == null
-                ? '--'
-                : '${s.presentDays}天  迟到${s.lateCount}  加班${s.overtimeHours.toStringAsFixed(1)}h',
-            style: const TextStyle(
-                color: Color(0xFFE2E8F0),
-                fontSize: 16,
-                fontWeight: FontWeight.w600),
+          _SummaryMetric(
+            label: monthLabel,
+            value: s == null ? '--' : '${s.presentDays}天',
+            color: const Color(0xFF1D4ED8),
+          ),
+          _SummaryMetric(
+            label: '迟到',
+            value: s == null ? '--' : '${s.lateCount}',
+            color: const Color(0xFF7C3AED),
+          ),
+          _SummaryMetric(
+            label: '加班',
+            value: s == null ? '--' : '${s.overtimeHours.toStringAsFixed(1)}h',
+            color: const Color(0xFF0F766E),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

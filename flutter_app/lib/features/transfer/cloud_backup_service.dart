@@ -68,6 +68,10 @@ abstract class CloudBackupApi {
     required String password,
   });
 
+  Future<CloudBackupSession> refreshSession({
+    required CloudBackupSession session,
+  });
+
   Future<void> uploadPackage({
     required CloudBackupSession session,
     required File packageFile,
@@ -133,6 +137,34 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
       role: role,
       accessToken: response['access_token']?.toString() ?? '',
       refreshToken: response['refresh_token']?.toString(),
+    );
+  }
+
+  @override
+  Future<CloudBackupSession> refreshSession({
+    required CloudBackupSession session,
+  }) async {
+    final refreshToken = session.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return session;
+    }
+    final response = await _sendJson(
+      method: 'POST',
+      path: '/auth/v1/token',
+      query: {'grant_type': 'refresh_token'},
+      headers: {'apikey': publishableKey},
+      body: {'refresh_token': refreshToken},
+    );
+    final user = response['user'];
+    final metadata = user is Map ? user['app_metadata'] : null;
+    final role = metadata is Map
+        ? CloudBackupRole.fromValue(metadata['app_role']?.toString())
+        : session.role;
+    return CloudBackupSession(
+      email: session.email,
+      role: role,
+      accessToken: response['access_token']?.toString() ?? session.accessToken,
+      refreshToken: response['refresh_token']?.toString() ?? refreshToken,
     );
   }
 
@@ -413,26 +445,31 @@ class CloudBackupService {
     if (!session.canUpload) {
       throw const CloudBackupPermissionException();
     }
-    await api.uploadPackage(
-      session: session,
-      packageFile: packageFile,
-      objectPath: SupabaseCloudBackupApi.defaultObjectPath,
-    );
-    await api.uploadPackage(
-      session: session,
-      packageFile: packageFile,
-      objectPath: _historyObjectPath((nowProvider ?? DateTime.now)()),
-    );
-    await _pruneHistory(session);
+    await _withFreshSession(session, (freshSession) async {
+      await api.uploadPackage(
+        session: freshSession,
+        packageFile: packageFile,
+        objectPath: SupabaseCloudBackupApi.defaultObjectPath,
+      );
+      await api.uploadPackage(
+        session: freshSession,
+        packageFile: packageFile,
+        objectPath: _historyObjectPath((nowProvider ?? DateTime.now)()),
+      );
+      await _pruneHistory(freshSession);
+    });
   }
 
   Future<File> downloadPackage({
     required CloudBackupSession session,
     CloudBackupRemoteBackup? backup,
   }) async {
-    final bytes = await api.downloadPackage(
-      session: session,
-      objectPath: backup?.objectPath,
+    final bytes = await _withFreshSession(
+      session,
+      (freshSession) => api.downloadPackage(
+        session: freshSession,
+        objectPath: backup?.objectPath,
+      ),
     );
     final documentsDir = await _documentsDirectory();
     final cloudDir = Directory(p.join(documentsDir.path, 'cloud_backups'));
@@ -447,14 +484,20 @@ class CloudBackupService {
     required CloudBackupSession session,
     int limit = 5,
   }) async {
-    final backups = await api.listBackups(session: session, limit: limit);
+    final backups = await _withFreshSession(
+      session,
+      (freshSession) => api.listBackups(session: freshSession, limit: limit),
+    );
     if (backups.isNotEmpty) {
       return backups;
     }
     try {
-      await api.downloadPackage(
-        session: session,
-        objectPath: SupabaseCloudBackupApi.defaultObjectPath,
+      await _withFreshSession(
+        session,
+        (freshSession) => api.downloadPackage(
+          session: freshSession,
+          objectPath: SupabaseCloudBackupApi.defaultObjectPath,
+        ),
       );
       return [
         CloudBackupRemoteBackup(
@@ -486,10 +529,13 @@ class CloudBackupService {
       ),
     );
     await file.writeAsString(jsonText, flush: true);
-    await api.uploadPackage(
-      session: session,
-      packageFile: file,
-      objectPath: attendanceObjectPath(accountKey),
+    await _withFreshSession(
+      session,
+      (freshSession) => api.uploadPackage(
+        session: freshSession,
+        packageFile: file,
+        objectPath: attendanceObjectPath(accountKey),
+      ),
     );
   }
 
@@ -497,9 +543,12 @@ class CloudBackupService {
     required CloudBackupSession session,
     required String accountKey,
   }) async {
-    final bytes = await api.downloadPackage(
-      session: session,
-      objectPath: attendanceObjectPath(accountKey),
+    final bytes = await _withFreshSession(
+      session,
+      (freshSession) => api.downloadPackage(
+        session: freshSession,
+        objectPath: attendanceObjectPath(accountKey),
+      ),
     );
     return utf8.decode(bytes, allowMalformed: true);
   }
@@ -508,6 +557,69 @@ class CloudBackupService {
     final file = await _sessionFile();
     await file.parent.create(recursive: true);
     await file.writeAsString(jsonEncode(session.toJson()));
+  }
+
+  Future<T> _withFreshSession<T>(
+    CloudBackupSession session,
+    Future<T> Function(CloudBackupSession session) action,
+  ) async {
+    final freshSession = await _refreshIfExpired(session);
+    try {
+      return await action(freshSession);
+    } on CloudBackupRequestException catch (error) {
+      if (!_looksLikeExpiredToken(error) || freshSession.refreshToken == null) {
+        rethrow;
+      }
+      final refreshed = await api.refreshSession(session: freshSession);
+      await _saveSession(refreshed);
+      return action(refreshed);
+    }
+  }
+
+  Future<CloudBackupSession> _refreshIfExpired(
+    CloudBackupSession session,
+  ) async {
+    final expiresAt = _jwtExpiresAt(session.accessToken);
+    if (expiresAt == null || session.refreshToken == null) {
+      return session;
+    }
+    final now = (nowProvider ?? DateTime.now)().toUtc();
+    if (expiresAt.isAfter(now.add(const Duration(minutes: 2)))) {
+      return session;
+    }
+    final refreshed = await api.refreshSession(session: session);
+    await _saveSession(refreshed);
+    return refreshed;
+  }
+
+  DateTime? _jwtExpiresAt(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) {
+      return null;
+    }
+    try {
+      final payload =
+          utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map) {
+        return null;
+      }
+      final rawExp = decoded['exp'];
+      final exp = rawExp is int ? rawExp : int.tryParse('$rawExp');
+      if (exp == null) {
+        return null;
+      }
+      return DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _looksLikeExpiredToken(CloudBackupRequestException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('exp') ||
+        message.contains('jwt') ||
+        message.contains('expired');
   }
 
   Future<File> _sessionFile() async {
@@ -568,7 +680,32 @@ class CloudBackupRequestException implements Exception {
   final int statusCode;
   final String message;
 
+  String get debugMessage {
+    final normalized = _compactMessage(message);
+    final hint = normalized.toLowerCase().contains('exp')
+        ? '。可能是云账号登录已过期，请退出云账号后重新登录'
+        : '';
+    return 'HTTP $statusCode：$normalized$hint';
+  }
+
   @override
   String toString() =>
       'CloudBackupRequestException(statusCode: $statusCode, message: $message)';
+
+  static String _compactMessage(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map) {
+        final innerMessage = decoded['message']?.toString();
+        final error = decoded['error']?.toString();
+        final status = decoded['statusCode']?.toString();
+        return [
+          if (status != null) 'status=$status',
+          if (error != null) 'error=$error',
+          if (innerMessage != null) innerMessage,
+        ].join(' · ');
+      }
+    } catch (_) {}
+    return value.trim().isEmpty ? '无返回内容' : value.trim();
+  }
 }
