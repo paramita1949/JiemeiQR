@@ -1571,6 +1571,10 @@ class _CloudAccountManagerDialogState
             child: const Text('取消'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('删除'),
           ),
@@ -1590,12 +1594,25 @@ class _CloudAccountManagerDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('账号管理'),
+      title: const Text(
+        '账号管理',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
       content: SizedBox(
-        width: 420,
+        width: 430,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              '管理云备份登录账号',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
             if (_errorText != null) ...[
               Container(
                 width: double.infinity,
@@ -1624,46 +1641,79 @@ class _CloudAccountManagerDialogState
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: _accounts.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final account = _accounts[index];
                     final isSelf = account.email == widget.session.email;
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(account.email),
-                      subtitle: Text(
-                        account.role == CloudBackupRole.admin
-                            ? '管理员：可上传、恢复、管理账号'
-                            : '普通账号：只能恢复云备份',
+                    final isAdmin = account.role == CloudBackupRole.admin;
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      trailing: Wrap(
-                        spacing: 4,
+                      child: Row(
                         children: [
-                          IconButton(
-                            tooltip: '复制默认密码',
-                            onPressed: () {
-                              Clipboard.setData(
-                                const ClipboardData(text: 'qqmima'),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('默认密码已复制')),
-                              );
-                            },
-                            icon: const Icon(Icons.key_outlined),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  account.email,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    _CloudAccountRoleChip(
+                                      icon: isAdmin
+                                          ? Icons.shield_outlined
+                                          : Icons.cloud_download_outlined,
+                                      label: isAdmin ? '管理员' : '普通账户',
+                                      admin: isAdmin,
+                                    ),
+                                    if (isAdmin)
+                                      const _CloudAccountRoleChip(
+                                        icon: Icons.cloud_upload_outlined,
+                                        label: '可上传',
+                                        admin: true,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          IconButton(
-                            tooltip: '修改密码',
-                            onPressed: _saving
-                                ? null
-                                : () => _showPasswordDialog(account),
-                            icon: const Icon(Icons.lock_reset_outlined),
-                          ),
-                          IconButton(
-                            tooltip: isSelf ? '不能删除当前登录账号' : '删除账号',
-                            onPressed: _saving || isSelf
-                                ? null
-                                : () => _confirmDelete(account),
-                            icon: const Icon(Icons.delete_outline),
+                          const SizedBox(width: 10),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _CloudAccountIconButton(
+                                tooltip: '修改密码',
+                                icon: Icons.lock_reset_outlined,
+                                onPressed: _saving
+                                    ? null
+                                    : () => _showPasswordDialog(account),
+                              ),
+                              const SizedBox(width: 6),
+                              _CloudAccountIconButton(
+                                tooltip: isSelf ? '不能删除当前登录账号' : '删除账号',
+                                icon: Icons.delete_outline,
+                                danger: true,
+                                onPressed: _saving || isSelf
+                                    ? null
+                                    : () => _confirmDelete(account),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1675,16 +1725,108 @@ class _CloudAccountManagerDialogState
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
-        ),
-        FilledButton.icon(
-          onPressed: _saving ? null : _showCreateDialog,
-          icon: const Icon(Icons.person_add_alt_1_outlined),
-          label: const Text('新建账号'),
+        SizedBox(
+          width: 430,
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('关闭'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _saving ? null : _showCreateDialog,
+                  child: const Text('新建'),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _CloudAccountRoleChip extends StatelessWidget {
+  const _CloudAccountRoleChip({
+    required this.icon,
+    required this.label,
+    required this.admin,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool admin;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = admin ? const Color(0xFF027A48) : const Color(0xFF155EEF);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: admin ? const Color(0xFFE9F9F2) : const Color(0xFFEEF4FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloudAccountIconButton extends StatelessWidget {
+  const _CloudAccountIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.danger = false,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? const Color(0xFFDC2626) : const Color(0xFF475467);
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(12),
+        child: Opacity(
+          opacity: onPressed == null ? 0.42 : 1,
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color:
+                    danger ? const Color(0xFFFECACA) : const Color(0xFFE5E7EB),
+              ),
+            ),
+            child: Icon(icon, color: color),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1776,7 +1918,10 @@ class _CloudAccountFormDialogState extends State<_CloudAccountFormDialog> {
             const SizedBox(height: 10),
             TextField(
               controller: _passwordController,
-              decoration: const InputDecoration(labelText: '新密码'),
+              decoration: InputDecoration(
+                labelText: widget.fixedEmail ? '新密码' : '初始密码',
+                helperText: widget.fixedEmail ? null : '默认可填 qqmima',
+              ),
             ),
             if (!widget.fixedEmail) ...[
               const SizedBox(height: 12),
@@ -1784,7 +1929,7 @@ class _CloudAccountFormDialogState extends State<_CloudAccountFormDialog> {
                 segments: const [
                   ButtonSegment(
                     value: CloudBackupRole.viewer,
-                    label: Text('只恢复'),
+                    label: Text('普通账户'),
                   ),
                   ButtonSegment(
                     value: CloudBackupRole.admin,
