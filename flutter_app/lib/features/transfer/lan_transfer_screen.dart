@@ -1593,13 +1593,18 @@ class _CloudAccountManagerDialogState
 
   @override
   Widget build(BuildContext context) {
+    final dialogWidth = MediaQuery.sizeOf(context).width - 40;
+    final contentWidth = dialogWidth.clamp(0.0, 430.0);
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       title: const Text(
         '账号管理',
         style: TextStyle(fontWeight: FontWeight.w900),
       ),
       content: SizedBox(
-        width: 430,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1661,7 +1666,7 @@ class _CloudAccountManagerDialogState
                               children: [
                                 Text(
                                   account.email,
-                                  maxLines: 2,
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: AppTheme.textPrimary,
@@ -1682,12 +1687,6 @@ class _CloudAccountManagerDialogState
                                       label: isAdmin ? '管理员' : '普通账户',
                                       admin: isAdmin,
                                     ),
-                                    if (isAdmin)
-                                      const _CloudAccountRoleChip(
-                                        icon: Icons.cloud_upload_outlined,
-                                        label: '可上传',
-                                        admin: true,
-                                      ),
                                   ],
                                 ),
                               ],
@@ -1726,7 +1725,7 @@ class _CloudAccountManagerDialogState
       ),
       actions: [
         SizedBox(
-          width: 430,
+          width: contentWidth,
           child: Row(
             children: [
               Expanded(
@@ -1813,8 +1812,8 @@ class _CloudAccountIconButton extends StatelessWidget {
         child: Opacity(
           opacity: onPressed == null ? 0.42 : 1,
           child: Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
@@ -1823,7 +1822,7 @@ class _CloudAccountIconButton extends StatelessWidget {
                     danger ? const Color(0xFFFECACA) : const Color(0xFFE5E7EB),
               ),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 22),
           ),
         ),
       ),
