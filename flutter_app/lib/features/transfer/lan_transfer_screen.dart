@@ -78,6 +78,7 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
   CloudBackupSession? _cloudSession;
   List<CloudBackupRemoteBackup> _cloudBackups = const [];
   String? _statusText;
+  _BackupTab _selectedTab = _BackupTab.cloud;
   _ReceiveStage _receiveStage = _ReceiveStage.idle;
   Timer? _sendSessionMonitor;
   StreamSubscription<TransferRequest>? _transferRequestSubscription;
@@ -131,91 +132,115 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
               icon: Icons.backup_outlined,
               title: '数据备份',
             ),
-            const SizedBox(height: 18),
-            _CloudBackupPanel(
-              loading: _loadingCloudSession,
-              session: _cloudSession,
-              signingIn: _cloudSigningIn,
-              uploading: _cloudUploading,
-              restoring: _cloudRestoring,
-              loadingBackups: _loadingCloudBackups,
-              backups: _cloudBackups,
-              onLogin: _showCloudLoginDialog,
-              onLogout: _logoutCloudBackup,
-              onUpload: _cloudSession?.canUpload == true
-                  ? _confirmAndUploadCloudBackup
-                  : null,
-              onRestore:
-                  _cloudSession == null ? null : _confirmAndRestoreCloudBackup,
-              onRestoreBackup: _cloudSession == null
-                  ? null
-                  : (backup) => _confirmAndRestoreCloudBackup(backup: backup),
-              onManageAccounts: _cloudSession?.canUpload == true
-                  ? _showCloudAccountManager
-                  : null,
+            const SizedBox(height: 16),
+            _BackupTabSwitch(
+              selected: _selectedTab,
+              onSelected: (tab) => setState(() => _selectedTab = tab),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _CircleActionButton(
-                    title: '发送',
-                    subtitle: sending ? '发送中' : '给其他设备',
-                    icon: Icons.upload_rounded,
-                    active: sending,
-                    busy: _startingSend,
-                    onTap: _startingSend ? null : _startSend,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _CircleActionButton(
-                    title: '接收',
-                    subtitle: '附近设备',
-                    icon: Icons.download_rounded,
-                    active: _receiving,
-                    busy: _receiving,
-                    onTap: _receiving ? null : _showReceiveOptions,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_sendSession != null) _buildSendPanel(_sendSession!),
-            const SizedBox(height: 12),
-            _TransferFeedbackCard(
-              statusText: _statusText,
-              stage: _receiveStage,
-              sending: sending,
-              receiving: _receiving,
-            ),
-            const SizedBox(height: 16),
-            _UtilityPanel(
-              creatingBackup: _creatingBackup,
-              resettingDatabase: _resettingDatabase,
-              loadingBackups: _loadingBackups,
-              applyingSchedule: _applyingSchedule,
-              backupSchedule: _backupSchedule,
-              backupSnapshots: _backupSnapshots,
-              restoringBackupPath: _restoringBackupPath,
-              sharingBackupPath: _sharingBackupPath,
-              onCreateBackup: _creatingBackup ? null : _createBackup,
-              onImportSharedBackup:
-                  _importingSharedBackup ? null : _pickAndImportSharedBackup,
-              onResetDatabase:
-                  _resettingDatabase ? null : _confirmAndResetDatabase,
-              onSelectSchedule: _selectBackupSchedule,
-              onRestoreBackup: _confirmAndRestoreBackup,
-              onShareBackup: _shareBackupSnapshot,
-              onDeleteBackup: _confirmAndDeleteBackup,
-              onCleanupBackups: _confirmAndCleanupBackups,
-              cleaningBackups: _cleaningBackups,
-              sharingBackup: _sharingBackup,
-              importingSharedBackup: _importingSharedBackup,
-            ),
+            if (_selectedTab == _BackupTab.cloud) ...[
+              _buildCloudBackupPage(),
+              const SizedBox(height: 12),
+              _TransferFeedbackCard(
+                statusText: _statusText,
+                stage: _receiveStage,
+                sending: sending,
+                receiving: _receiving,
+              ),
+            ] else
+              _buildLocalBackupPage(sending),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCloudBackupPage() {
+    return _CloudBackupPanel(
+      loading: _loadingCloudSession,
+      session: _cloudSession,
+      signingIn: _cloudSigningIn,
+      uploading: _cloudUploading,
+      restoring: _cloudRestoring,
+      loadingBackups: _loadingCloudBackups,
+      backups: _cloudBackups,
+      onLogin: _showCloudLoginDialog,
+      onLogout: _logoutCloudBackup,
+      onUpload: _cloudSession?.canUpload == true
+          ? _confirmAndUploadCloudBackup
+          : null,
+      onRestore: _cloudSession == null ? null : _confirmAndRestoreCloudBackup,
+      onRestoreBackup: _cloudSession == null
+          ? null
+          : (backup) => _confirmAndRestoreCloudBackup(backup: backup),
+      onManageAccounts:
+          _cloudSession?.canUpload == true ? _showCloudAccountManager : null,
+    );
+  }
+
+  Widget _buildLocalBackupPage(bool sending) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _CircleActionButton(
+                title: '发送',
+                subtitle: sending ? '发送中' : '给其他设备',
+                icon: Icons.upload_rounded,
+                active: sending,
+                busy: _startingSend,
+                onTap: _startingSend ? null : _startSend,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _CircleActionButton(
+                title: '接收',
+                subtitle: '附近设备',
+                icon: Icons.download_rounded,
+                active: _receiving,
+                busy: _receiving,
+                onTap: _receiving ? null : _showReceiveOptions,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_sendSession != null) ...[
+          _buildSendPanel(_sendSession!),
+          const SizedBox(height: 12),
+        ],
+        _TransferFeedbackCard(
+          statusText: _statusText,
+          stage: _receiveStage,
+          sending: sending,
+          receiving: _receiving,
+        ),
+        const SizedBox(height: 16),
+        _UtilityPanel(
+          creatingBackup: _creatingBackup,
+          resettingDatabase: _resettingDatabase,
+          loadingBackups: _loadingBackups,
+          applyingSchedule: _applyingSchedule,
+          backupSchedule: _backupSchedule,
+          backupSnapshots: _backupSnapshots,
+          restoringBackupPath: _restoringBackupPath,
+          sharingBackupPath: _sharingBackupPath,
+          onCreateBackup: _creatingBackup ? null : _createBackup,
+          onImportSharedBackup:
+              _importingSharedBackup ? null : _pickAndImportSharedBackup,
+          onResetDatabase: _resettingDatabase ? null : _confirmAndResetDatabase,
+          onSelectSchedule: _selectBackupSchedule,
+          onRestoreBackup: _confirmAndRestoreBackup,
+          onShareBackup: _shareBackupSnapshot,
+          onDeleteBackup: _confirmAndDeleteBackup,
+          onCleanupBackups: _confirmAndCleanupBackups,
+          cleaningBackups: _cleaningBackups,
+          sharingBackup: _sharingBackup,
+          importingSharedBackup: _importingSharedBackup,
+        ),
+      ],
     );
   }
 
@@ -2431,12 +2456,110 @@ class _ReceiveOptionsSheet extends StatelessWidget {
   }
 }
 
+enum _BackupTab {
+  cloud,
+  local;
+}
+
 enum _ReceiveStage {
   idle,
   pairing,
   transferring,
   success,
   error,
+}
+
+class _BackupTabSwitch extends StatelessWidget {
+  const _BackupTabSwitch({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _BackupTab selected;
+  final ValueChanged<_BackupTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _BackupTabButton(
+              label: '云端备份',
+              icon: Icons.cloud_done_outlined,
+              selected: selected == _BackupTab.cloud,
+              onTap: () => onSelected(_BackupTab.cloud),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _BackupTabButton(
+              label: '本地备份',
+              icon: Icons.folder_copy_outlined,
+              selected: selected == _BackupTab.local,
+              onTap: () => onSelected(_BackupTab.local),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackupTabButton extends StatelessWidget {
+  const _BackupTabButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        constraints: const BoxConstraints(minHeight: 48),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 19,
+              color: selected ? Colors.white : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : AppTheme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TransferFeedbackCard extends StatelessWidget {
