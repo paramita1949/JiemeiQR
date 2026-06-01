@@ -178,6 +178,50 @@ class DatabaseMergeService {
     db.execute('''
       UPDATE main.orders
       SET
+        merchant_name = CASE
+          WHEN COALESCE((
+            SELECT c.updated_at FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          ), 0) > COALESCE(updated_at, 0)
+          THEN (
+            SELECT c.merchant_name FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          )
+          ELSE merchant_name
+        END,
+        order_date = CASE
+          WHEN COALESCE((
+            SELECT c.updated_at FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          ), 0) > COALESCE(updated_at, 0)
+          THEN (
+            SELECT c.order_date FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          )
+          ELSE order_date
+        END,
+        scanner_gun = CASE
+          WHEN COALESCE((
+            SELECT c.updated_at FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          ), 0) > COALESCE(updated_at, 0)
+          THEN (
+            SELECT c.scanner_gun FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          )
+          ELSE scanner_gun
+        END,
+        remark = CASE
+          WHEN COALESCE((
+            SELECT c.updated_at FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          ), 0) > COALESCE(updated_at, 0)
+          THEN (
+            SELECT c.remark FROM cloud.orders c
+            WHERE c.waybill_no = main.orders.waybill_no
+          )
+          ELSE remark
+        END,
         status = MAX(status, (
           SELECT c.status FROM cloud.orders c
           WHERE c.waybill_no = main.orders.waybill_no
