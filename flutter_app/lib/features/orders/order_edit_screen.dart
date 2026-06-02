@@ -706,13 +706,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final merchantHistoryNames = await _orderDao.recentMerchantNames(
-        limit: 200,
-      );
-      final draft = await _effectiveOcrService.recognize(
-        image,
-        merchantHistoryNames: merchantHistoryNames,
-      );
+      final draft = await _effectiveOcrService.recognize(image);
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
       DebugEventLog.add(
         'AI_OCR',

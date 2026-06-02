@@ -803,35 +803,32 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
 
     setState(() {
       _cloudUploading = true;
-      _statusText = '正在合并云端数据...';
+      _statusText = '正在生成云备份...';
     });
     try {
-      final package = await _createMergedCloudPackageOrLocal(session);
+      final package = await _backupService.createSharePackage();
       await _cloudBackupService.uploadPackage(
         session: session,
         packageFile: File(package.filePath),
       );
-      await widget.onPrepareImport?.call();
-      await _backupService.importSharedBackupPackage(package.filePath);
-      await widget.onImportCompleted?.call(seedIfEmpty: false);
       if (!mounted) {
         return;
       }
       await _loadCloudBackups(session);
-      setState(() => _statusText = '合并同步完成：${package.fileName}');
-      _showSnack('合并同步已完成');
+      setState(() => _statusText = '云端上传完成：${package.fileName}');
+      _showSnack('云端上传已完成');
     } on BackupSourceMissingException {
       _showSnack('当前数据库不存在，无法上传');
     } on CloudBackupPermissionException {
       _showSnack('当前账号没有上传权限');
     } on CloudBackupRequestException catch (error) {
-      final message = '合并同步失败：${error.debugMessage}';
+      final message = '云端上传失败：${error.debugMessage}';
       _showSnack(message);
       if (mounted) {
         setState(() => _statusText = message);
       }
     } catch (error) {
-      final message = '合并同步失败：$error';
+      final message = '云端上传失败：$error';
       _showSnack(message);
       if (mounted) {
         setState(() => _statusText = message);
@@ -887,13 +884,10 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
         session: session,
         backup: backup,
       );
-      final mergedPackage = await _backupService.createMergedSharePackage(
-        cloudPackagePath: packageFile.path,
-      );
       await widget.onPrepareImport?.call();
       prepared = true;
-      final result = await _backupService
-          .importSharedBackupPackage(mergedPackage.filePath);
+      final result =
+          await _backupService.importSharedBackupPackage(packageFile.path);
       await widget.onImportCompleted?.call(seedIfEmpty: false);
       prepared = false;
       if (!mounted) {
@@ -954,24 +948,6 @@ class _LanTransferScreenState extends State<LanTransferScreen> {
       if (mounted) {
         setState(() => _cloudRestoring = false);
       }
-    }
-  }
-
-  Future<SharePackageResult> _createMergedCloudPackageOrLocal(
-    CloudBackupSession session,
-  ) async {
-    try {
-      final cloudPackage = await _cloudBackupService.downloadPackage(
-        session: session,
-      );
-      return _backupService.createMergedSharePackage(
-        cloudPackagePath: cloudPackage.path,
-      );
-    } on CloudBackupRequestException catch (error) {
-      if (error.statusCode == 404) {
-        return _backupService.createSharePackage();
-      }
-      rethrow;
     }
   }
 

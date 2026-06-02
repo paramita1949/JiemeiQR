@@ -8,8 +8,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
-import 'database_merge_service.dart';
-
 typedef DocumentsDirectoryProvider = Future<Directory> Function();
 typedef DatabaseDirectoryProvider = Future<Directory> Function();
 typedef NowProvider = DateTime Function();
@@ -63,7 +61,7 @@ class BackupService {
   final int sqliteSchemaVersion;
   static const int maxSnapshotCount = 90;
   static const String aiConfigFileName = 'ai_ocr_config.json';
-  static const String defaultAppVersion = '4.1.9';
+  static const String defaultAppVersion = '4.2.0';
   static const int currentSqliteSchemaVersion = 20;
   static const Duration dailyAutoBackupInterval = Duration(hours: 24);
   static const Duration weeklyAutoBackupInterval = Duration(days: 7);
@@ -386,31 +384,6 @@ class BackupService {
       filePath: packageFile.path,
       createdAt: now,
     );
-  }
-
-  Future<SharePackageResult> createMergedSharePackage({
-    required String cloudPackagePath,
-    DatabaseMergeService mergeService = const DatabaseMergeService(),
-  }) async {
-    final documentsDir = await _documentsDirectory();
-    final stamp = _fileStamp((nowProvider ?? DateTime.now)());
-    final mergeDir =
-        Directory(p.join(documentsDir.path, 'cloud_merges', stamp));
-    await mergeDir.create(recursive: true);
-    final cloudDatabase = await extractDatabaseFromSharePackage(
-      cloudPackagePath,
-      outputDirectoryPath: mergeDir.path,
-      outputFileName: 'cloud-$databaseFileName',
-    );
-    final mergedDatabase =
-        File(p.join(mergeDir.path, 'merged-$databaseFileName'));
-    final localDatabase = await _databaseFile();
-    await mergeService.mergeDatabases(
-      localDatabasePath: localDatabase.path,
-      cloudDatabasePath: cloudDatabase.path,
-      outputDatabasePath: mergedDatabase.path,
-    );
-    return createSharePackage(snapshotPath: mergedDatabase.path);
   }
 
   Future<File> extractDatabaseFromSharePackage(
