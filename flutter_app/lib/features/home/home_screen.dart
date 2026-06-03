@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_account_resolver.dart';
@@ -26,6 +27,11 @@ import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
+typedef AttendanceAutoCheckInRunner = Future<GeofenceDecision?> Function({
+  required AppDatabase database,
+  required String accountKey,
+});
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -33,12 +39,15 @@ class HomeScreen extends StatefulWidget {
     this.refreshToken = 0,
     this.onPrepareImport,
     this.onImportCompleted,
+    this.attendanceAutoCheckInRunner =
+        AttendanceGeofenceReminderService.checkAndMaybeNotify,
   });
 
   final AppDatabase? database;
   final int refreshToken;
   final Future<void> Function()? onPrepareImport;
   final DatabaseReloadCallback? onImportCompleted;
+  final AttendanceAutoCheckInRunner attendanceAutoCheckInRunner;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -321,13 +330,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _runAttendanceReminderCheck() async {
     try {
       final accountKey = await const AttendanceAccountResolver().resolve();
-      await AttendanceGeofenceReminderService.checkAndMaybeNotify(
+      final decision = await widget.attendanceAutoCheckInRunner(
         database: _database,
         accountKey: accountKey,
       );
+      if (decision?.triggered != true) return;
+      if (!mounted) return;
+      DebugEventLog.add(
+          'GEOFENCE_AUTO', 'show foreground auto check-in dialog');
+      await _showAutoCheckInDialog();
     } catch (_) {
       // Keep home resilient when location/notification fails on some devices.
     }
+  }
+
+  Future<void> _showAutoCheckInDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('已自动上班签到'),
+        content: const Text('已在公司范围内完成上班签到。'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startPrecheckinGuardTimer() {
@@ -405,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('开启通知权限'),
-          content: const Text('未开启通知权限，围栏签到提醒与锁屏提醒将无法正常弹出。'),
+          content: const Text('未开启通知权限，自动签到反馈与上班临近提醒将无法正常弹出。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -778,7 +808,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } else if (normalized.contains('show foreground dialog')) {
         readable.add('已弹出前台提醒：$event');
       } else if (normalized.contains('show lockscreen notification')) {
-        readable.add('已触发锁屏通知：$event');
+        readable.add('已触发系统通知：$event');
       } else if (normalized.contains('permission')) {
         readable.add('权限相关状态：$event');
       } else {

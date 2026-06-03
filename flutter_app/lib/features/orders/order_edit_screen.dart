@@ -51,6 +51,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   ImagePicker? _imagePicker;
   late final bool _ownsDatabase;
   late Future<_OrderEditState> _stateFuture;
+  bool _ocrInProgress = false;
+  String? _ocrProgressText;
 
   DateTime _orderDate = DateTime.now();
   Product? _selectedProduct;
@@ -141,11 +143,19 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                       IconButton.filledTonal(
                         key: const Key('waybillOcrButton'),
                         tooltip: '拍照识别',
-                        onPressed: _recognizeWaybillPhoto,
+                        onPressed:
+                            _ocrInProgress ? null : _recognizeWaybillPhoto,
                         icon: const Icon(Icons.auto_awesome),
                       ),
                     ],
                   ),
+                  if (_ocrProgressText != null) ...[
+                    const SizedBox(height: 8),
+                    _OcrProgressPanel(
+                      inProgress: _ocrInProgress,
+                      text: _ocrProgressText!,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   _SectionCard(
                     title: '订单信息',
@@ -694,20 +704,26 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     if (!mounted) {
       return;
     }
+    _setOcrProgress(
+      '图片已选择：${_ocrSourceLabel(plan.source)} · 压缩 1600px / 85%',
+    );
+    _setOcrProgress(
+      '上传至${_ocrProviderLabel(nextConfig)}：${_ocrModelLabel(nextConfig)} · ${_ocrPromptPresetLabel(nextConfig)}策略',
+    );
     await _runWaybillOcr(File(picked.path));
   }
 
   Future<void> _runWaybillOcr(File image) async {
     DebugEventLog.add('AI_OCR',
         'start image=${image.path.split(Platform.pathSeparator).last}');
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    _setOcrInProgress(true);
     try {
+      _setOcrProgress('识别中：等待${_ocrProviderLabel(_aiConfig)}返回结果');
       final draft = await _effectiveOcrService.recognize(image);
+      _setOcrProgress(_ocrDraftSummary(draft));
+      _setOcrProgress('匹配本地库存：${draft.rows.length} 条明细');
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
+      _setOcrProgress(_ocrMatchSummary(matched));
       DebugEventLog.add(
         'AI_OCR',
         'success waybill=${matched.source.waybillNo} merchant=${matched.source.merchantName} lines=${matched.lines.length} warnings=${matched.source.warnings.length}',
@@ -715,14 +731,19 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context, rootNavigator: true).pop();
+      _setOcrProgress('识别完成，进入确认页');
+      _setOcrInProgress(false);
       await _openOcrReview(matched);
+      if (mounted) {
+        setState(() => _ocrProgressText = null);
+      }
     } on GeminiWaybillOcrException catch (error) {
       DebugEventLog.add('AI_OCR', 'gemini_failed ${error.message}');
       if (!mounted) {
         return;
       }
-      Navigator.of(context, rootNavigator: true).pop();
+      _setOcrProgress('识别失败：${error.message}');
+      _setOcrInProgress(false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
@@ -731,10 +752,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context, rootNavigator: true).pop();
       final rateLimitInfo = ModelScopeWaybillOcrService.lastRateLimitInfo;
       final rateLimitText = rateLimitInfo?.summaryText();
       final diagnosis = _diagnoseModelScopeFailure(error.message);
+      _setOcrProgress('识别失败：$diagnosis');
+      _setOcrInProgress(false);
       _showOcrFeedback(
         [
           diagnosis,
@@ -747,7 +769,8 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context, rootNavigator: true).pop();
+      _setOcrProgress('识别失败，请重试');
+      _setOcrInProgress(false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('识别失败，请重试')),
       );
@@ -770,6 +793,20 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
 
   ImagePicker get _effectiveImagePicker {
     return _imagePicker ??= widget.imagePicker ?? ImagePicker();
+  }
+
+  void _setOcrInProgress(bool value) {
+    if (!mounted || _ocrInProgress == value) {
+      return;
+    }
+    setState(() => _ocrInProgress = value);
+  }
+
+  void _setOcrProgress(String text) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _ocrProgressText = text);
   }
 
   Future<void> _openOcrReview(MatchedWaybillOcrDraft matched) async {
@@ -1670,6 +1707,65 @@ class _OcrCapturePlan {
   final String promptPreset;
 }
 
+class _OcrProgressPanel extends StatelessWidget {
+  const _OcrProgressPanel({
+    required this.inProgress,
+    required this.text,
+  });
+
+  final bool inProgress;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDCE7F8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A1D4ED8),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (inProgress)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 17,
+              color: Color(0xFF16A34A),
+            ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _OrderActionBar extends StatelessWidget {
   const _OrderActionBar({
     required this.onEnd,
@@ -1771,6 +1867,59 @@ InputDecoration _inputDecoration(String label) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+String _ocrSourceLabel(ImageSource source) {
+  return source == ImageSource.camera ? '拍照图片' : '相册图片';
+}
+
+String _ocrProviderLabel(AiOcrConfig config) {
+  return config.usesModelScopeOcr ? '魔搭' : '谷歌';
+}
+
+String _ocrModelLabel(AiOcrConfig config) {
+  final model =
+      config.usesModelScopeOcr ? config.modelscopeModel : config.geminiModel;
+  final text = model.trim();
+  if (text.isEmpty) {
+    return '未选择模型';
+  }
+  final slashIndex = text.lastIndexOf('/');
+  return slashIndex >= 0 ? text.substring(slashIndex + 1) : text;
+}
+
+String _ocrPromptPresetLabel(AiOcrConfig config) {
+  return config.ocrPromptPreset == AiOcrConfig.ocrPromptPresetGeneral
+      ? '通用'
+      : '增强';
+}
+
+String _ocrDraftSummary(WaybillOcrDraft draft) {
+  final parts = <String>[];
+  if (draft.waybillNo.trim().isNotEmpty) {
+    parts.add('运单号 ${draft.waybillNo.trim()}');
+  }
+  if (draft.merchantName.trim().isNotEmpty) {
+    parts.add('商户 ${draft.merchantName.trim()}');
+  }
+  parts.add('${draft.rows.length} 条明细');
+  return '识别到：${parts.join(' · ')}';
+}
+
+String _ocrMatchSummary(MatchedWaybillOcrDraft matched) {
+  final exact = matched.lines
+      .where((line) => line.resolvedStatus == OcrLineStatus.matched)
+      .length;
+  final fixed = matched.autoFixedCount;
+  final review = matched.needReviewCount;
+  final unmatched = matched.unmatchedCount;
+  final parts = <String>[
+    if (exact > 0) '精确$exact',
+    if (fixed > 0) '修正$fixed',
+    if (review > 0) '待确认$review',
+    if (unmatched > 0) '未匹配$unmatched',
+  ];
+  return parts.isEmpty ? '库存匹配完成' : '库存匹配：${parts.join(' · ')}';
+}
 
 String _batchIndexSuffix(BatchRecord batch, List<BatchRecord> allBatches) {
   final sameDate =

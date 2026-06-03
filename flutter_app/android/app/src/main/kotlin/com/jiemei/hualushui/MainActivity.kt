@@ -19,7 +19,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AttendanceCommuteScheduler.cancel(applicationContext)
         cacheImportPathFromIntent(intent)
     }
 
@@ -68,24 +67,9 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "registerGeofence" -> {
-                    val lat = call.argument<Double>("lat")
-                    val lng = call.argument<Double>("lng")
-                    val radius = call.argument<Double>("radius")
-                    if (lat == null || lng == null || radius == null) {
-                        result.error("INVALID_ARGS", "lat/lng/radius required", null)
-                        return@setMethodCallHandler
-                    }
-                    val registerResult = GeofenceRegistrar.register(
-                        context = applicationContext,
-                        latitude = lat,
-                        longitude = lng,
-                        radiusMeters = radius.toFloat(),
-                    )
-                    if (registerResult.isSuccess) {
-                        result.success(registerResult.getOrNull())
-                    } else {
-                        result.error("REGISTER_FAILED", registerResult.exceptionOrNull()?.message, null)
-                    }
+                    GeofenceRegistrar.unregister(applicationContext)
+                    AttendanceNativeLog.add(applicationContext, "GEOFENCE_NATIVE", "register ignored foreground-only")
+                    result.success("BACKGROUND_GEOFENCE_DISABLED")
                 }
 
                 "unregisterGeofence" -> {

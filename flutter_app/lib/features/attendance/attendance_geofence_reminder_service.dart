@@ -12,7 +12,7 @@ class AttendanceGeofenceReminderService {
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
-  static Future<void> checkAndMaybeNotify({
+  static Future<GeofenceDecision?> checkAndMaybeNotify({
     required AppDatabase database,
     String accountKey = 'local',
   }) async {
@@ -21,7 +21,7 @@ class AttendanceGeofenceReminderService {
     if (!rule.geofenceEnabled ||
         rule.officeLat == null ||
         rule.officeLng == null) {
-      return;
+      return null;
     }
 
     await _initNotification();
@@ -29,19 +29,19 @@ class AttendanceGeofenceReminderService {
     final permissionState =
         await ensureSystemPermissions(requestIfNeeded: true);
     final serviceEnabled = permissionState.locationServiceEnabled;
-    if (!serviceEnabled) return;
+    if (!serviceEnabled) return null;
 
     final permission = permissionState.locationPermission;
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      return;
+      return null;
     }
 
     DebugEventLog.add('GEOFENCE_AUTO', 'foreground locate start');
     final location = await _locateForAttendance();
     if (location == null) {
       DebugEventLog.add('GEOFENCE_AUTO', 'position null');
-      return;
+      return null;
     }
 
     final distance = Geolocator.distanceBetween(
@@ -60,9 +60,10 @@ class AttendanceGeofenceReminderService {
     final decision =
         await dao.handleGeofenceTransition(isInsideNow: isInsideNow);
     DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
-    if (!decision.triggered) return;
+    if (!decision.triggered) return decision;
 
     await showAutoCheckinNotification();
+    return decision;
   }
 
   static Future<_AttendanceLocation?> _locateForAttendance() async {
