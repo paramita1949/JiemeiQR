@@ -1521,13 +1521,28 @@ class _RestockWaybillSheet extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      line.waybillNo,
-                                      style: const TextStyle(
-                                        color: AppTheme.textPrimary,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            line.waybillNo,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                        if ((line.scannerGun ?? '')
+                                            .trim()
+                                            .isNotEmpty) ...[
+                                          const SizedBox(width: 8),
+                                          _ScannerGunBadge(
+                                            text: line.scannerGun!.trim(),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                     const SizedBox(height: 3),
                                     Text(

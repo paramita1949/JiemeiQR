@@ -836,6 +836,7 @@ class OrderDao {
       SELECT
         o.id AS order_id,
         o.waybill_no,
+        o.scanner_gun,
         o.merchant_name,
         o.order_date,
         o.status,
@@ -848,7 +849,7 @@ class OrderDao {
       INNER JOIN products p ON p.id = oi.product_id
       INNER JOIN batches b ON b.id = oi.batch_id
       WHERE ${where.join(' AND ')}
-      GROUP BY o.id, o.waybill_no, o.merchant_name, o.order_date, o.status
+      GROUP BY o.id, o.waybill_no, o.scanner_gun, o.merchant_name, o.order_date, o.status
       ORDER BY o.order_date DESC, o.created_at DESC
       ''',
           variables: vars,
@@ -865,6 +866,7 @@ class OrderDao {
           (row) => OrderRestockWaybillLine(
             orderId: row.data['order_id'] as int? ?? 0,
             waybillNo: row.data['waybill_no'] as String? ?? '',
+            scannerGun: row.data['scanner_gun'] as String?,
             merchantName: row.data['merchant_name'] as String? ?? '',
             orderDate: _parseSqlDateTime(row.data['order_date']),
             status: OrderStatus.values[(row.data['status'] as int?) ?? 0],
@@ -1499,6 +1501,7 @@ class OrderRestockWaybillLine {
   const OrderRestockWaybillLine({
     required this.orderId,
     required this.waybillNo,
+    required this.scannerGun,
     required this.merchantName,
     required this.orderDate,
     required this.status,
@@ -1510,6 +1513,7 @@ class OrderRestockWaybillLine {
 
   final int orderId;
   final String waybillNo;
+  final String? scannerGun;
   final String merchantName;
   final DateTime orderDate;
   final OrderStatus status;
