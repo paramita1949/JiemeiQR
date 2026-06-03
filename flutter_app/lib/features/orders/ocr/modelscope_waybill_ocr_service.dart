@@ -265,9 +265,8 @@ String _normalizeApiKey(String raw) {
 }
 
 bool _isRecognizedDraftEmpty(WaybillOcrDraft draft) {
-  final hasHeader = draft.waybillNo.trim().isNotEmpty ||
-      draft.merchantName.trim().isNotEmpty ||
-      draft.orderDateText.trim().isNotEmpty;
+  final hasHeader =
+      draft.waybillNo.trim().isNotEmpty || draft.merchantName.trim().isNotEmpty;
   final hasRows = draft.rows.any((row) => row.hasContent && row.boxes > 0);
   return !hasHeader && !hasRows;
 }
@@ -307,14 +306,13 @@ const _ocrPromptGeneral = '''
 如果图片方向旋转，请先按文字方向阅读。
 只提取：
 - waybillNo: 右上区域的运单号/通单号
-- merchantName: 提取“收货方业务短称”（不要公司全称，不带地区名），优先形如“XX百货/XX商贸/XX贸易/XX日用/XX化妆/XX供应链/XX集团”；前缀通常2-3个字。读不到则空字符串
-- orderDate: 单据日期，读不到则空字符串
+- merchantName: 提取“收货方业务短称”（不要公司全称；省/市/县/区/镇/乡/街道等行政区划前缀一律删除；不要为了某个城市或地区写特殊规则），优先形如“XX百货/XX商贸/XX贸易/XX日用/XX化妆/XX供应链/XX集团”；前缀通常2-3个字。读不到则空字符串
 - rows: 表格每一行的 productCode、productName、actualBatch、dateBatch、boxes
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
 不同实际批号必须作为不同原始行输出。
 读不清的字段返回空字符串或0，并在warnings用中文写原因。
 返回 JSON 对象，字段必须包含：
-waybillNo, merchantName, orderDate, rows, warnings。
+waybillNo, merchantName, rows, warnings。
 ''';
 
 const _ocrPromptWaybillTemplateV2 = '''
@@ -324,7 +322,6 @@ const _ocrPromptWaybillTemplateV2 = '''
 只提取并返回JSON字段：
 - waybillNo: 右上区域“运单号”
 - merchantName: 优先取“收货方”的业务短称，没有则取“客户/经销商/售达方”中的业务短称
-- orderDate: 优先取“起运日”，没有则取单据日期
 - rows: 明细表每一行的 productCode、productName、actualBatch、dateBatch、boxes
 列映射固定为：
 - productCode <- 产品码
@@ -338,12 +335,13 @@ const _ocrPromptWaybillTemplateV2 = '''
 - 不同实际批号必须作为不同原始行输出，不要合并
 - merchantName 提取规则（仅通过语义，不要机械截断）：
   - 只能依据“收货方/客户/经销商/售达方”字段原文，不要根据地址、门店名、仓库名推断
-  - 如果是公司全称，提取最稳定、最常用的业务短称，不要带省/市/区/县/镇等地区词
+  - 如果是公司全称，提取最稳定、最常用的业务短称
+  - 行政区划前缀一律删除：省/市/县/区/镇/乡/街道等地区名称只作为前缀时，不要放进 merchantName
   - 优先保留这些词：商贸、贸易、日用、化妆、供应链、百货、集团、经贸、物流、仓
   - 当命中上述关键词时，关键词前通常只保留2-3个核心字（例如“恒盛日化”“嘉源商贸”）
   - 支持“十足”系列短称：十足、十足台州、十足诸暨（仅当这些词直接出现在收货方字段时）
-  - 示例：`浙江嘉兴恒盛日化有限公司` -> `恒盛日化`；`台州某某商贸有限公司` -> `某某商贸`；`嘉兴XX百货有限公司` -> `XX百货`
+  - 不要为了某个城市或地区写特殊规则，按“行政区划前缀删除 + 保留业务短称核心词”的通用规则处理
 - 读不清的字段返回空字符串或0，并在warnings用中文写原因
 返回 JSON 对象，字段必须包含：
-waybillNo, merchantName, orderDate, rows, warnings。
+waybillNo, merchantName, rows, warnings。
 ''';

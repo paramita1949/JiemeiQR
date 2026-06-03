@@ -1546,7 +1546,7 @@ class _RestockWaybillSheet extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      '${line.merchantName} · ${_formatDate(line.orderDate)}',
+                                      '${line.merchantName} · ${_formatDate(line.orderDate)} · ${line.batchCount}个批号',
                                       style: const TextStyle(
                                         color: AppTheme.textSecondary,
                                         fontSize: 12,

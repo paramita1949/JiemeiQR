@@ -824,6 +824,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         builder: (_) => WaybillOcrReviewScreen(
           orderDao: _orderDao,
           matched: matched,
+          initialOrderDate: _orderDate,
         ),
       ),
     );
@@ -834,10 +835,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         ? matched.source.merchantName
         : reviewResult.trim();
     final normalizedWaybillNo = _normalizeWaybillNo(matched.source.waybillNo);
-    final orderDate = matched.orderDate ?? DateTime.now();
+    final orderDate =
+        DateTime(_orderDate.year, _orderDate.month, _orderDate.day);
     _waybillNoController.text = normalizedWaybillNo;
     _merchantController.text = merchantName;
-    _orderDate = DateTime(orderDate.year, orderDate.month, orderDate.day);
+    _orderDate = orderDate;
     final orderId = await _orderDao.findOpenOrderId(
       waybillNo: normalizedWaybillNo,
       merchantName: merchantName,

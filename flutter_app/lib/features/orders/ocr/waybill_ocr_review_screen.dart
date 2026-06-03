@@ -12,10 +12,12 @@ class WaybillOcrReviewScreen extends StatefulWidget {
     super.key,
     required this.orderDao,
     required this.matched,
+    this.initialOrderDate,
   });
 
   final OrderDao orderDao;
   final MatchedWaybillOcrDraft matched;
+  final DateTime? initialOrderDate;
 
   @override
   State<WaybillOcrReviewScreen> createState() => _WaybillOcrReviewScreenState();
@@ -158,9 +160,8 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
                 if (_merchantMatchText(draft).isNotEmpty)
                   _InfoRow(label: '商家匹配', value: _merchantMatchText(draft)),
                 _InfoRow(
-                  label: '日期',
-                  value:
-                      _dateText(widget.matched.orderDate, draft.orderDateText),
+                  label: '订单日期',
+                  value: _dateText(_effectiveOrderDate(), ''),
                 ),
               ],
             ),
@@ -210,7 +211,7 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
     final merchantName = _merchantController.text.trim().isEmpty
         ? draft.merchantName
         : _merchantController.text.trim();
-    final orderDate = widget.matched.orderDate ?? DateTime.now();
+    final orderDate = _effectiveOrderDate();
     final selected = _entries
         .where((entry) => entry.included && entry.line.isMatched)
         .toList(growable: false);
@@ -281,6 +282,16 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
     } catch (_) {
       _showError('录入失败，请检查识别结果');
     }
+  }
+
+  DateTime _normalizedOrderDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  DateTime _effectiveOrderDate() {
+    return _normalizedOrderDate(
+      widget.initialOrderDate ?? widget.matched.orderDate ?? DateTime.now(),
+    );
   }
 
   Future<List<_InsufficientStockItem>> _insufficientItemsFor(

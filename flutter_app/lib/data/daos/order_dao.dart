@@ -840,6 +840,11 @@ class OrderDao {
         o.merchant_name,
         o.order_date,
         o.status,
+        (
+          SELECT COUNT(DISTINCT all_oi.batch_id)
+          FROM order_items all_oi
+          WHERE all_oi.order_id = o.id
+        ) AS batch_count,
         SUM(oi.boxes) AS total_boxes,
         MAX(b.boxes_per_board) AS boxes_per_board,
         SUM(CASE WHEN oi.is_picked = 1 THEN 1 ELSE 0 END) AS picked_line_count,
@@ -870,6 +875,7 @@ class OrderDao {
             merchantName: row.data['merchant_name'] as String? ?? '',
             orderDate: _parseSqlDateTime(row.data['order_date']),
             status: OrderStatus.values[(row.data['status'] as int?) ?? 0],
+            batchCount: (row.data['batch_count'] as int?) ?? 0,
             totalBoxes: (row.data['total_boxes'] as int?) ?? 0,
             boxesPerBoard: (row.data['boxes_per_board'] as int?) ?? 1,
             pickedLineCount: (row.data['picked_line_count'] as int?) ?? 0,
@@ -1505,6 +1511,7 @@ class OrderRestockWaybillLine {
     required this.merchantName,
     required this.orderDate,
     required this.status,
+    required this.batchCount,
     required this.totalBoxes,
     required this.boxesPerBoard,
     required this.pickedLineCount,
@@ -1517,6 +1524,7 @@ class OrderRestockWaybillLine {
   final String merchantName;
   final DateTime orderDate;
   final OrderStatus status;
+  final int batchCount;
   final int totalBoxes;
   final int boxesPerBoard;
   final int pickedLineCount;
