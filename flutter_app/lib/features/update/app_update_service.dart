@@ -28,6 +28,20 @@ class AppUpdateInfo {
   final bool hasUpdate;
 }
 
+class AppUpdateDownloadStatus {
+  const AppUpdateDownloadStatus({
+    required this.message,
+    this.uri,
+  });
+
+  final String message;
+  final Uri? uri;
+}
+
+typedef AppUpdateDownloadStatusChanged = void Function(
+  AppUpdateDownloadStatus status,
+);
+
 class AppUpdateService {
   const AppUpdateService({
     this.owner = 'paramita1949',
@@ -79,6 +93,7 @@ class AppUpdateService {
   Future<File> downloadApk(
     AppUpdateInfo info, {
     ValueChanged<double>? onProgress,
+    AppUpdateDownloadStatusChanged? onStatus,
   }) async {
     final directory = await getTemporaryDirectory();
     final updatesDir = Directory(p.join(directory.path, 'updates'));
@@ -91,13 +106,40 @@ class AppUpdateService {
     final file = File(p.join(updatesDir.path, fileName));
     AppUpdateException? lastError;
     final candidates = appUpdateDownloadUris(info.apkUrl);
-    final uris = await _prioritizeDownloadUris(candidates);
+    onStatus?.call(
+      AppUpdateDownloadStatus(
+        message: _downloadCandidatesMessage(candidates, info.apkUrl),
+      ),
+    );
+    final uris = await _prioritizeDownloadUris(
+      candidates,
+      officialUrl: info.apkUrl,
+      onStatus: onStatus,
+    );
 
-    for (final uri in uris) {
+    for (var index = 0; index < uris.length; index += 1) {
+      final uri = uris[index];
+      final label = appUpdateDownloadUriLabel(uri, officialUrl: info.apkUrl);
+      onStatus?.call(
+        AppUpdateDownloadStatus(message: '正在尝试 $label', uri: uri),
+      );
       try {
-        return await _downloadApkFromUri(uri, file, onProgress: onProgress);
+        return await _downloadApkFromUri(
+          uri,
+          file,
+          onProgress: onProgress,
+          onStatus: onStatus,
+          lineLabel: label,
+        );
       } on AppUpdateException catch (error) {
         lastError = error;
+        onStatus?.call(
+          AppUpdateDownloadStatus(
+            message:
+                index < uris.length - 1 ? '$label 失败，自动切换下一条线路' : '$label 失败',
+            uri: uri,
+          ),
+        );
       }
     }
 
@@ -143,6 +185,8 @@ Future<File> _downloadApkFromUri(
   Uri uri,
   File file, {
   ValueChanged<double>? onProgress,
+  AppUpdateDownloadStatusChanged? onStatus,
+  String? lineLabel,
 }) async {
   final client = HttpClient()..connectionTimeout = _downloadConnectTimeout;
   try {
@@ -155,6 +199,12 @@ Future<File> _downloadApkFromUri(
     if (response.statusCode != HttpStatus.ok) {
       throw AppUpdateException('下载失败：HTTP ${response.statusCode}');
     }
+    onStatus?.call(
+      AppUpdateDownloadStatus(
+        message: '正在使用 ${lineLabel ?? appUpdateDownloadUriLabel(uri)} 下载',
+        uri: uri,
+      ),
+    );
     final sink = file.openWrite();
     var received = 0;
     final total = response.contentLength;
@@ -195,6 +245,38 @@ Future<File> downloadAppUpdateApkFromUriForTesting(
   ValueChanged<double>? onProgress,
 }) {
   return _downloadApkFromUri(uri, file, onProgress: onProgress);
+}
+
+@visibleForTesting
+Future<File> downloadAppUpdateApkFromUrisForTesting(
+  List<Uri> uris,
+  File file, {
+  AppUpdateDownloadStatusChanged? onStatus,
+}) async {
+  AppUpdateException? lastError;
+  for (var index = 0; index < uris.length; index += 1) {
+    final uri = uris[index];
+    final label = appUpdateDownloadUriLabel(uri);
+    onStatus?.call(AppUpdateDownloadStatus(message: '正在尝试 $label', uri: uri));
+    try {
+      return await _downloadApkFromUri(
+        uri,
+        file,
+        onStatus: onStatus,
+        lineLabel: label,
+      );
+    } on AppUpdateException catch (error) {
+      lastError = error;
+      onStatus?.call(
+        AppUpdateDownloadStatus(
+          message:
+              index < uris.length - 1 ? '$label 失败，自动切换下一条线路' : '$label 失败',
+          uri: uri,
+        ),
+      );
+    }
+  }
+  throw lastError ?? const AppUpdateException('下载失败：没有可用下载线路');
 }
 
 Future<void> _deleteIncompleteApk(File file) async {
@@ -267,6 +349,18 @@ List<Uri> appUpdateDownloadUris(String officialUrl) {
   ].map(Uri.parse).toList(growable: false);
 }
 
+String appUpdateDownloadUriLabel(Uri uri, {String? officialUrl}) {
+  if (officialUrl != null && uri.toString() == officialUrl.trim()) {
+    return '官方地址';
+  }
+  for (final proxy in _githubDownloadProxyPrefixes) {
+    if (uri.toString().startsWith(proxy)) {
+      return Uri.parse(proxy).host;
+    }
+  }
+  return uri.host.isNotEmpty ? uri.host : uri.toString();
+}
+
 typedef AppUpdateDownloadProbe = Future<void> Function(Uri uri);
 
 Future<Uri> chooseFastestAppUpdateDownloadUri(
@@ -307,20 +401,50 @@ Future<Uri> chooseFastestAppUpdateDownloadUri(
   return completer.future;
 }
 
-Future<List<Uri>> _prioritizeDownloadUris(List<Uri> uris) async {
+Future<List<Uri>> _prioritizeDownloadUris(
+  List<Uri> uris, {
+  required String officialUrl,
+  AppUpdateDownloadStatusChanged? onStatus,
+}) async {
   if (uris.length <= 1) {
     return uris;
   }
+  onStatus?.call(
+    AppUpdateDownloadStatus(message: '正在测速：${uris.length} 条下载线路'),
+  );
   try {
     final fastest = await chooseFastestAppUpdateDownloadUri(uris);
+    onStatus?.call(
+      AppUpdateDownloadStatus(
+        message:
+            '测速完成，优先使用 ${appUpdateDownloadUriLabel(fastest, officialUrl: officialUrl)}',
+        uri: fastest,
+      ),
+    );
     return [
       fastest,
       for (final uri in uris)
         if (uri != fastest) uri,
     ];
   } on Object {
+    onStatus?.call(
+      const AppUpdateDownloadStatus(message: '测速失败，按默认顺序自动尝试'),
+    );
     return uris;
   }
+}
+
+String _downloadCandidatesMessage(List<Uri> uris, String officialUrl) {
+  if (uris.isEmpty) {
+    return '没有可用下载线路';
+  }
+  final labels = uris
+      .map((uri) => appUpdateDownloadUriLabel(uri, officialUrl: officialUrl))
+      .toList(growable: false);
+  if (labels.length <= 4) {
+    return '候选线路：${labels.join('、')}';
+  }
+  return '候选线路：${labels.take(4).join('、')} 等 ${labels.length} 条';
 }
 
 Future<void> _probeDownloadUri(Uri uri) async {

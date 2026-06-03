@@ -565,6 +565,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<_DebugLogReport> _checkForUpdateFromLogPanel() async {
     var progress = 0.0;
+    var downloadStatusMessages = <String>[];
     StateSetter? progressSetState;
     var blockingDialogOpen = false;
 
@@ -648,8 +649,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return _buildDebugReport();
       }
       progress = 0.0;
+      downloadStatusMessages = ['准备下载更新包...'];
       progressSetState = null;
       blockingDialogOpen = true;
+      void addDownloadStatus(String message) {
+        final nextMessages = [
+          ...downloadStatusMessages,
+          message,
+        ];
+        downloadStatusMessages = nextMessages.length <= 6
+            ? nextMessages
+            : nextMessages.sublist(nextMessages.length - 6);
+        progressSetState?.call(() {});
+      }
+
       unawaited(showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -665,6 +678,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   LinearProgressIndicator(value: progress),
                   const SizedBox(height: 10),
                   Text('下载进度 ${(progress * 100).round()}%'),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '下载线路',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        for (final message in downloadStatusMessages)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3),
+                            child: Text(
+                              message,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             );
@@ -676,6 +719,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onProgress: (value) {
           progress = value.clamp(0.0, 1.0).toDouble();
           progressSetState?.call(() {});
+        },
+        onStatus: (status) {
+          addDownloadStatus(status.message);
+          DebugEventLog.add('APP_UPDATE', 'download_status ${status.message}');
         },
       );
       if (!mounted) {
