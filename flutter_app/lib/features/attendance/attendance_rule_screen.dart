@@ -452,8 +452,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           _statusStrip(
             icon: Icons.radar_rounded,
             text: _todayGeofenceState == null
-                ? '打开APP定位到公司范围后自动记录上班，并弹窗反馈'
-                : '今日：${_todayGeofenceState!.wasInside ? '范围内' : '范围外'} · 已触发${_todayGeofenceState!.triggeredCount}次 · 打开APP后弹窗反馈',
+                ? '打开APP定位到公司范围后自动记录上班，并系统通知反馈'
+                : '今日：${_todayGeofenceState!.wasInside ? '范围内' : '范围外'} · 已触发${_todayGeofenceState!.triggeredCount}次 · 打开APP后系统通知反馈',
           ),
           const SizedBox(height: 10),
           Row(
@@ -591,9 +591,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       requestIfNeeded: true,
     );
     if (!mounted) return;
-    final msg = state.ready
-        ? '权限已就绪（定位/通知）'
-        : '权限未完全开启：请检查定位服务、定位权限、通知权限';
+    final msg = state.ready ? '权限已就绪（定位/通知）' : '权限未完全开启：请检查定位服务、定位权限、通知权限';
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 

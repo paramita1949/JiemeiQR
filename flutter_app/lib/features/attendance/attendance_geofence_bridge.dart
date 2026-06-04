@@ -4,7 +4,8 @@ import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 class AttendanceGeofenceBridge {
   AttendanceGeofenceBridge._();
 
-  static const MethodChannel _channel = MethodChannel('com.jiemei.hualushui/geofence');
+  static const MethodChannel _channel =
+      MethodChannel('com.jiemei.hualushui/geofence');
 
   /// Foreground-only auto check-in keeps office coordinates in Drift and uses
   /// one-shot AMap location when the app is open. Native background geofences
@@ -23,7 +24,8 @@ class AttendanceGeofenceBridge {
   }
 
   static Future<String> providerSummary() async {
-    final value = await _channel.invokeMethod<String>('getLocationProviderSummary');
+    final value =
+        await _channel.invokeMethod<String>('getLocationProviderSummary');
     return value ?? '系统融合定位（GPS/北斗/网络）';
   }
 

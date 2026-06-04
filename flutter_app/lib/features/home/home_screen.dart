@@ -335,29 +335,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         accountKey: accountKey,
       );
       if (decision?.triggered != true) return;
-      if (!mounted) return;
-      DebugEventLog.add(
-          'GEOFENCE_AUTO', 'show foreground auto check-in dialog');
-      await _showAutoCheckInDialog();
+      DebugEventLog.add('GEOFENCE_AUTO', 'foreground auto check-in notified');
     } catch (_) {
       // Keep home resilient when location/notification fails on some devices.
     }
-  }
-
-  Future<void> _showAutoCheckInDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('已自动上班签到'),
-        content: const Text('已在公司范围内完成上班签到。'),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _startPrecheckinGuardTimer() {
