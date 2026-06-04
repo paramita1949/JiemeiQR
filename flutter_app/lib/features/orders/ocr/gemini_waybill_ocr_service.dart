@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_diagnostics.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
 
@@ -117,7 +118,9 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
     if (payload is! Map<String, Object?>) {
       throw const GeminiWaybillOcrException('OCR JSON 格式无效');
     }
-    return WaybillOcrDraft.fromJson(payload);
+    final draft = WaybillOcrDraft.fromJson(payload);
+    logOcrMerchantDiagnosis(provider: 'gemini', draft: draft);
+    return draft;
   }
 }
 
@@ -159,6 +162,7 @@ const _ocrPromptGeneral = '''
 如果图片方向旋转，请先按文字方向阅读。
 只提取：
 - waybillNo: 右上区域的运单号/通单号
+- rawMerchantName: “收货方/客户/经销商/售达方”字段原文或可见全称，不要简称；读不到则空字符串
 - merchantName: 提取“收货方业务短称”（不要公司全称；省/市/县/区/镇/乡/街道等行政区划前缀一律删除；不要为了某个城市或地区写特殊规则），优先形如“XX百货/XX商贸/XX贸易/XX日用/XX化妆/XX供应链/XX集团”；前缀通常2-3个字。读不到则空字符串
 - rows: 表格每一行的 productCode、productName、actualBatch、dateBatch、boxes
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
@@ -172,6 +176,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 如果图片方向旋转，请先按文字方向阅读。
 只提取并返回JSON字段：
 - waybillNo: 右上区域“运单号”
+- rawMerchantName: “收货方/客户/经销商/售达方”字段原文或可见全称，不要简称；读不到则空字符串
 - merchantName: 优先取“收货方”的业务短称，没有则取“客户/经销商/售达方”中的业务短称
 - rows: 明细表每一行的 productCode、productName、actualBatch、dateBatch、boxes
 列映射固定为：
@@ -199,6 +204,7 @@ const _responseSchema = {
   'type': 'object',
   'properties': {
     'waybillNo': {'type': 'string'},
+    'rawMerchantName': {'type': 'string'},
     'merchantName': {'type': 'string'},
     'warnings': {
       'type': 'array',
@@ -227,6 +233,7 @@ const _responseSchema = {
   },
   'required': [
     'waybillNo',
+    'rawMerchantName',
     'merchantName',
     'rows',
     'warnings',

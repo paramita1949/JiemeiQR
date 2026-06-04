@@ -13,11 +13,13 @@ class WaybillOcrReviewScreen extends StatefulWidget {
     required this.orderDao,
     required this.matched,
     this.initialOrderDate,
+    this.initialProgressText,
   });
 
   final OrderDao orderDao;
   final MatchedWaybillOcrDraft matched;
   final DateTime? initialOrderDate;
+  final String? initialProgressText;
 
   @override
   State<WaybillOcrReviewScreen> createState() => _WaybillOcrReviewScreenState();
@@ -152,6 +154,10 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
               title: 'AI识别结果',
               subtitle: '',
             ),
+            if (widget.initialProgressText?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              _OcrReviewProgressCard(text: widget.initialProgressText!.trim()),
+            ],
             const SizedBox(height: 10),
             _InfoCard(
               children: [
@@ -405,6 +411,44 @@ String _normalizeWaybillNo(String raw) {
   }
   final stripped = trimmed.replaceFirst(RegExp(r'^0+'), '');
   return stripped.isEmpty ? '0' : stripped;
+}
+
+class _OcrReviewProgressCard extends StatelessWidget {
+  const _OcrReviewProgressCard({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FFF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            color: Color(0xFF15803D),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF15803D),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SummaryCard extends StatelessWidget {

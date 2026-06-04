@@ -713,17 +713,34 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   }
 
   Future<void> _runWaybillOcr(File image) async {
+    final totalStopwatch = Stopwatch()..start();
     DebugEventLog.add('AI_OCR',
         'start image=${image.path.split(Platform.pathSeparator).last}');
     _setOcrInProgress(true);
     try {
       _setOcrProgress('正在上传图片至${_ocrProviderLabel(_aiConfig)}，等待识别...');
+      final recognizeStopwatch = Stopwatch()..start();
       final draft = await _effectiveOcrService.recognize(image);
+      recognizeStopwatch.stop();
+      DebugEventLog.add(
+        'AI_OCR_TIMING',
+        'recognize_ms=${recognizeStopwatch.elapsedMilliseconds}',
+      );
+      DebugEventLog.add(
+        'AI_OCR_MERCHANT_FLOW',
+        'raw=${_logValue(draft.rawMerchantName)} final=${_logValue(draft.merchantName)} warnings=${draft.warnings.length}',
+      );
       _setOcrProgress(_ocrDraftSummary(draft));
       _setOcrProgress('正在匹配本地库存数据...');
+      final matchStopwatch = Stopwatch()..start();
       final matched = await WaybillOcrMatcher(_productDao).match(draft);
-      _setOcrProgress(_ocrMatchSummary(matched),
-          state: _OcrProgressState.success);
+      matchStopwatch.stop();
+      DebugEventLog.add(
+        'AI_OCR_TIMING',
+        'match_ms=${matchStopwatch.elapsedMilliseconds}',
+      );
+      final successMessage = _ocrMatchSummary(matched);
+      _setOcrProgress(successMessage, state: _OcrProgressState.success);
       DebugEventLog.add(
         'AI_OCR',
         'success waybill=${matched.source.waybillNo} merchant=${matched.source.merchantName} lines=${matched.lines.length} warnings=${matched.source.warnings.length}',
@@ -732,11 +749,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         return;
       }
       _setOcrInProgress(false);
-      await Future<void>.delayed(const Duration(seconds: 2));
-      if (!mounted) {
-        return;
-      }
-      await _openOcrReview(matched);
+      final openReviewStopwatch = Stopwatch()..start();
+      await _openOcrReview(matched, progressText: successMessage);
+      openReviewStopwatch.stop();
+      totalStopwatch.stop();
+      DebugEventLog.add(
+        'AI_OCR_TIMING',
+        'open_review_ms=${openReviewStopwatch.elapsedMilliseconds} total_ms=${totalStopwatch.elapsedMilliseconds}',
+      );
       if (mounted) {
         setState(() => _ocrProgressText = null);
       }
@@ -818,13 +838,17 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     });
   }
 
-  Future<void> _openOcrReview(MatchedWaybillOcrDraft matched) async {
+  Future<void> _openOcrReview(
+    MatchedWaybillOcrDraft matched, {
+    String? progressText,
+  }) async {
     final reviewResult = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => WaybillOcrReviewScreen(
           orderDao: _orderDao,
           matched: matched,
           initialOrderDate: _orderDate,
+          initialProgressText: progressText,
         ),
       ),
     );
@@ -1935,6 +1959,14 @@ String _ocrDraftSummary(WaybillOcrDraft draft) {
 String _ocrMatchSummary(MatchedWaybillOcrDraft matched) {
   final matchedCount = matched.lines.where((line) => line.isMatched).length;
   return '识别完成：${matched.lines.length} 条明细，已匹配 $matchedCount 条';
+}
+
+String _logValue(String value) {
+  final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (compact.length <= 80) {
+    return compact;
+  }
+  return '${compact.substring(0, 80)}...';
 }
 
 String _batchIndexSuffix(BatchRecord batch, List<BatchRecord> allBatches) {

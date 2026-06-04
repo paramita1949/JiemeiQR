@@ -29,6 +29,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final AppDatabase _database;
   late final OrderDao _orderDao;
   late final bool _ownsDatabase;
+  late final ScrollController _scrollController;
   late DateTimeRange? _dateRange;
   _OrderQuickFilter _quickFilter = _OrderQuickFilter.pendingOnly;
   OrderStatus? _status;
@@ -52,6 +53,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
+    _scrollController = ScrollController();
     _dateRange = widget.dateRange;
     _quickFilter = widget.dateRange == null
         ? _OrderQuickFilter.pendingOnly
@@ -62,6 +64,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     if (_ownsDatabase) {
       _database.close();
     }
@@ -73,6 +76,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 42),
           children: [
             Row(
@@ -216,19 +220,25 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  Future<void> _refreshOrders() async {
-    setState(() {
-      _loadingInitial = true;
-      _loadingMore = false;
-      _hasMore = false;
-      _total = 0;
-      _counts = null;
-      _allRestockAggregates = const [];
-      _restockAggregates = const [];
-      _hasUrgentRestock = false;
-      _restockMerchantOptions = const [];
-      _orders.clear();
-    });
+  Future<void> _refreshOrders({
+    int? limit,
+    double? restoreScrollOffset,
+    bool keepCurrentOrders = false,
+  }) async {
+    if (!keepCurrentOrders) {
+      setState(() {
+        _loadingInitial = true;
+        _loadingMore = false;
+        _hasMore = false;
+        _total = 0;
+        _counts = null;
+        _allRestockAggregates = const [];
+        _restockAggregates = const [];
+        _hasUrgentRestock = false;
+        _restockMerchantOptions = const [];
+        _orders.clear();
+      });
+    }
     final counts = await _orderDao.orderStatusCounts(dateRange: _dateRange);
     final hideRestock = _quickFilter == _OrderQuickFilter.exception ||
         _status == OrderStatus.picked ||
@@ -267,7 +277,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       exceptionOnly: _quickFilter == _OrderQuickFilter.exception,
       urgentOnly: shouldUseUrgent,
       offset: 0,
-      limit: _pageSize,
+      limit: limit ?? _pageSize,
     );
     final merchantOptions =
         shouldUseUrgent ? urgentDuplicateMerchants : allDuplicateMerchants;
@@ -299,7 +309,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
         shouldUseUrgent ? urgentRestockAggregates : allRestockAggregates;
     final availableFloors = _extractAvailableFloors(allRestockAggregates);
     setState(() {
-      _orders.addAll(page.orders);
+      _orders
+        ..clear()
+        ..addAll(page.orders);
       _counts = counts;
       _allRestockAggregates = allRestockAggregates;
       _restockAggregates = restockAggregates;
@@ -316,6 +328,21 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _total = page.total;
       _hasMore = _orders.length < _total;
       _loadingInitial = false;
+    });
+    _restoreScrollOffset(restoreScrollOffset);
+  }
+
+  void _restoreScrollOffset(double? offset) {
+    if (offset == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      final maxScrollExtent = _scrollController.position.maxScrollExtent;
+      final targetOffset = offset.clamp(0.0, maxScrollExtent).toDouble();
+      _scrollController.jumpTo(targetOffset);
     });
   }
 
@@ -397,15 +424,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _openOrderDetail(OrderSummary order) async {
-    await pushAndRefresh(
-      context,
-      route: MaterialPageRoute(
+    final restoreScrollOffset =
+        _scrollController.hasClients ? _scrollController.offset : null;
+    final restoreLimit =
+        _orders.length > _pageSize ? _orders.length : _pageSize;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
         builder: (_) => OrderDetailScreen(
           database: _database,
           orderId: order.id,
         ),
       ),
-      onRefresh: _refreshOrders,
+    );
+    if (!mounted) {
+      return;
+    }
+    await _refreshOrders(
+      limit: restoreLimit,
+      restoreScrollOffset: restoreScrollOffset,
+      keepCurrentOrders: true,
     );
   }
 
