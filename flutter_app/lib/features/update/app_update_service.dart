@@ -130,13 +130,26 @@ class AppUpdateService {
           onProgress: onProgress,
           onStatus: onStatus,
           lineLabel: label,
+          minBytesPerSecond: _downloadMinBytesPerSecond,
+          speedCheckWindow: _downloadSpeedCheckWindow,
         );
       } on AppUpdateException catch (error) {
         lastError = error;
+        final isTooSlow = error.message.contains('下载速度过慢');
+        final isIdle = error.message.contains('长时间无响应');
         onStatus?.call(
           AppUpdateDownloadStatus(
-            message:
-                index < uris.length - 1 ? '$label 失败，自动切换下一条线路' : '$label 失败',
+            message: index < uris.length - 1
+                ? isTooSlow
+                    ? '$label 下载速度过慢，自动切换下一条线路'
+                    : isIdle
+                        ? '$label 长时间无响应，自动切换下一条线路'
+                        : '$label 失败，自动切换下一条线路'
+                : isTooSlow
+                    ? '$label 下载速度过慢'
+                    : isIdle
+                        ? '$label 长时间无响应'
+                        : '$label 失败',
             uri: uri,
           ),
         );
@@ -187,8 +200,11 @@ Future<File> _downloadApkFromUri(
   ValueChanged<double>? onProgress,
   AppUpdateDownloadStatusChanged? onStatus,
   String? lineLabel,
+  int minBytesPerSecond = _downloadMinBytesPerSecond,
+  Duration speedCheckWindow = _downloadSpeedCheckWindow,
 }) async {
   final client = HttpClient()..connectionTimeout = _downloadConnectTimeout;
+  var speedTooSlow = false;
   try {
     final request = await client.getUrl(uri).timeout(_downloadConnectTimeout);
     request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
@@ -208,6 +224,20 @@ Future<File> _downloadApkFromUri(
     final sink = file.openWrite();
     var received = 0;
     final total = response.contentLength;
+    final startedAt = DateTime.now();
+    var nextSpeedCheckAt = startedAt.add(speedCheckWindow);
+    var lastSpeedCheckReceived = 0;
+    final speedTimer = Timer.periodic(speedCheckWindow, (_) {
+      final delta = received - lastSpeedCheckReceived;
+      lastSpeedCheckReceived = received;
+      final minimumBytes = minBytesPerSecond *
+          speedCheckWindow.inMilliseconds ~/
+          Duration.millisecondsPerSecond;
+      if (delta < minimumBytes) {
+        speedTooSlow = true;
+        client.close(force: true);
+      }
+    });
     try {
       await for (final chunk in response.timeout(_downloadIdleTimeout)) {
         received += chunk.length;
@@ -215,8 +245,23 @@ Future<File> _downloadApkFromUri(
         if (total > 0) {
           onProgress?.call(received / total);
         }
+        final now = DateTime.now();
+        if (now.isAfter(nextSpeedCheckAt) ||
+            now.isAtSameMomentAs(nextSpeedCheckAt)) {
+          final elapsedMs = now.difference(startedAt).inMilliseconds;
+          if (elapsedMs > 0) {
+            final bytesPerSecond = received * 1000 ~/ elapsedMs;
+            if (bytesPerSecond < minBytesPerSecond) {
+              throw AppUpdateException(
+                '下载失败：下载速度过慢（${_formatBytesPerSecond(bytesPerSecond)}）',
+              );
+            }
+          }
+          nextSpeedCheckAt = now.add(speedCheckWindow);
+        }
       }
     } finally {
+      speedTimer.cancel();
       await sink.close();
     }
     if (total > 0 && received != total) {
@@ -230,8 +275,16 @@ Future<File> _downloadApkFromUri(
     onProgress?.call(1);
     return file;
   } on AppUpdateException {
+    await _deleteIncompleteApk(file);
     rethrow;
+  } on TimeoutException {
+    await _deleteIncompleteApk(file);
+    throw const AppUpdateException('下载失败：线路长时间无响应');
   } catch (error) {
+    await _deleteIncompleteApk(file);
+    if (speedTooSlow) {
+      throw const AppUpdateException('下载失败：下载速度过慢');
+    }
     throw AppUpdateException('下载失败：$error');
   } finally {
     client.close(force: true);
@@ -252,6 +305,8 @@ Future<File> downloadAppUpdateApkFromUrisForTesting(
   List<Uri> uris,
   File file, {
   AppUpdateDownloadStatusChanged? onStatus,
+  int minBytesPerSecond = _downloadMinBytesPerSecond,
+  Duration speedCheckWindow = _downloadSpeedCheckWindow,
 }) async {
   AppUpdateException? lastError;
   for (var index = 0; index < uris.length; index += 1) {
@@ -264,13 +319,26 @@ Future<File> downloadAppUpdateApkFromUrisForTesting(
         file,
         onStatus: onStatus,
         lineLabel: label,
+        minBytesPerSecond: minBytesPerSecond,
+        speedCheckWindow: speedCheckWindow,
       );
     } on AppUpdateException catch (error) {
       lastError = error;
+      final isTooSlow = error.message.contains('下载速度过慢');
+      final isIdle = error.message.contains('长时间无响应');
       onStatus?.call(
         AppUpdateDownloadStatus(
-          message:
-              index < uris.length - 1 ? '$label 失败，自动切换下一条线路' : '$label 失败',
+          message: index < uris.length - 1
+              ? isTooSlow
+                  ? '$label 下载速度过慢，自动切换下一条线路'
+                  : isIdle
+                      ? '$label 长时间无响应，自动切换下一条线路'
+                      : '$label 失败，自动切换下一条线路'
+              : isTooSlow
+                  ? '$label 下载速度过慢'
+                  : isIdle
+                      ? '$label 长时间无响应'
+                      : '$label 失败',
           uri: uri,
         ),
       );
@@ -300,6 +368,16 @@ Future<bool> _hasApkZipHeader(File file) async {
       bytes[1] == 0x4B &&
       bytes[2] == 0x03 &&
       bytes[3] == 0x04;
+}
+
+String _formatBytesPerSecond(int bytesPerSecond) {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return '${(bytesPerSecond / 1024 / 1024).toStringAsFixed(1)}MB/s';
+  }
+  if (bytesPerSecond >= 1024) {
+    return '${(bytesPerSecond / 1024).toStringAsFixed(1)}KB/s';
+  }
+  return '${bytesPerSecond}B/s';
 }
 
 class AppUpdateException implements Exception {
@@ -421,11 +499,11 @@ Future<List<Uri>> _prioritizeDownloadUris(
         uri: fastest,
       ),
     );
-    return [
-      fastest,
-      for (final uri in uris)
-        if (uri != fastest) uri,
-    ];
+    return orderAppUpdateDownloadUrisAfterProbeForTesting(
+      uris,
+      fastest: fastest,
+      officialUrl: officialUrl,
+    );
   } on Object {
     onStatus?.call(
       const AppUpdateDownloadStatus(message: '测速失败，按默认顺序自动尝试'),
@@ -445,6 +523,22 @@ String _downloadCandidatesMessage(List<Uri> uris, String officialUrl) {
     return '候选线路：${labels.join('、')}';
   }
   return '候选线路：${labels.take(4).join('、')} 等 ${labels.length} 条';
+}
+
+@visibleForTesting
+List<Uri> orderAppUpdateDownloadUrisAfterProbeForTesting(
+  List<Uri> uris, {
+  required Uri fastest,
+  required String officialUrl,
+}) {
+  final official = officialUrl.trim();
+  final fastestIsOfficial = fastest.toString() == official;
+  return [
+    fastest,
+    for (final uri in uris)
+      if (uri != fastest && (fastestIsOfficial || uri.toString() != official))
+        uri,
+  ];
 }
 
 Future<void> _probeDownloadUri(Uri uri) async {
@@ -475,6 +569,8 @@ Future<void> _probeDownloadUri(Uri uri) async {
 const _downloadConnectTimeout = Duration(seconds: 6);
 const _downloadProbeTimeout = Duration(seconds: 8);
 const _downloadIdleTimeout = Duration(seconds: 12);
+const _downloadSpeedCheckWindow = Duration(seconds: 12);
+const _downloadMinBytesPerSecond = 16 * 1024;
 const _downloadProbeBytes = 64 * 1024;
 
 const _githubDownloadProxyPrefixes = [

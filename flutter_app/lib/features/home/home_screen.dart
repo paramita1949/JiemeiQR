@@ -546,6 +546,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<_DebugLogReport> _checkForUpdateFromLogPanel() async {
     var progress = 0.0;
+    var downloadCurrentLine = '准备中';
+    var downloadCurrentStatus = '准备下载更新包...';
     var downloadStatusMessages = <String>[];
     StateSetter? progressSetState;
     var blockingDialogOpen = false;
@@ -630,17 +632,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return _buildDebugReport();
       }
       progress = 0.0;
+      downloadCurrentLine = '准备中';
+      downloadCurrentStatus = '准备下载更新包...';
       downloadStatusMessages = ['准备下载更新包...'];
       progressSetState = null;
       blockingDialogOpen = true;
-      void addDownloadStatus(String message) {
+      void addDownloadStatus(AppUpdateDownloadStatus status) {
+        final message = status.message;
+        if (message.startsWith('正在使用 ')) {
+          downloadCurrentLine =
+              message.replaceFirst('正在使用 ', '').replaceFirst(' 下载', '');
+          downloadCurrentStatus = '正在下载';
+        } else if (message.startsWith('正在尝试 ')) {
+          downloadCurrentLine = message.replaceFirst('正在尝试 ', '');
+          downloadCurrentStatus = '正在连接';
+        } else if (message.startsWith('测速完成')) {
+          downloadCurrentStatus = message;
+        } else if (message.contains('自动切换')) {
+          downloadCurrentStatus = message;
+        } else if (!message.startsWith('候选线路')) {
+          downloadCurrentStatus = message;
+        }
         final nextMessages = [
           ...downloadStatusMessages,
           message,
         ];
-        downloadStatusMessages = nextMessages.length <= 6
+        downloadStatusMessages = nextMessages.length <= 3
             ? nextMessages
-            : nextMessages.sublist(nextMessages.length - 6);
+            : nextMessages.sublist(nextMessages.length - 3);
         progressSetState?.call(() {});
       }
 
@@ -673,17 +692,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '下载线路',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        Row(
+                          children: [
+                            const Text(
+                              '当前线路',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  downloadCurrentLine,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
+                        Text(
+                          downloadCurrentStatus,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         for (final message in downloadStatusMessages)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 3),
+                            padding: const EdgeInsets.only(bottom: 2),
                             child: Text(
-                              message,
-                              style: const TextStyle(fontSize: 12),
+                              '· $message',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                       ],
@@ -702,7 +767,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           progressSetState?.call(() {});
         },
         onStatus: (status) {
-          addDownloadStatus(status.message);
+          addDownloadStatus(status);
           DebugEventLog.add('APP_UPDATE', 'download_status ${status.message}');
         },
       );
