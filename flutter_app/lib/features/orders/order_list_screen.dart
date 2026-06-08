@@ -36,8 +36,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
   final List<OrderSummary> _orders = <OrderSummary>[];
   List<OrderRestockAggregate> _allRestockAggregates = const [];
   List<OrderRestockAggregate> _restockAggregates = const [];
+  List<OrderRestockAggregate> _pickedAggregates = const [];
   int? _restockFloorFilter;
   bool _restockUrgentOnly = false;
+  bool _showPickedAggregate = false;
   bool _hasUrgentRestock = false;
   List<String> _restockMerchantOptions = const [];
   Set<String> _restockMerchantFilter = const <String>{};
@@ -166,26 +168,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
               ),
             ],
-            if (_allRestockAggregates.isNotEmpty) ...[
+            if (_allRestockAggregates.isNotEmpty ||
+                _pickedAggregates.isNotEmpty) ...[
               const SizedBox(height: 8),
-              _RestockAggregateCard(
-                rows: _restockAggregates,
-                floorRows: _allRestockAggregates,
-                selectedFloor: _restockFloorFilter,
-                urgentOnly: _restockUrgentOnly,
-                showUrgentFilter: _hasUrgentRestock,
-                merchantOptions: _restockMerchantOptions,
-                selectedMerchants: _restockMerchantFilter,
-                onSelectFloor: (floor) {
-                  setState(() => _restockFloorFilter = floor);
-                },
-                onToggleUrgent: () {
-                  setState(() => _restockUrgentOnly = !_restockUrgentOnly);
-                  _refreshOrders();
-                },
-                onOpenMerchantFilter: _showRestockMerchantFilterSheet,
-                onTapRow: _showRestockWaybillLines,
-              ),
+              _buildAggregateSummaryCard(),
             ],
             const SizedBox(height: 10),
             if (_loadingInitial)
@@ -234,6 +220,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         _counts = null;
         _allRestockAggregates = const [];
         _restockAggregates = const [];
+        _pickedAggregates = const [];
         _hasUrgentRestock = false;
         _restockMerchantOptions = const [];
         _orders.clear();
@@ -302,6 +289,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
             urgentOnly: true,
             merchantNames: selectedMerchants.toList(),
           );
+    final pickedAggregates = await _orderDao.orderRestockAggregates(
+      status: _status,
+      dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      urgentOnly: shouldUseUrgent,
+      pickedOnly: true,
+    );
     if (!mounted) {
       return;
     }
@@ -315,11 +309,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _counts = counts;
       _allRestockAggregates = allRestockAggregates;
       _restockAggregates = restockAggregates;
+      _pickedAggregates = pickedAggregates;
       _hasUrgentRestock = hasUrgentRestock;
       _restockMerchantOptions = merchantOptions;
       _restockMerchantFilter = selectedMerchants;
       if (_restockUrgentOnly && !hasUrgentRestock) {
         _restockUrgentOnly = false;
+      }
+      if (_showPickedAggregate && pickedAggregates.isEmpty) {
+        _showPickedAggregate = false;
       }
       if (_restockFloorFilter != null &&
           !availableFloors.contains(_restockFloorFilter)) {
@@ -330,6 +328,68 @@ class _OrderListScreenState extends State<OrderListScreen> {
       _loadingInitial = false;
     });
     _restoreScrollOffset(restoreScrollOffset);
+  }
+
+  Widget _buildAggregateSummaryCard() {
+    final hasRestock = _allRestockAggregates.isNotEmpty;
+    final hasPicked = _pickedAggregates.isNotEmpty;
+    final showPicked = !hasRestock || (_showPickedAggregate && hasPicked);
+    final card = showPicked
+        ? _RestockAggregateCard(
+            title: '已拣货汇总（按产品/批号/日期）',
+            rows: _pickedAggregates,
+            floorRows: const [],
+            selectedFloor: null,
+            urgentOnly: false,
+            showUrgentFilter: false,
+            merchantOptions: const [],
+            selectedMerchants: const <String>{},
+            onSelectFloor: (_) {},
+            onToggleUrgent: () {},
+            onOpenMerchantFilter: () {},
+            onTapRow: _showPickedWaybillLines,
+          )
+        : _RestockAggregateCard(
+            title: '备货汇总（按产品/批号/日期）',
+            rows: _restockAggregates,
+            floorRows: _allRestockAggregates,
+            selectedFloor: _restockFloorFilter,
+            urgentOnly: _restockUrgentOnly,
+            showUrgentFilter: _hasUrgentRestock,
+            merchantOptions: _restockMerchantOptions,
+            selectedMerchants: _restockMerchantFilter,
+            onSelectFloor: (floor) {
+              setState(() => _restockFloorFilter = floor);
+            },
+            onToggleUrgent: () {
+              setState(() => _restockUrgentOnly = !_restockUrgentOnly);
+              _refreshOrders();
+            },
+            onOpenMerchantFilter: _showRestockMerchantFilterSheet,
+            onTapRow: _showRestockWaybillLines,
+          );
+    if (!hasRestock || !hasPicked) {
+      return card;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: (details) {
+        if (details.delta.dx < -8 && !_showPickedAggregate) {
+          setState(() => _showPickedAggregate = true);
+        } else if (details.delta.dx > 8 && _showPickedAggregate) {
+          setState(() => _showPickedAggregate = false);
+        }
+      },
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -200 && !_showPickedAggregate) {
+          setState(() => _showPickedAggregate = true);
+        } else if (velocity > 200 && _showPickedAggregate) {
+          setState(() => _showPickedAggregate = false);
+        }
+      },
+      child: card,
+    );
   }
 
   void _restoreScrollOffset(double? offset) {
@@ -537,7 +597,50 @@ class _OrderListScreenState extends State<OrderListScreen> {
             return;
           }
           pushAndRefresh(
-            this.context,
+            context,
+            route: MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(
+                database: _database,
+                orderId: orderId,
+              ),
+            ),
+            onRefresh: _refreshOrders,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showPickedWaybillLines(OrderRestockAggregate row) async {
+    final lines = await _orderDao.orderRestockWaybillLines(
+      productCode: row.productCode,
+      actualBatch: row.actualBatch,
+      dateBatch: row.dateBatch,
+      status: _status,
+      dateRange: _dateRange,
+      unfinishedOnly: _quickFilter == _OrderQuickFilter.pendingOnly,
+      urgentOnly: _restockUrgentOnly && _hasUrgentRestock,
+      pickedOnly: true,
+    );
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RestockWaybillSheet(
+        aggregate: row,
+        lines: lines,
+        onOpenOrder: (orderId) {
+          Navigator.of(context).pop();
+          final order = _orders.where((item) => item.id == orderId).firstOrNull;
+          if (order != null) {
+            _openOrderDetail(order);
+            return;
+          }
+          pushAndRefresh(
+            context,
             route: MaterialPageRoute(
               builder: (_) => OrderDetailScreen(
                 database: _database,
@@ -1253,6 +1356,7 @@ String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
 class _RestockAggregateCard extends StatelessWidget {
   const _RestockAggregateCard({
+    required this.title,
     required this.rows,
     required this.floorRows,
     required this.selectedFloor,
@@ -1266,6 +1370,7 @@ class _RestockAggregateCard extends StatelessWidget {
     required this.onTapRow,
   });
 
+  final String title;
   final List<OrderRestockAggregate> rows;
   final List<OrderRestockAggregate> floorRows;
   final int? selectedFloor;
@@ -1304,10 +1409,10 @@ class _RestockAggregateCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '备货汇总（按产品/批号/日期）',
-                  style: TextStyle(
+                  title,
+                  style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,

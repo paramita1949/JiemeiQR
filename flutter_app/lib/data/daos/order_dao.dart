@@ -679,9 +679,10 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
     bool urgentOnly = false,
+    bool pickedOnly = false,
     List<String> merchantNames = const <String>[],
   }) async {
-    final where = <String>['oi.is_picked = 0'];
+    final where = <String>['oi.is_picked = ${pickedOnly ? 1 : 0}'];
     final vars = <Variable<Object>>[];
     if (unfinishedOnly) {
       where.add('o.status != ?');
@@ -783,13 +784,14 @@ class OrderDao {
     DateTimeRange? dateRange,
     bool unfinishedOnly = false,
     bool urgentOnly = false,
+    bool pickedOnly = false,
     List<String> merchantNames = const <String>[],
   }) async {
     final where = <String>[
       'p.code = ?',
       'b.actual_batch = ?',
       'b.date_batch = ?',
-      'oi.is_picked = 0',
+      'oi.is_picked = ${pickedOnly ? 1 : 0}',
     ];
     final vars = <Variable<Object>>[
       Variable.withString(productCode),
