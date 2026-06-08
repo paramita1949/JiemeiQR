@@ -40,6 +40,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   int? _restockFloorFilter;
   bool _restockUrgentOnly = false;
   bool _showPickedAggregate = false;
+  double _aggregateDragDx = 0;
   bool _hasUrgentRestock = false;
   List<String> _restockMerchantOptions = const [];
   Set<String> _restockMerchantFilter = const <String>{};
@@ -368,27 +369,60 @@ class _OrderListScreenState extends State<OrderListScreen> {
             onOpenMerchantFilter: _showRestockMerchantFilterSheet,
             onTapRow: _showRestockWaybillLines,
           );
+    final animatedCard = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final isPickedChild =
+            child.key == const ValueKey<String>('pickedAggregate');
+        final begin = isPickedChild ? const Offset(1, 0) : const Offset(-1, 0);
+        return ClipRect(
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: begin,
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<String>(
+          showPicked ? 'pickedAggregate' : 'restockAggregate',
+        ),
+        child: card,
+      ),
+    );
     if (!hasRestock || !hasPicked) {
-      return card;
+      return animatedCard;
     }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) {
+        _aggregateDragDx = 0;
+      },
       onHorizontalDragUpdate: (details) {
-        if (details.delta.dx < -8 && !_showPickedAggregate) {
-          setState(() => _showPickedAggregate = true);
-        } else if (details.delta.dx > 8 && _showPickedAggregate) {
-          setState(() => _showPickedAggregate = false);
-        }
+        _aggregateDragDx += details.delta.dx;
       },
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
-        if (velocity < -200 && !_showPickedAggregate) {
-          setState(() => _showPickedAggregate = true);
-        } else if (velocity > 200 && _showPickedAggregate) {
-          setState(() => _showPickedAggregate = false);
+        final shouldShowPicked = !_showPickedAggregate &&
+            (velocity < -200 || _aggregateDragDx < -60);
+        final shouldShowRestock =
+            _showPickedAggregate && (velocity > 200 || _aggregateDragDx > 60);
+        if (shouldShowPicked) {
+          setState(() {
+            _showPickedAggregate = true;
+          });
+        } else if (shouldShowRestock) {
+          setState(() {
+            _showPickedAggregate = false;
+          });
         }
+        _aggregateDragDx = 0;
       },
-      child: card,
+      child: animatedCard,
     );
   }
 
