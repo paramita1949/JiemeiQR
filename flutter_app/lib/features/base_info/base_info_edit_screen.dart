@@ -341,32 +341,29 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
       return;
     }
     final currentVersion = ++_productLookupVersion;
-    final product = await _productDao.productByCode(code);
+    final normalizedCode = _normalizeProductCodeInput(code);
+    var resolvedCode = code;
+    var product = await _productDao.productByCode(resolvedCode);
+    if (product == null && normalizedCode != code) {
+      resolvedCode = normalizedCode;
+      product = await _productDao.productByCode(resolvedCode);
+    }
     if (!mounted ||
         currentVersion != _productLookupVersion ||
         product == null) {
       return;
     }
+    if (_productCodeController.text.trim() != resolvedCode) {
+      _productCodeController.text = resolvedCode;
+    }
     if (_productNameController.text.trim().isEmpty) {
       _productNameController.text = product.name;
     }
-    final shouldFillBoxesPerBoard =
-        _boxesPerBoardController.text.trim().isEmpty;
-    final shouldFillPiecesPerBox = _piecesPerBoxController.text.trim().isEmpty;
-    if (shouldFillBoxesPerBoard || shouldFillPiecesPerBox) {
-      final batches = await _productDao.batchesForProduct(product.id);
-      if (!mounted || currentVersion != _productLookupVersion) {
-        return;
-      }
-      if (shouldFillBoxesPerBoard) {
-        final boxesPerBoard = batches.isEmpty
-            ? product.boxesPerBoard
-            : batches.first.boxesPerBoard;
-        _boxesPerBoardController.text = boxesPerBoard.toString();
-      }
-      if (shouldFillPiecesPerBox) {
-        _piecesPerBoxController.text = product.piecesPerBox.toString();
-      }
+    final specsFilled = await _fillSpecsFromProduct(product);
+    if (!mounted || currentVersion != _productLookupVersion) {
+      return;
+    }
+    if (specsFilled) {
       setState(() {});
     }
     final hasTsRequired = await _productDao.hasTsRequiredBatches(product.id);
@@ -376,6 +373,13 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     if (hasTsRequired && !_tsRequired) {
       setState(() => _tsRequired = true);
     }
+  }
+
+  String _normalizeProductCodeInput(String code) {
+    if (code.startsWith('00') && code.length > 2) {
+      return code.substring(2);
+    }
+    return code;
   }
 
   Future<void> _save({required bool continueSameProduct}) async {
@@ -487,11 +491,38 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     setState(() => _quickProducts = products);
   }
 
-  void _applyQuickProduct(Product product) {
-    setState(() {
-      _productCodeController.text = product.code;
-      _productNameController.text = product.name;
-    });
+  Future<void> _applyQuickProduct(Product product) async {
+    _productLookupVersion++;
+    _productCodeController.text = product.code;
+    _productNameController.text = product.name;
+    await _fillSpecsFromProduct(product);
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  Future<bool> _fillSpecsFromProduct(Product product) async {
+    final shouldFillBoxesPerBoard =
+        _boxesPerBoardController.text.trim().isEmpty;
+    final shouldFillPiecesPerBox = _piecesPerBoxController.text.trim().isEmpty;
+    if (!shouldFillBoxesPerBoard && !shouldFillPiecesPerBox) {
+      return false;
+    }
+
+    final batches = await _productDao.batchesForProduct(product.id);
+    if (!mounted) {
+      return false;
+    }
+    if (shouldFillBoxesPerBoard) {
+      final boxesPerBoard =
+          batches.isEmpty ? product.boxesPerBoard : batches.first.boxesPerBoard;
+      _boxesPerBoardController.text = boxesPerBoard.toString();
+    }
+    if (shouldFillPiecesPerBox) {
+      _piecesPerBoxController.text = product.piecesPerBox.toString();
+    }
+    return true;
   }
 
   void _showSavedSnackBar() {
@@ -997,7 +1028,7 @@ class _QuickProductChips extends StatelessWidget {
   });
 
   final List<Product> products;
-  final ValueChanged<Product> onSelected;
+  final Future<void> Function(Product) onSelected;
 
   @override
   Widget build(BuildContext context) {
