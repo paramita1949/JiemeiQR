@@ -43,6 +43,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
   bool _loadingEditData = false;
   bool _tsRequired = false;
   int _productLookupVersion = 0;
+  String? _activeProductCode;
   List<Product> _quickProducts = const [];
 
   bool get _isEditing => widget.editingBatchId != null;
@@ -353,13 +354,18 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
         product == null) {
       return;
     }
+    final productChanged = _activeProductCode != resolvedCode;
+    _activeProductCode = resolvedCode;
     if (_productCodeController.text.trim() != resolvedCode) {
       _productCodeController.text = resolvedCode;
     }
-    if (_productNameController.text.trim().isEmpty) {
+    if (productChanged || _productNameController.text.trim().isEmpty) {
       _productNameController.text = product.name;
     }
-    final specsFilled = await _fillSpecsFromProduct(product);
+    final specsFilled = await _fillSpecsFromProduct(
+      product,
+      force: productChanged,
+    );
     if (!mounted || currentVersion != _productLookupVersion) {
       return;
     }
@@ -495,17 +501,23 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
     _productLookupVersion++;
     _productCodeController.text = product.code;
     _productNameController.text = product.name;
-    await _fillSpecsFromProduct(product);
+    final productChanged = _activeProductCode != product.code;
+    _activeProductCode = product.code;
+    await _fillSpecsFromProduct(product, force: productChanged);
     if (!mounted) {
       return;
     }
     setState(() {});
   }
 
-  Future<bool> _fillSpecsFromProduct(Product product) async {
+  Future<bool> _fillSpecsFromProduct(
+    Product product, {
+    bool force = false,
+  }) async {
     final shouldFillBoxesPerBoard =
-        _boxesPerBoardController.text.trim().isEmpty;
-    final shouldFillPiecesPerBox = _piecesPerBoxController.text.trim().isEmpty;
+        force || _boxesPerBoardController.text.trim().isEmpty;
+    final shouldFillPiecesPerBox =
+        force || _piecesPerBoxController.text.trim().isEmpty;
     if (!shouldFillBoxesPerBoard && !shouldFillPiecesPerBox) {
       return false;
     }
@@ -582,6 +594,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
 
     _productCodeController.text = entry.product.code;
     _productNameController.text = entry.product.name;
+    _activeProductCode = entry.product.code;
     _actualBatchController.text = entry.batch.actualBatch;
     _dateBatchController.text = entry.batch.dateBatch;
     _stockPiecesController.text =
@@ -719,6 +732,7 @@ class _BaseInfoEditScreenState extends State<BaseInfoEditScreen> {
       _productCodeController.clear();
       _productNameController.clear();
       _piecesPerBoxController.clear();
+      _activeProductCode = null;
     }
     _actualBatchController.clear();
     _dateBatchController.clear();
