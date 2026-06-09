@@ -19,6 +19,7 @@ import 'package:qrscan_flutter/features/orders/ocr/ai_config_screen.dart';
 import 'package:qrscan_flutter/features/qr/qr_entry_screen.dart';
 import 'package:qrscan_flutter/features/transfer/backup_import_intent_service.dart';
 import 'package:qrscan_flutter/features/transfer/backup_service.dart';
+import 'package:qrscan_flutter/features/transfer/cloud_auto_backup_service.dart';
 import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/features/update/app_update_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
@@ -72,6 +73,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _handlingIntentImport = false;
   bool _notiHintShownInSession = false;
   Timer? _precheckinGuardTimer;
+  Timer? _cloudAutoBackupTimer;
+  bool _runningCloudAutoBackup = false;
 
   @override
   void initState() {
@@ -82,10 +85,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     unawaited(_refreshStats());
     unawaited(_runAutoBackupCheck());
     unawaited(_consumePendingImportIntent());
+    unawaited(_runCloudAutoBackupCheck());
     unawaited(_runAttendanceReminderCheck());
     unawaited(_runPrecheckinGuard(forForeground: true));
     unawaited(_ensureNotificationPermissionHint());
     _startPrecheckinGuardTimer();
+    _startCloudAutoBackupTimer();
   }
 
   @override
@@ -110,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _precheckinGuardTimer?.cancel();
+    _cloudAutoBackupTimer?.cancel();
     if (_ownsDatabase) {
       _database.close();
     }
@@ -122,10 +128,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(_refreshStats());
       unawaited(_runAutoBackupCheck());
       unawaited(_consumePendingImportIntent());
+      unawaited(_runCloudAutoBackupCheck());
       unawaited(_runAttendanceReminderCheck());
       unawaited(_runPrecheckinGuard(forForeground: true));
       unawaited(_ensureNotificationPermissionHint());
       _startPrecheckinGuardTimer();
+      _startCloudAutoBackupTimer();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       unawaited(_runPrecheckinGuard(forForeground: false));
@@ -324,6 +332,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _backupService.runAutoBackupIfDue();
     } catch (_) {
       // Ignore auto backup errors on home lifecycle hooks.
+    }
+  }
+
+  void _startCloudAutoBackupTimer() {
+    _cloudAutoBackupTimer?.cancel();
+    _cloudAutoBackupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      unawaited(_runCloudAutoBackupCheck());
+    });
+  }
+
+  Future<void> _runCloudAutoBackupCheck() async {
+    if (_runningCloudAutoBackup) {
+      return;
+    }
+    _runningCloudAutoBackup = true;
+    try {
+      final result =
+          await CloudAutoBackupService(database: _database).runIfDue();
+      if (!result.ran) {
+        return;
+      }
+      DebugEventLog.add(
+        'CLOUD_AUTO_BACKUP',
+        'business=${result.businessUploaded}, attendance=${result.attendanceUploaded}',
+      );
+    } catch (error) {
+      DebugEventLog.add('CLOUD_AUTO_BACKUP', 'failed: $error');
+    } finally {
+      _runningCloudAutoBackup = false;
     }
   }
 
