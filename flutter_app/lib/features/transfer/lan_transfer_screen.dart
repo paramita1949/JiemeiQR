@@ -3079,7 +3079,8 @@ class _BackupSnapshotTile extends StatelessWidget {
 }
 
 String _formatSnapshotTime(DateTime value) {
+  final local = value.toLocal();
   String pad2(int n) => n.toString().padLeft(2, '0');
-  return '${value.year}.${value.month}.${value.day} '
-      '${pad2(value.hour)}:${pad2(value.minute)}';
+  return '${local.year}.${local.month}.${local.day} '
+      '${pad2(local.hour)}:${pad2(local.minute)}';
 }
