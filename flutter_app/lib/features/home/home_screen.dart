@@ -586,6 +586,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     var downloadCurrentLine = '准备中';
     var downloadCurrentStatus = '准备下载更新包...';
     var downloadStatusMessages = <String>[];
+    var downloadCanSwitchLine = false;
+    var downloadSwitchingLine = false;
+    AppUpdateDownloadSwitchController? downloadSwitchController;
     StateSetter? progressSetState;
     var blockingDialogOpen = false;
 
@@ -672,22 +675,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       downloadCurrentLine = '准备中';
       downloadCurrentStatus = '准备下载更新包...';
       downloadStatusMessages = ['准备下载更新包...'];
+      downloadCanSwitchLine = false;
+      downloadSwitchingLine = false;
+      downloadSwitchController = AppUpdateDownloadSwitchController();
       progressSetState = null;
       blockingDialogOpen = true;
       void addDownloadStatus(AppUpdateDownloadStatus status) {
         final message = status.message;
         if (message.startsWith('正在使用 ')) {
+          downloadSwitchingLine = false;
+          downloadCanSwitchLine = status.canSwitchLine;
           downloadCurrentLine =
               message.replaceFirst('正在使用 ', '').replaceFirst(' 下载', '');
           downloadCurrentStatus = '正在下载';
         } else if (message.startsWith('正在尝试 ')) {
+          downloadSwitchingLine = false;
+          downloadCanSwitchLine = status.canSwitchLine;
           downloadCurrentLine = message.replaceFirst('正在尝试 ', '');
           downloadCurrentStatus = '正在连接';
+        } else if (message.contains('已手动切换')) {
+          downloadSwitchingLine = false;
+          downloadCanSwitchLine = status.canSwitchLine;
+          downloadCurrentStatus = message;
         } else if (message.startsWith('测速完成')) {
+          downloadCanSwitchLine = status.canSwitchLine;
           downloadCurrentStatus = message;
         } else if (message.contains('自动切换')) {
+          downloadCanSwitchLine = status.canSwitchLine;
           downloadCurrentStatus = message;
         } else if (!message.startsWith('候选线路')) {
+          downloadCanSwitchLine = status.canSwitchLine;
           downloadCurrentStatus = message;
         }
         final nextMessages = [
@@ -793,6 +810,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ],
               ),
+              actions: [
+                TextButton.icon(
+                  onPressed: downloadCanSwitchLine &&
+                          !downloadSwitchingLine &&
+                          downloadSwitchController != null
+                      ? () {
+                          downloadSwitchingLine = true;
+                          downloadCanSwitchLine = false;
+                          downloadCurrentStatus = '正在切换线路...';
+                          final nextMessages = [
+                            ...downloadStatusMessages,
+                            '已请求换源，正在停止当前线路',
+                          ];
+                          downloadStatusMessages = nextMessages.length <= 3
+                              ? nextMessages
+                              : nextMessages.sublist(nextMessages.length - 3);
+                          DebugEventLog.add('APP_UPDATE', 'manual_switch_line');
+                          downloadSwitchController?.requestSwitch();
+                          setState(() {});
+                        }
+                      : null,
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  label: const Text('换源'),
+                ),
+              ],
             );
           },
         ),
@@ -807,6 +849,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           addDownloadStatus(status);
           DebugEventLog.add('APP_UPDATE', 'download_status ${status.message}');
         },
+        switchController: downloadSwitchController,
       );
       if (!mounted) {
         return _buildDebugReport();
@@ -830,6 +873,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       closeBlockingDialog();
       DebugEventLog.add('APP_UPDATE', 'failed $error');
       showMessage('更新失败：$error');
+    } finally {
+      downloadSwitchController?.dispose();
     }
     return _buildDebugReport();
   }

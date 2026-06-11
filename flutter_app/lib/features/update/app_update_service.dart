@@ -32,15 +32,39 @@ class AppUpdateDownloadStatus {
   const AppUpdateDownloadStatus({
     required this.message,
     this.uri,
+    this.canSwitchLine = false,
   });
 
   final String message;
   final Uri? uri;
+  final bool canSwitchLine;
 }
 
 typedef AppUpdateDownloadStatusChanged = void Function(
   AppUpdateDownloadStatus status,
 );
+
+class AppUpdateDownloadSwitchController {
+  final _requests = StreamController<void>.broadcast();
+  var _disposed = false;
+
+  void requestSwitch() {
+    if (_disposed) {
+      return;
+    }
+    _requests.add(null);
+  }
+
+  void dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    unawaited(_requests.close());
+  }
+
+  Stream<void> get _switchRequests => _requests.stream;
+}
 
 class AppUpdateService {
   const AppUpdateService({
@@ -94,6 +118,7 @@ class AppUpdateService {
     AppUpdateInfo info, {
     ValueChanged<double>? onProgress,
     AppUpdateDownloadStatusChanged? onStatus,
+    AppUpdateDownloadSwitchController? switchController,
   }) async {
     final directory = await getTemporaryDirectory();
     final updatesDir = Directory(p.join(directory.path, 'updates'));
@@ -120,8 +145,13 @@ class AppUpdateService {
     for (var index = 0; index < uris.length; index += 1) {
       final uri = uris[index];
       final label = appUpdateDownloadUriLabel(uri, officialUrl: info.apkUrl);
+      final canSwitchLine = switchController != null && index < uris.length - 1;
       onStatus?.call(
-        AppUpdateDownloadStatus(message: '正在尝试 $label', uri: uri),
+        AppUpdateDownloadStatus(
+          message: '正在尝试 $label',
+          uri: uri,
+          canSwitchLine: canSwitchLine,
+        ),
       );
       try {
         return await _downloadApkFromUri(
@@ -132,24 +162,31 @@ class AppUpdateService {
           lineLabel: label,
           minBytesPerSecond: _downloadMinBytesPerSecond,
           speedCheckWindow: _downloadSpeedCheckWindow,
+          switchController: switchController,
+          canSwitchLine: canSwitchLine,
         );
       } on AppUpdateException catch (error) {
         lastError = error;
+        final isManualSwitch = error.message.contains('已手动切换线路');
         final isTooSlow = error.message.contains('下载速度过慢');
         final isIdle = error.message.contains('长时间无响应');
         onStatus?.call(
           AppUpdateDownloadStatus(
             message: index < uris.length - 1
-                ? isTooSlow
-                    ? '$label 下载速度过慢，自动切换下一条线路'
-                    : isIdle
-                        ? '$label 长时间无响应，自动切换下一条线路'
-                        : '$label 失败，自动切换下一条线路'
-                : isTooSlow
-                    ? '$label 下载速度过慢'
-                    : isIdle
-                        ? '$label 长时间无响应'
-                        : '$label 失败',
+                ? isManualSwitch
+                    ? '$label 已手动切换，正在尝试下一条线路'
+                    : isTooSlow
+                        ? '$label 下载速度过慢，自动切换下一条线路'
+                        : isIdle
+                            ? '$label 长时间无响应，自动切换下一条线路'
+                            : '$label 失败，自动切换下一条线路'
+                : isManualSwitch
+                    ? '$label 已手动切换线路'
+                    : isTooSlow
+                        ? '$label 下载速度过慢'
+                        : isIdle
+                            ? '$label 长时间无响应'
+                            : '$label 失败',
             uri: uri,
           ),
         );
@@ -202,9 +239,19 @@ Future<File> _downloadApkFromUri(
   String? lineLabel,
   int minBytesPerSecond = _downloadMinBytesPerSecond,
   Duration speedCheckWindow = _downloadSpeedCheckWindow,
+  AppUpdateDownloadSwitchController? switchController,
+  bool canSwitchLine = false,
 }) async {
   final client = HttpClient()..connectionTimeout = _downloadConnectTimeout;
   var speedTooSlow = false;
+  var manualSwitchRequested = false;
+  StreamSubscription<void>? switchSubscription;
+  if (switchController != null && canSwitchLine) {
+    switchSubscription = switchController._switchRequests.listen((_) {
+      manualSwitchRequested = true;
+      client.close(force: true);
+    });
+  }
   try {
     final request = await client.getUrl(uri).timeout(_downloadConnectTimeout);
     request.headers.set(HttpHeaders.userAgentHeader, 'JiemeiQR-Updater');
@@ -219,6 +266,7 @@ Future<File> _downloadApkFromUri(
       AppUpdateDownloadStatus(
         message: '正在使用 ${lineLabel ?? appUpdateDownloadUriLabel(uri)} 下载',
         uri: uri,
+        canSwitchLine: canSwitchLine,
       ),
     );
     final sink = file.openWrite();
@@ -279,14 +327,21 @@ Future<File> _downloadApkFromUri(
     rethrow;
   } on TimeoutException {
     await _deleteIncompleteApk(file);
+    if (manualSwitchRequested) {
+      throw const AppUpdateException('下载失败：已手动切换线路');
+    }
     throw const AppUpdateException('下载失败：线路长时间无响应');
   } catch (error) {
     await _deleteIncompleteApk(file);
+    if (manualSwitchRequested) {
+      throw const AppUpdateException('下载失败：已手动切换线路');
+    }
     if (speedTooSlow) {
       throw const AppUpdateException('下载失败：下载速度过慢');
     }
     throw AppUpdateException('下载失败：$error');
   } finally {
+    await switchSubscription?.cancel();
     client.close(force: true);
   }
 }
@@ -307,12 +362,20 @@ Future<File> downloadAppUpdateApkFromUrisForTesting(
   AppUpdateDownloadStatusChanged? onStatus,
   int minBytesPerSecond = _downloadMinBytesPerSecond,
   Duration speedCheckWindow = _downloadSpeedCheckWindow,
+  AppUpdateDownloadSwitchController? switchController,
 }) async {
   AppUpdateException? lastError;
   for (var index = 0; index < uris.length; index += 1) {
     final uri = uris[index];
     final label = appUpdateDownloadUriLabel(uri);
-    onStatus?.call(AppUpdateDownloadStatus(message: '正在尝试 $label', uri: uri));
+    final canSwitchLine = switchController != null && index < uris.length - 1;
+    onStatus?.call(
+      AppUpdateDownloadStatus(
+        message: '正在尝试 $label',
+        uri: uri,
+        canSwitchLine: canSwitchLine,
+      ),
+    );
     try {
       return await _downloadApkFromUri(
         uri,
@@ -321,24 +384,31 @@ Future<File> downloadAppUpdateApkFromUrisForTesting(
         lineLabel: label,
         minBytesPerSecond: minBytesPerSecond,
         speedCheckWindow: speedCheckWindow,
+        switchController: switchController,
+        canSwitchLine: canSwitchLine,
       );
     } on AppUpdateException catch (error) {
       lastError = error;
+      final isManualSwitch = error.message.contains('已手动切换线路');
       final isTooSlow = error.message.contains('下载速度过慢');
       final isIdle = error.message.contains('长时间无响应');
       onStatus?.call(
         AppUpdateDownloadStatus(
           message: index < uris.length - 1
-              ? isTooSlow
-                  ? '$label 下载速度过慢，自动切换下一条线路'
-                  : isIdle
-                      ? '$label 长时间无响应，自动切换下一条线路'
-                      : '$label 失败，自动切换下一条线路'
-              : isTooSlow
-                  ? '$label 下载速度过慢'
-                  : isIdle
-                      ? '$label 长时间无响应'
-                      : '$label 失败',
+              ? isManualSwitch
+                  ? '$label 已手动切换，正在尝试下一条线路'
+                  : isTooSlow
+                      ? '$label 下载速度过慢，自动切换下一条线路'
+                      : isIdle
+                          ? '$label 长时间无响应，自动切换下一条线路'
+                          : '$label 失败，自动切换下一条线路'
+              : isManualSwitch
+                  ? '$label 已手动切换线路'
+                  : isTooSlow
+                      ? '$label 下载速度过慢'
+                      : isIdle
+                          ? '$label 长时间无响应'
+                          : '$label 失败',
           uri: uri,
         ),
       );
