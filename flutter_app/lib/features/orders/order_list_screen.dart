@@ -110,6 +110,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ),
                     const SizedBox(width: 8),
                     IconButton.filledTonal(
+                      key: const Key('orderSearchButton'),
+                      tooltip: '搜索订单',
+                      onPressed: _showOrderSearchSheet,
+                      icon: const Icon(Icons.search_rounded),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
                       tooltip: '日期筛选',
                       onPressed: _pickDateRange,
                       icon: const Icon(Icons.calendar_month_outlined),
@@ -538,6 +545,25 @@ class _OrderListScreenState extends State<OrderListScreen> {
       limit: restoreLimit,
       restoreScrollOffset: restoreScrollOffset,
       keepCurrentOrders: true,
+    );
+  }
+
+  Future<void> _showOrderSearchSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _OrderSearchSheet(
+        orderDao: _orderDao,
+        onOpenOrder: (order) {
+          Navigator.of(sheetContext).pop();
+          Future<void>.microtask(() {
+            if (mounted) {
+              _openOrderDetail(order);
+            }
+          });
+        },
+      ),
     );
   }
 
@@ -1387,6 +1413,411 @@ _StatusMeta _statusMeta(OrderStatus status) {
 }
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
+
+class _OrderSearchSheet extends StatefulWidget {
+  const _OrderSearchSheet({
+    required this.orderDao,
+    required this.onOpenOrder,
+  });
+
+  final OrderDao orderDao;
+  final ValueChanged<OrderSummary> onOpenOrder;
+
+  @override
+  State<_OrderSearchSheet> createState() => _OrderSearchSheetState();
+}
+
+class _OrderSearchSheetState extends State<_OrderSearchSheet> {
+  static const int _pageSize = 20;
+
+  final TextEditingController _controller = TextEditingController();
+  OrderSearchMode _mode = OrderSearchMode.waybill;
+  List<OrderSummary> _results = const <OrderSummary>[];
+  int _total = 0;
+  int _requestId = 0;
+  bool _loading = false;
+  bool _loadingMore = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleQueryChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleQueryChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  int get _minQueryLength => _mode == OrderSearchMode.waybill ? 2 : 1;
+
+  bool get _hasMore => _results.length < _total;
+
+  String get _hintText => _mode == OrderSearchMode.waybill ? '输入运单号' : '输入商家';
+
+  void _handleQueryChanged() {
+    _runSearch(reset: true);
+  }
+
+  void _changeMode(OrderSearchMode mode) {
+    if (_mode == mode) {
+      return;
+    }
+    setState(() {
+      _mode = mode;
+      _results = const <OrderSummary>[];
+      _total = 0;
+      _errorText = null;
+    });
+    _runSearch(reset: true);
+  }
+
+  Future<void> _runSearch({required bool reset}) async {
+    final text = _controller.text.trim();
+    _requestId += 1;
+    final requestId = _requestId;
+    if (text.length < _minQueryLength) {
+      setState(() {
+        _results = const <OrderSummary>[];
+        _total = 0;
+        _loading = false;
+        _loadingMore = false;
+        _errorText = null;
+      });
+      return;
+    }
+    setState(() {
+      if (reset) {
+        _loading = true;
+        _results = const <OrderSummary>[];
+      } else {
+        _loadingMore = true;
+      }
+      _errorText = null;
+    });
+    try {
+      final page = await widget.orderDao.searchCompletedOrderSummaries(
+        mode: _mode,
+        query: text,
+        offset: reset ? 0 : _results.length,
+        limit: _pageSize,
+      );
+      if (!mounted || requestId != _requestId) {
+        return;
+      }
+      setState(() {
+        _results =
+            reset ? page.orders : <OrderSummary>[..._results, ...page.orders];
+        _total = page.total;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _requestId) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _errorText = '搜索失败，请重试';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        key: const Key('orderHistorySearchSheet'),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF3F6FB),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.82,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '搜索订单',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('orderHistorySearchField'),
+                controller: _controller,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: _hintText,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 13,
+                  ),
+                ),
+                onSubmitted: (_) => _runSearch(reset: true),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _SearchModeButton(
+                    label: '运单号',
+                    selected: _mode == OrderSearchMode.waybill,
+                    onTap: () => _changeMode(OrderSearchMode.waybill),
+                  ),
+                  const SizedBox(width: 8),
+                  _SearchModeButton(
+                    key: const Key('orderSearchMerchantMode'),
+                    label: '商家',
+                    selected: _mode == OrderSearchMode.merchant,
+                    onTap: () => _changeMode(OrderSearchMode.merchant),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _total > 0 ? '匹配结果 ${_results.length}/$_total' : '匹配结果',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(child: _buildResults()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResults() {
+    final text = _controller.text.trim();
+    if (text.length < _minQueryLength) {
+      return const SizedBox.shrink();
+    }
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorText != null) {
+      return Center(
+        child: Text(
+          _errorText!,
+          style: const TextStyle(
+            color: Color(0xFFDC2626),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+    if (_results.isEmpty) {
+      return const Center(
+        child: Text(
+          '没有找到完成订单',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: _results.length + (_hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index >= _results.length) {
+          return Center(
+            child: TextButton(
+              onPressed: _loadingMore ? null : () => _runSearch(reset: false),
+              child: Text(_loadingMore ? '加载中...' : '加载更多'),
+            ),
+          );
+        }
+        final order = _results[index];
+        return _OrderSearchResultRow(
+          order: order,
+          onTap: () => widget.onOpenOrder(order),
+        );
+      },
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+    );
+  }
+}
+
+class _SearchModeButton extends StatelessWidget {
+  const _SearchModeButton({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        alignment: Alignment.center,
+        constraints: const BoxConstraints(minWidth: 78),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE5EDFF) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFD5DDEB),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? const Color(0xFF1D4ED8) : AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderSearchResultRow extends StatelessWidget {
+  const _OrderSearchResultRow({
+    required this.order,
+    required this.onTap,
+  });
+
+  final OrderSummary order;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _statusMeta(order.status);
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    order.waybillNo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          order.merchantName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDate(order.orderDate),
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: status.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                status.label,
+                style: TextStyle(
+                  color: status.color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _RestockAggregateCard extends StatelessWidget {
   const _RestockAggregateCard({

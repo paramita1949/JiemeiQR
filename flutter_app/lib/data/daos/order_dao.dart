@@ -5,6 +5,11 @@ import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import '../app_database.dart';
 import 'stock_dao.dart';
 
+enum OrderSearchMode {
+  waybill,
+  merchant,
+}
+
 class OrderDao {
   OrderDao(this._database);
 
@@ -672,6 +677,197 @@ class OrderDao {
     }
     return OrderStatusCounts(
         done: done, unfinished: unfinished, picked: picked);
+  }
+
+  Future<PagedOrderSummaries> searchCompletedOrderSummaries({
+    required OrderSearchMode mode,
+    required String query,
+    required int offset,
+    required int limit,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty || limit <= 0) {
+      return const PagedOrderSummaries(
+        orders: <OrderSummary>[],
+        total: 0,
+      );
+    }
+
+    final orderTable = _database.orders;
+    final likeText = '%$text%';
+    final countExp = orderTable.id.count();
+    final countQuery = _database.selectOnly(orderTable)..addColumns([countExp]);
+    countQuery.where(orderTable.status.equals(OrderStatus.done.index));
+    switch (mode) {
+      case OrderSearchMode.waybill:
+        countQuery.where(orderTable.waybillNo.like(likeText));
+      case OrderSearchMode.merchant:
+        countQuery.where(orderTable.merchantName.like(likeText));
+    }
+    final total = (await countQuery.getSingle()).read(countExp) ?? 0;
+    if (total == 0) {
+      return const PagedOrderSummaries(
+        orders: <OrderSummary>[],
+        total: 0,
+      );
+    }
+
+    final orders = switch (mode) {
+      OrderSearchMode.waybill => await _searchCompletedOrdersByWaybill(
+          query: text,
+          likeText: likeText,
+          offset: offset,
+          limit: limit,
+        ),
+      OrderSearchMode.merchant => await _searchCompletedOrdersByMerchant(
+          likeText: likeText,
+          offset: offset,
+          limit: limit,
+        ),
+    };
+    return _summariesForOrders(orders: orders, total: total);
+  }
+
+  Future<List<Order>> _searchCompletedOrdersByWaybill({
+    required String query,
+    required String likeText,
+    required int offset,
+    required int limit,
+  }) async {
+    final exactOrders = await (_database.select(_database.orders)
+          ..where(
+            (table) =>
+                table.status.equals(OrderStatus.done.index) &
+                table.waybillNo.equals(query),
+          ))
+        .get();
+    final result = <Order>[];
+    if (offset < exactOrders.length) {
+      result.addAll(exactOrders.skip(offset).take(limit));
+    }
+    final remaining = limit - result.length;
+    if (remaining <= 0) {
+      return result;
+    }
+    final partialOffset =
+        offset > exactOrders.length ? offset - exactOrders.length : 0;
+    final partialQuery = _database.select(_database.orders)
+      ..where(
+        (table) =>
+            table.status.equals(OrderStatus.done.index) &
+            table.waybillNo.like(likeText) &
+            table.waybillNo.isNotValue(query),
+      )
+      ..orderBy([
+        (table) => OrderingTerm.desc(table.orderDate),
+        (table) => OrderingTerm.desc(table.createdAt),
+        (table) => OrderingTerm.asc(table.waybillNo),
+      ])
+      ..limit(remaining, offset: partialOffset);
+    result.addAll(await partialQuery.get());
+    return result;
+  }
+
+  Future<List<Order>> _searchCompletedOrdersByMerchant({
+    required String likeText,
+    required int offset,
+    required int limit,
+  }) {
+    final query = _database.select(_database.orders)
+      ..where(
+        (table) =>
+            table.status.equals(OrderStatus.done.index) &
+            table.merchantName.like(likeText),
+      )
+      ..orderBy([
+        (table) => OrderingTerm.desc(table.orderDate),
+        (table) => OrderingTerm.desc(table.createdAt),
+        (table) => OrderingTerm.asc(table.waybillNo),
+      ])
+      ..limit(limit, offset: offset);
+    return query.get();
+  }
+
+  Future<PagedOrderSummaries> _summariesForOrders({
+    required List<Order> orders,
+    required int total,
+  }) async {
+    if (orders.isEmpty) {
+      return PagedOrderSummaries(
+        orders: const <OrderSummary>[],
+        total: total,
+      );
+    }
+    final orderIds = orders.map((order) => order.id).toList();
+    final items = await (_database.select(_database.orderItems)
+          ..where((table) => table.orderId.isIn(orderIds)))
+        .get();
+    final productIds = items.map((item) => item.productId).toSet().toList();
+    final batchIds = items.map((item) => item.batchId).toSet().toList();
+    final products = productIds.isEmpty
+        ? const <Product>[]
+        : await (_database.select(_database.products)
+              ..where((table) => table.id.isIn(productIds)))
+            .get();
+    final productsById = {for (final product in products) product.id: product};
+    final batches = batchIds.isEmpty
+        ? const <BatchRecord>[]
+        : await (_database.select(_database.batches)
+              ..where((table) => table.id.isIn(batchIds)))
+            .get();
+    final batchById = {
+      for (final batch in batches) batch.id: batch,
+    };
+    final statByOrderId = <int, _OrderItemStats>{};
+    for (final item in items) {
+      final batch = batchById[item.batchId];
+      final tsRequired = batch?.tsRequired ?? false;
+      final location = batch?.location;
+      statByOrderId.update(
+        item.orderId,
+        (value) => value.add(
+          item.boxes,
+          tsRequired: tsRequired,
+          isException: item.isException,
+          isPicked: item.isPicked,
+          location: location,
+        ),
+        ifAbsent: () => _OrderItemStats(
+          item.boxes,
+          tsRequired: tsRequired,
+          isException: item.isException,
+          isPicked: item.isPicked,
+          location: location,
+        ),
+      );
+    }
+    final summaries = <OrderSummary>[];
+    for (final order in orders) {
+      final stats = statByOrderId[order.id];
+      summaries.add(
+        OrderSummary(
+          id: order.id,
+          waybillNo: order.waybillNo,
+          merchantName: order.merchantName,
+          orderDate: order.orderDate,
+          status: order.status,
+          scannerGun: order.scannerGun,
+          itemCount: stats?.count ?? 0,
+          totalBoxes: stats?.totalBoxes ?? 0,
+          pickedItemCount: stats?.pickedCount ?? 0,
+          hasTsRequired: stats?.hasTsRequired ?? false,
+          hasException: stats?.hasException ?? false,
+          locationsText: stats?.locationsText ?? '',
+          restockSummaryText: _restockSummaryText(
+            orderItems:
+                items.where((item) => item.orderId == order.id).toList(),
+            productsById: productsById,
+            batchesById: batchById,
+          ),
+        ),
+      );
+    }
+    return PagedOrderSummaries(orders: summaries, total: total);
   }
 
   Future<List<OrderRestockAggregate>> orderRestockAggregates({
