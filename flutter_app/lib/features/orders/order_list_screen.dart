@@ -25,6 +25,9 @@ class OrderListScreen extends StatefulWidget {
 
 class _OrderListScreenState extends State<OrderListScreen> {
   static const int _pageSize = 50;
+  static OrderSearchMode _rememberedSearchMode = OrderSearchMode.waybill;
+
+  List<_OrderSearchRecord> _searchRecords = const <_OrderSearchRecord>[];
 
   late final AppDatabase _database;
   late final OrderDao _orderDao;
@@ -96,6 +99,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton.filledTonal(
+                      key: const Key('orderSearchButton'),
+                      tooltip: '搜索订单',
+                      onPressed: _showOrderSearchSheet,
+                      icon: const Icon(Icons.search_rounded),
+                    ),
+                    const SizedBox(width: 8),
                     IconButton.filled(
                       key: const Key('newWaybillTopButton'),
                       tooltip: '新增运单',
@@ -107,13 +117,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         highlightColor: const Color(0xFF64748E),
                       ),
                       icon: const Icon(Icons.playlist_add_rounded),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      key: const Key('orderSearchButton'),
-                      tooltip: '搜索订单',
-                      onPressed: _showOrderSearchSheet,
-                      icon: const Icon(Icons.search_rounded),
                     ),
                     const SizedBox(width: 8),
                     IconButton.filledTonal(
@@ -555,6 +558,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => _OrderSearchSheet(
         orderDao: _orderDao,
+        initialMode: _rememberedSearchMode,
+        onModeChanged: (mode) => _rememberedSearchMode = mode,
+        initialRecords: _searchRecords,
+        onRecordsChanged: (records) => _searchRecords = records,
         onOpenOrder: (order) {
           Navigator.of(sheetContext).pop();
           Future<void>.microtask(() {
@@ -1414,13 +1421,37 @@ _StatusMeta _statusMeta(OrderStatus status) {
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
+class _OrderSearchRecord {
+  const _OrderSearchRecord({
+    required this.mode,
+    required this.query,
+  });
+
+  final OrderSearchMode mode;
+  final String query;
+
+  String get label => mode == OrderSearchMode.waybill ? '运单号' : '商家';
+
+  bool isSameSearch(_OrderSearchRecord other) {
+    return mode == other.mode && query == other.query;
+  }
+}
+
 class _OrderSearchSheet extends StatefulWidget {
   const _OrderSearchSheet({
     required this.orderDao,
+    required this.initialMode,
+    required this.onModeChanged,
+    required this.initialRecords,
+    required this.onRecordsChanged,
     required this.onOpenOrder,
   });
 
   final OrderDao orderDao;
+  final OrderSearchMode initialMode;
+  final ValueChanged<OrderSearchMode> onModeChanged;
+  final List<_OrderSearchRecord> initialRecords;
+  final ValueChanged<List<_OrderSearchRecord>> onRecordsChanged;
   final ValueChanged<OrderSummary> onOpenOrder;
 
   @override
@@ -1429,9 +1460,11 @@ class _OrderSearchSheet extends StatefulWidget {
 
 class _OrderSearchSheetState extends State<_OrderSearchSheet> {
   static const int _pageSize = 20;
+  static const int _maxRecordCount = 8;
 
   final TextEditingController _controller = TextEditingController();
-  OrderSearchMode _mode = OrderSearchMode.waybill;
+  late OrderSearchMode _mode;
+  late List<_OrderSearchRecord> _records;
   List<OrderSummary> _results = const <OrderSummary>[];
   int _total = 0;
   int _requestId = 0;
@@ -1442,6 +1475,8 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
   @override
   void initState() {
     super.initState();
+    _mode = widget.initialMode;
+    _records = List<_OrderSearchRecord>.unmodifiable(widget.initialRecords);
     _controller.addListener(_handleQueryChanged);
   }
 
@@ -1453,11 +1488,15 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
     super.dispose();
   }
 
-  int get _minQueryLength => _mode == OrderSearchMode.waybill ? 2 : 1;
+  int get _minQueryLength => _minQueryLengthFor(_mode);
 
   bool get _hasMore => _results.length < _total;
 
   String get _hintText => _mode == OrderSearchMode.waybill ? '输入运单号' : '输入商家';
+
+  int _minQueryLengthFor(OrderSearchMode mode) {
+    return mode == OrderSearchMode.waybill ? 2 : 1;
+  }
 
   void _handleQueryChanged() {
     _runSearch(reset: true);
@@ -1473,7 +1512,63 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
       _total = 0;
       _errorText = null;
     });
+    widget.onModeChanged(mode);
     _runSearch(reset: true);
+  }
+
+  void _rememberCurrentSearch() {
+    final text = _controller.text.trim();
+    _rememberRecord(_OrderSearchRecord(mode: _mode, query: text));
+  }
+
+  void _rememberRecord(_OrderSearchRecord record) {
+    final query = record.query.trim();
+    if (query.length < _minQueryLengthFor(record.mode)) {
+      return;
+    }
+    final normalized = _OrderSearchRecord(mode: record.mode, query: query);
+    final next = <_OrderSearchRecord>[
+      normalized,
+      for (final item in _records)
+        if (!item.isSameSearch(normalized)) item,
+    ].take(_maxRecordCount).toList(growable: false);
+    _replaceRecords(next);
+  }
+
+  void _replaceRecords(List<_OrderSearchRecord> records) {
+    final next = List<_OrderSearchRecord>.unmodifiable(records);
+    setState(() => _records = next);
+    widget.onRecordsChanged(next);
+  }
+
+  void _clearSearchRecords() {
+    if (_records.isEmpty) {
+      return;
+    }
+    _replaceRecords(const <_OrderSearchRecord>[]);
+  }
+
+  void _applySearchRecord(_OrderSearchRecord record) {
+    final modeChanged = _mode != record.mode;
+    final textChanged = _controller.text != record.query;
+    setState(() {
+      _mode = record.mode;
+      _results = const <OrderSummary>[];
+      _total = 0;
+      _errorText = null;
+    });
+    if (modeChanged) {
+      widget.onModeChanged(record.mode);
+    }
+    _rememberRecord(record);
+    if (textChanged) {
+      _controller.value = TextEditingValue(
+        text: record.query,
+        selection: TextSelection.collapsed(offset: record.query.length),
+      );
+    } else {
+      _runSearch(reset: true);
+    }
   }
 
   Future<void> _runSearch({required bool reset}) async {
@@ -1600,12 +1695,16 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
                     vertical: 13,
                   ),
                 ),
-                onSubmitted: (_) => _runSearch(reset: true),
+                onSubmitted: (_) {
+                  _rememberCurrentSearch();
+                  _runSearch(reset: true);
+                },
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   _SearchModeButton(
+                    key: const Key('orderSearchWaybillMode'),
                     label: '运单号',
                     selected: _mode == OrderSearchMode.waybill,
                     onTap: () => _changeMode(OrderSearchMode.waybill),
@@ -1620,6 +1719,10 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
                 ],
               ),
               const SizedBox(height: 12),
+              if (_records.isNotEmpty) ...[
+                _buildSearchRecords(),
+                const SizedBox(height: 12),
+              ],
               Text(
                 _total > 0 ? '匹配结果 ${_results.length}/$_total' : '匹配结果',
                 style: const TextStyle(
@@ -1681,10 +1784,83 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
         final order = _results[index];
         return _OrderSearchResultRow(
           order: order,
-          onTap: () => widget.onOpenOrder(order),
+          onTap: () {
+            _rememberCurrentSearch();
+            widget.onOpenOrder(order);
+          },
         );
       },
       separatorBuilder: (_, __) => const SizedBox(height: 8),
+    );
+  }
+
+  Widget _buildSearchRecords() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '搜索记录',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              key: const Key('clearOrderSearchHistoryButton'),
+              onPressed: _clearSearchRecords,
+              icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+              label: const Text('清除'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.textSecondary,
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final record in _records)
+              ActionChip(
+                key: ValueKey<String>(
+                  'orderSearchHistoryChip-${record.mode.name}-${record.query}',
+                ),
+                avatar: Icon(
+                  record.mode == OrderSearchMode.waybill
+                      ? Icons.local_shipping_rounded
+                      : Icons.storefront_rounded,
+                  size: 16,
+                  color: const Color(0xFF2563EB),
+                ),
+                label: Text(
+                  '${record.label} ${record.query}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                labelStyle: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFD5DDEB)),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _applySearchRecord(record),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

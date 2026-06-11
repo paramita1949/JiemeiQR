@@ -26,6 +26,9 @@ class OutboundCalendarScreen extends StatefulWidget {
 }
 
 class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
+  static _OutboundSearchType _rememberedSearchType =
+      _OutboundSearchType.waybill;
+
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final StockDao _stockDao;
@@ -35,8 +38,9 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   int? _selectedOrderId;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  _OutboundSearchType _searchType = _OutboundSearchType.waybill;
+  late _OutboundSearchType _searchType;
   bool _searchLoading = false;
+  bool _searchShowingHistoricalRows = false;
   int _searchVersion = 0;
   List<_OutboundSearchSuggestion> _searchSuggestions =
       const <_OutboundSearchSuggestion>[];
@@ -49,6 +53,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     _database = widget.database ?? AppDatabase();
     _productDao = ProductDao(_database);
     _stockDao = StockDao(_database);
+    _searchType = _rememberedSearchType;
     final today = _dateOnly(DateTime.now());
     _range = widget.initialRange ?? DateTimeRange(start: today, end: today);
     _stateFuture = _loadState();
@@ -157,7 +162,10 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                   const Center(child: CircularProgressIndicator())
                 else ...[
                   if (hasSearchQuery) ...[
-                    _OutboundSearchResultCard(rows: _searchRows),
+                    _OutboundSearchResultCard(
+                      rows: _searchRows,
+                      showingHistoricalRows: _searchShowingHistoricalRows,
+                    ),
                   ] else ...[
                     _OrderSummaryCard(
                       orders: state?.orders ?? const <_OutboundOrderSummary>[],
@@ -388,11 +396,15 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _selectedOrderId = null;
       _stateFuture = _loadState();
     });
+    if (_searchController.text.trim().isNotEmpty) {
+      _refreshSearch();
+    }
   }
 
   void _onSearchTypeChanged(_OutboundSearchType type) {
     setState(() {
       _searchType = type;
+      _rememberedSearchType = type;
     });
     _refreshSearch();
   }
@@ -411,9 +423,11 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
 
   void _clearSearch() {
     _searchController.clear();
+    _searchVersion += 1;
     setState(() {
       _searchSuggestions = const <_OutboundSearchSuggestion>[];
       _searchRows = const <_OutboundSearchRow>[];
+      _searchShowingHistoricalRows = false;
     });
   }
 
@@ -425,21 +439,37 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         _searchLoading = false;
         _searchSuggestions = const <_OutboundSearchSuggestion>[];
         _searchRows = const <_OutboundSearchRow>[];
+        _searchShowingHistoricalRows = false;
       });
       return;
     }
     setState(() => _searchLoading = true);
-    final range = _searchType == _OutboundSearchType.waybill ? null : _range;
     final suggestions = await _querySearchSuggestions(
       keyword: keyword,
       type: _searchType,
-      range: range,
+      range: null,
     );
-    final rows = await _querySearchRows(
+    final resultRange =
+        _searchType == _OutboundSearchType.waybill ? null : _range;
+    var rows = await _querySearchRows(
       keyword: keyword,
       type: _searchType,
-      range: range,
+      range: resultRange,
     );
+    var showingHistoricalRows = false;
+    if (rows.isEmpty &&
+        _searchType != _OutboundSearchType.waybill &&
+        resultRange != null) {
+      final historicalRows = await _querySearchRows(
+        keyword: keyword,
+        type: _searchType,
+        range: null,
+      );
+      if (historicalRows.isNotEmpty) {
+        rows = historicalRows;
+        showingHistoricalRows = true;
+      }
+    }
     if (!mounted || version != _searchVersion) {
       return;
     }
@@ -447,6 +477,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _searchLoading = false;
       _searchSuggestions = suggestions;
       _searchRows = rows;
+      _searchShowingHistoricalRows = showingHistoricalRows;
     });
   }
 
@@ -1247,8 +1278,8 @@ class _OutboundSearchPanel extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             searchType == _OutboundSearchType.waybill
-                ? '运单按全历史匹配'
-                : '日期范围共用上方日历',
+                ? '全历史定位运单'
+                : '全历史匹配候选，结果按当前范围显示',
             style: const TextStyle(
               color: AppTheme.textSecondary,
               fontSize: 12,
@@ -1326,9 +1357,11 @@ class _OutboundSearchPanel extends StatelessWidget {
 class _OutboundSearchResultCard extends StatelessWidget {
   const _OutboundSearchResultCard({
     required this.rows,
+    required this.showingHistoricalRows,
   });
 
   final List<_OutboundSearchRow> rows;
+  final bool showingHistoricalRows;
 
   @override
   Widget build(BuildContext context) {
@@ -1365,6 +1398,17 @@ class _OutboundSearchResultCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (showingHistoricalRows) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '当前范围无记录，历史有出库记录',
+              style: TextStyle(
+                color: Color(0xFFB45309),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           if (rows.isEmpty)
             const Text('当前条件无已出库记录',
