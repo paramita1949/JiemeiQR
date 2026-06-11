@@ -34,17 +34,17 @@ class CloudAutoBackupService {
 
   static const _settingsFileName = 'cloud_auto_backup_state.json';
 
+  /// 距上次成功上传满该间隔后才会再次自动上传，与本地自动备份保持一致。
+  static const Duration autoBackupInterval = Duration(hours: 24);
+
   Future<CloudAutoBackupResult> runIfDue() async {
     final now = (_nowProvider ?? DateTime.now)();
-    if (now.hour != 0) {
-      return const CloudAutoBackupResult.skipped('not_midnight_hour');
-    }
-
-    final dayKey = _dayKey(now);
     final state = await _readState();
-    if (state.lastBusinessRunDay == dayKey &&
-        state.lastAttendanceRunDay == dayKey) {
-      return const CloudAutoBackupResult.skipped('already_ran_today');
+
+    final businessDue = _isDue(state.lastBusinessRunAt, now);
+    final attendanceDue = _isDue(state.lastAttendanceRunAt, now);
+    if (!businessDue && !attendanceDue) {
+      return const CloudAutoBackupResult.skipped('not_due');
     }
 
     final cloudService = _cloudBackupService ??
@@ -58,7 +58,7 @@ class CloudAutoBackupService {
     var attendanceUploaded = false;
     final errors = <String>[];
 
-    if (session.canUpload && state.lastBusinessRunDay != dayKey) {
+    if (session.canUpload && businessDue) {
       try {
         final backupService = _backupService ??
             BackupService(
@@ -76,7 +76,7 @@ class CloudAutoBackupService {
       }
     }
 
-    if (state.lastAttendanceRunDay != dayKey) {
+    if (attendanceDue) {
       try {
         final accountKey = await (_attendanceAccountResolver ??
                 const AttendanceAccountResolver())
@@ -97,10 +97,9 @@ class CloudAutoBackupService {
     if (businessUploaded || attendanceUploaded) {
       await _writeState(
         _CloudAutoBackupState(
-          lastBusinessRunDay:
-              businessUploaded ? dayKey : state.lastBusinessRunDay,
-          lastAttendanceRunDay:
-              attendanceUploaded ? dayKey : state.lastAttendanceRunDay,
+          lastBusinessRunAt: businessUploaded ? now : state.lastBusinessRunAt,
+          lastAttendanceRunAt:
+              attendanceUploaded ? now : state.lastAttendanceRunAt,
         ),
       );
     }
@@ -113,6 +112,13 @@ class CloudAutoBackupService {
     );
   }
 
+  bool _isDue(DateTime? lastRunAt, DateTime now) {
+    if (lastRunAt == null) {
+      return true;
+    }
+    return now.difference(lastRunAt) >= autoBackupInterval;
+  }
+
   Future<_CloudAutoBackupState> _readState() async {
     final file = await _settingsFile();
     if (!await file.exists()) {
@@ -122,10 +128,8 @@ class CloudAutoBackupService {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is Map<String, dynamic>) {
         return _CloudAutoBackupState(
-          lastBusinessRunDay: decoded['lastBusinessRunDay']?.toString() ??
-              decoded['lastRunDay']?.toString(),
-          lastAttendanceRunDay: decoded['lastAttendanceRunDay']?.toString() ??
-              decoded['lastRunDay']?.toString(),
+          lastBusinessRunAt: _parseDate(decoded['lastBusinessRunAt']),
+          lastAttendanceRunAt: _parseDate(decoded['lastAttendanceRunAt']),
         );
       }
     } catch (_) {}
@@ -136,8 +140,8 @@ class CloudAutoBackupService {
     final file = await _settingsFile();
     await file.parent.create(recursive: true);
     await file.writeAsString(jsonEncode({
-      'lastBusinessRunDay': state.lastBusinessRunDay,
-      'lastAttendanceRunDay': state.lastAttendanceRunDay,
+      'lastBusinessRunAt': state.lastBusinessRunAt?.toIso8601String(),
+      'lastAttendanceRunAt': state.lastAttendanceRunAt?.toIso8601String(),
     }));
   }
 
@@ -147,10 +151,12 @@ class CloudAutoBackupService {
     return File(p.join(docs.path, _settingsFileName));
   }
 
-  static String _dayKey(DateTime value) =>
-      '${value.year.toString().padLeft(4, '0')}-'
-      '${value.month.toString().padLeft(2, '0')}-'
-      '${value.day.toString().padLeft(2, '0')}';
+  static DateTime? _parseDate(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return DateTime.tryParse(value.toString());
+  }
 }
 
 class CloudAutoBackupResult {
@@ -175,10 +181,10 @@ class CloudAutoBackupResult {
 
 class _CloudAutoBackupState {
   const _CloudAutoBackupState({
-    this.lastBusinessRunDay,
-    this.lastAttendanceRunDay,
+    this.lastBusinessRunAt,
+    this.lastAttendanceRunAt,
   });
 
-  final String? lastBusinessRunDay;
-  final String? lastAttendanceRunDay;
+  final DateTime? lastBusinessRunAt;
+  final DateTime? lastAttendanceRunAt;
 }
