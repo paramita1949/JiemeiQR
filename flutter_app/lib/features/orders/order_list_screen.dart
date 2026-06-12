@@ -1541,7 +1541,7 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
   }
 
   void _handleQueryChanged() {
-    _runSearch(reset: true);
+    _runSearch(reset: true, remember: false);
   }
 
   void _changeMode(OrderSearchMode mode) {
