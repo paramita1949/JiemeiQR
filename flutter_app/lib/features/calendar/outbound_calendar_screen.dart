@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' hide Column;
@@ -6,6 +8,7 @@ import 'package:qrscan_flutter/data/daos/product_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
+import 'package:qrscan_flutter/shared/search/search_preference_store.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
@@ -16,10 +19,12 @@ class OutboundCalendarScreen extends StatefulWidget {
     super.key,
     this.database,
     this.initialRange,
+    this.searchPreferenceStore,
   });
 
   final AppDatabase? database;
   final DateTimeRange? initialRange;
+  final SearchPreferenceStore? searchPreferenceStore;
 
   @override
   State<OutboundCalendarScreen> createState() => _OutboundCalendarScreenState();
@@ -27,11 +32,12 @@ class OutboundCalendarScreen extends StatefulWidget {
 
 class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   static _OutboundSearchType _rememberedSearchType =
-      _OutboundSearchType.waybill;
+      _OutboundSearchType.merchant;
 
   late final AppDatabase _database;
   late final ProductDao _productDao;
   late final StockDao _stockDao;
+  late final SearchPreferenceStore _searchPreferenceStore;
   late final bool _ownsDatabase;
   late DateTimeRange _range;
   late Future<_CalendarState> _stateFuture;
@@ -53,9 +59,13 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     _database = widget.database ?? AppDatabase();
     _productDao = ProductDao(_database);
     _stockDao = StockDao(_database);
+    _searchPreferenceStore =
+        widget.searchPreferenceStore ?? const FileSearchPreferenceStore();
+    _rememberedSearchType = _OutboundSearchType.merchant;
     _searchType = _rememberedSearchType;
     final today = _dateOnly(DateTime.now());
     _range = widget.initialRange ?? DateTimeRange(start: today, end: today);
+    unawaited(_loadSearchTypePreference());
     _stateFuture = _loadState();
   }
 
@@ -406,7 +416,26 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _searchType = type;
       _rememberedSearchType = type;
     });
+    unawaited(
+      _searchPreferenceStore.saveOutboundSearchType(
+        _outboundSearchTypePreference(type),
+      ),
+    );
     _refreshSearch();
+  }
+
+  Future<void> _loadSearchTypePreference() async {
+    final saved = await _searchPreferenceStore.loadOutboundSearchType();
+    final type = _outboundSearchTypeFromPreference(saved) ??
+        _OutboundSearchType.merchant;
+    _rememberedSearchType = type;
+    if (!mounted || _searchType == type) {
+      return;
+    }
+    setState(() => _searchType = type);
+    if (_searchController.text.trim().isNotEmpty) {
+      _refreshSearch();
+    }
   }
 
   void _onSearchChanged(String _) {
@@ -1170,6 +1199,24 @@ class _OutboundOrderSummary {
 
 enum _OutboundSearchType { waybill, merchant, product, batch }
 
+_OutboundSearchType? _outboundSearchTypeFromPreference(String? value) {
+  return switch (value) {
+    FileSearchPreferenceStore.outboundWaybill => _OutboundSearchType.waybill,
+    FileSearchPreferenceStore.outboundMerchant => _OutboundSearchType.merchant,
+    FileSearchPreferenceStore.outboundProduct => _OutboundSearchType.product,
+    _ => null,
+  };
+}
+
+String _outboundSearchTypePreference(_OutboundSearchType type) {
+  return switch (type) {
+    _OutboundSearchType.waybill => FileSearchPreferenceStore.outboundWaybill,
+    _OutboundSearchType.merchant => FileSearchPreferenceStore.outboundMerchant,
+    _OutboundSearchType.product => FileSearchPreferenceStore.outboundProduct,
+    _OutboundSearchType.batch => FileSearchPreferenceStore.outboundProduct,
+  };
+}
+
 class _OutboundSearchSuggestion {
   const _OutboundSearchSuggestion({
     required this.value,
@@ -1243,8 +1290,8 @@ class _OutboundSearchPanel extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _typeChip(label: '运单', type: _OutboundSearchType.waybill),
               _typeChip(label: '商家', type: _OutboundSearchType.merchant),
+              _typeChip(label: '运单', type: _OutboundSearchType.waybill),
               _typeChip(label: '产品', type: _OutboundSearchType.product),
             ],
           ),
@@ -1339,6 +1386,7 @@ class _OutboundSearchPanel extends StatelessWidget {
   }) {
     final selected = searchType == type;
     return ChoiceChip(
+      key: ValueKey<String>('outboundSearchType-${type.name}'),
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTypeChanged(type),

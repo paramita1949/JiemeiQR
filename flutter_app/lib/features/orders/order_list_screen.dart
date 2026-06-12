@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/order_dao.dart';
 import 'package:qrscan_flutter/features/orders/order_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_edit_screen.dart';
+import 'package:qrscan_flutter/shared/search/search_preference_store.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
@@ -14,10 +17,12 @@ class OrderListScreen extends StatefulWidget {
     super.key,
     this.database,
     this.dateRange,
+    this.searchPreferenceStore,
   });
 
   final AppDatabase? database;
   final DateTimeRange? dateRange;
+  final SearchPreferenceStore? searchPreferenceStore;
 
   @override
   State<OrderListScreen> createState() => _OrderListScreenState();
@@ -25,12 +30,13 @@ class OrderListScreen extends StatefulWidget {
 
 class _OrderListScreenState extends State<OrderListScreen> {
   static const int _pageSize = 50;
-  static OrderSearchMode _rememberedSearchMode = OrderSearchMode.waybill;
+  static OrderSearchMode _rememberedSearchMode = OrderSearchMode.merchant;
 
   List<_OrderSearchRecord> _searchRecords = const <_OrderSearchRecord>[];
 
   late final AppDatabase _database;
   late final OrderDao _orderDao;
+  late final SearchPreferenceStore _searchPreferenceStore;
   late final bool _ownsDatabase;
   late final ScrollController _scrollController;
   late DateTimeRange? _dateRange;
@@ -59,12 +65,16 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _orderDao = OrderDao(_database);
+    _searchPreferenceStore =
+        widget.searchPreferenceStore ?? const FileSearchPreferenceStore();
+    _rememberedSearchMode = OrderSearchMode.merchant;
     _scrollController = ScrollController();
     _dateRange = widget.dateRange;
     _quickFilter = widget.dateRange == null
         ? _OrderQuickFilter.pendingOnly
         : _OrderQuickFilter.custom;
     _status = null;
+    unawaited(_loadSearchModePreference());
     _refreshOrders();
   }
 
@@ -559,7 +569,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       builder: (sheetContext) => _OrderSearchSheet(
         orderDao: _orderDao,
         initialMode: _rememberedSearchMode,
-        onModeChanged: (mode) => _rememberedSearchMode = mode,
+        onModeChanged: _persistSearchMode,
         initialRecords: _searchRecords,
         onRecordsChanged: (records) => _searchRecords = records,
         onOpenOrder: (order) {
@@ -570,6 +580,25 @@ class _OrderListScreenState extends State<OrderListScreen> {
             }
           });
         },
+      ),
+    );
+  }
+
+  Future<void> _loadSearchModePreference() async {
+    final saved = await _searchPreferenceStore.loadOrderSearchMode();
+    final mode =
+        _orderSearchModeFromPreference(saved) ?? OrderSearchMode.merchant;
+    if (!mounted) {
+      return;
+    }
+    _rememberedSearchMode = mode;
+  }
+
+  void _persistSearchMode(OrderSearchMode mode) {
+    _rememberedSearchMode = mode;
+    unawaited(
+      _searchPreferenceStore.saveOrderSearchMode(
+        _orderSearchModePreference(mode),
       ),
     );
   }
@@ -1421,6 +1450,21 @@ _StatusMeta _statusMeta(OrderStatus status) {
 
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
+OrderSearchMode? _orderSearchModeFromPreference(String? value) {
+  return switch (value) {
+    FileSearchPreferenceStore.orderWaybill => OrderSearchMode.waybill,
+    FileSearchPreferenceStore.orderMerchant => OrderSearchMode.merchant,
+    _ => null,
+  };
+}
+
+String _orderSearchModePreference(OrderSearchMode mode) {
+  return switch (mode) {
+    OrderSearchMode.waybill => FileSearchPreferenceStore.orderWaybill,
+    OrderSearchMode.merchant => FileSearchPreferenceStore.orderMerchant,
+  };
+}
+
 class _OrderSearchRecord {
   const _OrderSearchRecord({
     required this.mode,
@@ -1430,10 +1474,8 @@ class _OrderSearchRecord {
   final OrderSearchMode mode;
   final String query;
 
-  String get label => mode == OrderSearchMode.waybill ? '运单号' : '商家';
-
   bool isSameSearch(_OrderSearchRecord other) {
-    return mode == other.mode && query == other.query;
+    return query == other.query;
   }
 }
 
@@ -1513,7 +1555,7 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
       _errorText = null;
     });
     widget.onModeChanged(mode);
-    _runSearch(reset: true);
+    _runSearch(reset: true, remember: false);
   }
 
   void _rememberCurrentSearch() {
@@ -1567,11 +1609,11 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
         selection: TextSelection.collapsed(offset: record.query.length),
       );
     } else {
-      _runSearch(reset: true);
+      _runSearch(reset: true, remember: false);
     }
   }
 
-  Future<void> _runSearch({required bool reset}) async {
+  Future<void> _runSearch({required bool reset, bool remember = true}) async {
     final text = _controller.text.trim();
     _requestId += 1;
     final requestId = _requestId;
@@ -1611,6 +1653,9 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
         _loading = false;
         _loadingMore = false;
       });
+      if (remember) {
+        _rememberCurrentSearch();
+      }
     } catch (_) {
       if (!mounted || requestId != _requestId) {
         return;
@@ -1695,26 +1740,23 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
                     vertical: 13,
                   ),
                 ),
-                onSubmitted: (_) {
-                  _rememberCurrentSearch();
-                  _runSearch(reset: true);
-                },
+                onSubmitted: (_) => _runSearch(reset: true),
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   _SearchModeButton(
-                    key: const Key('orderSearchWaybillMode'),
-                    label: '运单号',
-                    selected: _mode == OrderSearchMode.waybill,
-                    onTap: () => _changeMode(OrderSearchMode.waybill),
-                  ),
-                  const SizedBox(width: 8),
-                  _SearchModeButton(
                     key: const Key('orderSearchMerchantMode'),
                     label: '商家',
                     selected: _mode == OrderSearchMode.merchant,
                     onTap: () => _changeMode(OrderSearchMode.merchant),
+                  ),
+                  const SizedBox(width: 8),
+                  _SearchModeButton(
+                    key: const Key('orderSearchWaybillMode'),
+                    label: '运单号',
+                    selected: _mode == OrderSearchMode.waybill,
+                    onTap: () => _changeMode(OrderSearchMode.waybill),
                   ),
                 ],
               ),
@@ -1776,7 +1818,9 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
         if (index >= _results.length) {
           return Center(
             child: TextButton(
-              onPressed: _loadingMore ? null : () => _runSearch(reset: false),
+              onPressed: _loadingMore
+                  ? null
+                  : () => _runSearch(reset: false, remember: false),
               child: Text(_loadingMore ? '加载中...' : '加载更多'),
             ),
           );
@@ -1833,9 +1877,7 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
           children: [
             for (final record in _records)
               ActionChip(
-                key: ValueKey<String>(
-                  'orderSearchHistoryChip-${record.mode.name}-${record.query}',
-                ),
+                key: ValueKey<String>('orderSearchHistoryChip-${record.query}'),
                 avatar: Icon(
                   record.mode == OrderSearchMode.waybill
                       ? Icons.local_shipping_rounded
@@ -1844,7 +1886,7 @@ class _OrderSearchSheetState extends State<_OrderSearchSheet> {
                   color: const Color(0xFF2563EB),
                 ),
                 label: Text(
-                  '${record.label} ${record.query}',
+                  record.query,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
