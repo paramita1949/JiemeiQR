@@ -666,7 +666,7 @@ class AttendanceDao {
 
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
-    final isWorkdayByRule = _isWorkdayForRecord(day, rule.weekendType, rows);
+    final isWorkdayByRule = _isWorkdayForRecord(day, rule, rows);
     final effectiveHoliday = row.isHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;
@@ -714,11 +714,11 @@ class AttendanceDao {
 
   bool _isWorkdayForRecord(
     DateTime day,
-    String weekendType,
+    AttendanceRule rule,
     List<AttendanceRecord> rows,
   ) {
-    if (weekendType != 'single') {
-      return _isWorkday(day, weekendType);
+    if (rule.weekendType != 'single') {
+      return _isWorkday(day, rule.weekendType);
     }
     if (!isAttendanceWeekend(day)) {
       return true;
@@ -733,6 +733,12 @@ class AttendanceDao {
     final otherWorked = other != null && _hasAttendanceSignal(other);
     if (!otherWorked) {
       return currentWorked;
+    }
+    final currentFullDay =
+        current != null && _isCompletedWeekendWorkday(current, rule);
+    final otherFullDay = _isCompletedWeekendWorkday(other, rule);
+    if (currentFullDay != otherFullDay) {
+      return currentFullDay;
     }
     return day.weekday == DateTime.saturday;
   }
@@ -752,6 +758,20 @@ class AttendanceDao {
         row.isAbsent ||
         row.isLeave ||
         row.isHoliday;
+  }
+
+  bool _isCompletedWeekendWorkday(AttendanceRecord row, AttendanceRule rule) {
+    if (row.isHoliday) {
+      return false;
+    }
+    final checkIn = row.checkInAt;
+    final checkOut = row.checkOutAt;
+    if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)) {
+      return false;
+    }
+    final day = DateTime(row.day.year, row.day.month, row.day.day);
+    final workEnd = _mergeDayTime(day, rule.workEndTime);
+    return !checkOut.isBefore(workEnd);
   }
 
   Future<void> _saveNormalizedRecord(
@@ -787,11 +807,7 @@ class AttendanceDao {
         pairRows.add(other);
       }
     }
-    final isWorkdayByRule = _isWorkdayForRecord(
-      day,
-      rule.weekendType,
-      pairRows,
-    );
+    final isWorkdayByRule = _isWorkdayForRecord(day, rule, pairRows);
     final effectiveHoliday = row.isHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;
