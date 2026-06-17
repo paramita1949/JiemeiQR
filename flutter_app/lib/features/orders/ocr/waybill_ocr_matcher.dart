@@ -10,10 +10,18 @@ class WaybillOcrMatcher {
   Future<MatchedWaybillOcrDraft> match(WaybillOcrDraft draft) async {
     final products = await _productDao.allProducts();
     final batchesByProduct = <int, List<BatchRecord>>{};
+    final availableBoxesByBatchId = <int, int>{};
     for (final product in products) {
-      batchesByProduct[product.id] = await _productDao.batchesForProduct(
+      final availableBatches = await _productDao.availableBatchesForProduct(
         product.id,
+        includeZeroAvailable: true,
       );
+      batchesByProduct[product.id] = [
+        for (final row in availableBatches) row.batch,
+      ];
+      for (final row in availableBatches) {
+        availableBoxesByBatchId[row.batch.id] = row.availableBoxes;
+      }
     }
     final batchMatchesByActual = _buildBatchMatchesByActual(
       products: products,
@@ -49,6 +57,7 @@ class WaybillOcrMatcher {
           product: product,
           row: row,
           batches: batchesByProduct[product.id] ?? const [],
+          availableBoxesByBatchId: availableBoxesByBatchId,
         );
         if (fromProductDate != null) {
           batch = fromProductDate.batch;
@@ -58,6 +67,22 @@ class WaybillOcrMatcher {
         }
       } else if (product != null && batch != null) {
         status = OcrLineStatus.matched;
+      }
+
+      if (product != null && batch != null) {
+        final preferred = _preferAvailableSameDateBatch(
+          product: product,
+          row: row,
+          selectedBatch: batch,
+          batches: batchesByProduct[product.id] ?? const [],
+          availableBoxesByBatchId: availableBoxesByBatchId,
+        );
+        if (preferred != null) {
+          batch = preferred.batch;
+          status = preferred.status;
+          candidateBatches = preferred.candidateBatches;
+          reasons.add(preferred.reason);
+        }
       }
 
       final key = _OcrLineKey(
@@ -233,6 +258,7 @@ class WaybillOcrMatcher {
     required Product product,
     required WaybillOcrRow row,
     required List<BatchRecord> batches,
+    required Map<int, int> availableBoxesByBatchId,
   }) {
     final dateBatch = _dateBatchKey(row.dateBatch);
     if (dateBatch.isEmpty) {
@@ -241,7 +267,14 @@ class WaybillOcrMatcher {
     final byDate = batches
         .where((batch) => _dateBatchKey(batch.dateBatch) == dateBatch)
         .toList()
-      ..sort((a, b) => a.actualBatch.compareTo(b.actualBatch));
+      ..sort(
+        (a, b) => _compareOcrBatchCandidates(
+          a,
+          b,
+          availableBoxesByBatchId: availableBoxesByBatchId,
+          requestedBoxes: row.boxes,
+        ),
+      );
     if (byDate.isEmpty) {
       return null;
     }
@@ -254,13 +287,123 @@ class WaybillOcrMatcher {
         candidateBatches: byDate,
       );
     }
+    final selectedRank = _availabilityRank(
+      byDate.first,
+      availableBoxesByBatchId,
+      requestedBoxes: row.boxes,
+    );
+    final hasLowerPriorityCandidate = byDate.any(
+      (batch) =>
+          _availabilityRank(
+            batch,
+            availableBoxesByBatchId,
+            requestedBoxes: row.boxes,
+          ) >
+          selectedRank,
+    );
     return _BatchProductMatch(
       product: product,
       batch: byDate.first,
-      reason: '产品+日期命中多个批号，已默认代选批号1',
+      reason: selectedRank < 2 && hasLowerPriorityCandidate
+          ? '产品+日期命中多个批号，已优先代选可用批号'
+          : '产品+日期命中多个批号，已默认代选批号1',
       status: OcrLineStatus.needReview,
       candidateBatches: byDate,
     );
+  }
+
+  _BatchProductMatch? _preferAvailableSameDateBatch({
+    required Product product,
+    required WaybillOcrRow row,
+    required BatchRecord selectedBatch,
+    required List<BatchRecord> batches,
+    required Map<int, int> availableBoxesByBatchId,
+  }) {
+    final selectedAvailable = _availableBoxes(
+      selectedBatch,
+      availableBoxesByBatchId,
+    );
+    if (selectedAvailable > 0) {
+      return null;
+    }
+    final dateBatch = _dateBatchKey(row.dateBatch);
+    if (dateBatch.isEmpty) {
+      return null;
+    }
+    final byDate = batches
+        .where((batch) => _dateBatchKey(batch.dateBatch) == dateBatch)
+        .toList()
+      ..sort(
+        (a, b) => _compareOcrBatchCandidates(
+          a,
+          b,
+          availableBoxesByBatchId: availableBoxesByBatchId,
+          requestedBoxes: row.boxes,
+        ),
+      );
+    if (byDate.length <= 1) {
+      return null;
+    }
+    final preferred = byDate.first;
+    final preferredAvailable = _availableBoxes(
+      preferred,
+      availableBoxesByBatchId,
+    );
+    if (preferred.id == selectedBatch.id || preferredAvailable <= 0) {
+      return null;
+    }
+    return _BatchProductMatch(
+      product: product,
+      batch: preferred,
+      reason: '批号可用为0，已优先代选同日期可用批号',
+      status: OcrLineStatus.needReview,
+      candidateBatches: byDate,
+    );
+  }
+
+  int _compareOcrBatchCandidates(
+    BatchRecord a,
+    BatchRecord b, {
+    required Map<int, int> availableBoxesByBatchId,
+    required int requestedBoxes,
+  }) {
+    final rankCompare = _availabilityRank(
+      a,
+      availableBoxesByBatchId,
+      requestedBoxes: requestedBoxes,
+    ).compareTo(
+      _availabilityRank(
+        b,
+        availableBoxesByBatchId,
+        requestedBoxes: requestedBoxes,
+      ),
+    );
+    if (rankCompare != 0) {
+      return rankCompare;
+    }
+    return a.actualBatch.compareTo(b.actualBatch);
+  }
+
+  int _availabilityRank(
+    BatchRecord batch,
+    Map<int, int> availableBoxesByBatchId, {
+    required int requestedBoxes,
+  }) {
+    final available = _availableBoxes(batch, availableBoxesByBatchId);
+    if (requestedBoxes > 0 && available >= requestedBoxes) {
+      return 0;
+    }
+    if (available > 0) {
+      return 1;
+    }
+    return 2;
+  }
+
+  int _availableBoxes(
+    BatchRecord batch,
+    Map<int, int> availableBoxesByBatchId,
+  ) {
+    return availableBoxesByBatchId[batch.id] ?? 0;
   }
 
   MatchedWaybillOcrLine _buildLine(List<_ResolvedOcrRow> rows) {
