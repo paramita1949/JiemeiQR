@@ -11,6 +11,7 @@ import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/configured_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/paddle_ocr_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -76,10 +77,13 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     baiduSecretKey: '',
     modelscopeToken: '',
     modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+    paddleOcrToken: '',
+    paddleOcrModel: AiOcrConfig.defaultPaddleOcrModel,
     openRouterApiKey: '',
     openRouterModel: AiOcrConfig.defaultOpenRouterModel,
     geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
     modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+    paddleOcrModelPresets: AiOcrConfig.defaultPaddleOcrModelPresets,
     openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
     ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
   );
@@ -411,6 +415,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         var provider = _aiConfig.provider;
         var geminiModel = _aiConfig.geminiModel;
         var modelscopeModel = _aiConfig.modelscopeModel;
+        var paddleOcrModel = _aiConfig.paddleOcrModel;
         var promptPreset = _aiConfig.ocrPromptPreset;
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -426,10 +431,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
             List<String> activeModelPresets() {
               final current = provider == AiOcrConfig.modelscopeProvider
                   ? modelscopeModel
-                  : geminiModel;
+                  : provider == AiOcrConfig.paddleOcrProvider
+                      ? paddleOcrModel
+                      : geminiModel;
               final presets = provider == AiOcrConfig.modelscopeProvider
                   ? _aiConfig.modelScopeModelPresets
-                  : _aiConfig.geminiModelPresets;
+                  : provider == AiOcrConfig.paddleOcrProvider
+                      ? _aiConfig.paddleOcrModelPresets
+                      : _aiConfig.geminiModelPresets;
               return <String>{
                 if (current.trim().isNotEmpty) current.trim(),
                 ...presets.where((item) => item.trim().isNotEmpty),
@@ -546,6 +555,15 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                               () => provider = AiOcrConfig.modelscopeProvider,
                             ),
                           ),
+                          const SizedBox(width: 6),
+                          compactChoice(
+                            label: '飞桨',
+                            selected: provider == AiOcrConfig.paddleOcrProvider,
+                            enabled: _aiConfig.hasPaddleOcrCredential,
+                            onTap: () => setModalState(
+                              () => provider = AiOcrConfig.paddleOcrProvider,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: PopupMenuButton<String>(
@@ -554,6 +572,9 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                                 if (provider ==
                                     AiOcrConfig.modelscopeProvider) {
                                   modelscopeModel = value;
+                                } else if (provider ==
+                                    AiOcrConfig.paddleOcrProvider) {
+                                  paddleOcrModel = value;
                                 } else {
                                   geminiModel = value;
                                 }
@@ -589,7 +610,11 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                                           provider ==
                                                   AiOcrConfig.modelscopeProvider
                                               ? modelscopeModel
-                                              : geminiModel,
+                                              : provider ==
+                                                      AiOcrConfig
+                                                          .paddleOcrProvider
+                                                  ? paddleOcrModel
+                                                  : geminiModel,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -633,6 +658,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                                 provider: provider,
                                 geminiModel: geminiModel,
                                 modelscopeModel: modelscopeModel,
+                                paddleOcrModel: paddleOcrModel,
                                 promptPreset: promptPreset,
                               ),
                             ),
@@ -658,6 +684,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                                 provider: provider,
                                 geminiModel: geminiModel,
                                 modelscopeModel: modelscopeModel,
+                                paddleOcrModel: paddleOcrModel,
                                 promptPreset: promptPreset,
                               ),
                             ),
@@ -683,6 +710,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       provider: plan.provider,
       geminiModel: plan.geminiModel,
       modelscopeModel: plan.modelscopeModel,
+      paddleOcrModel: plan.paddleOcrModel,
       ocrPromptPreset: plan.promptPreset,
     );
     await _aiConfigStore.save(nextConfig);
@@ -787,6 +815,14 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         ].join('\n'),
         duration: const Duration(seconds: 4),
       );
+    } on PaddleOcrWaybillOcrException catch (error) {
+      DebugEventLog.add('AI_OCR', 'paddleocr_failed ${error.message}');
+      if (!mounted) {
+        return;
+      }
+      _setOcrProgress('识别失败：${error.message}', state: _OcrProgressState.error);
+      _setOcrInProgress(false);
+      _showOcrFeedback(error.message, duration: const Duration(seconds: 4));
     } catch (_) {
       DebugEventLog.add('AI_OCR', 'failed unknown_error');
       if (!mounted) {
@@ -1732,6 +1768,7 @@ class _OcrCapturePlan {
     required this.provider,
     required this.geminiModel,
     required this.modelscopeModel,
+    required this.paddleOcrModel,
     required this.promptPreset,
   });
 
@@ -1739,6 +1776,7 @@ class _OcrCapturePlan {
   final String provider;
   final String geminiModel;
   final String modelscopeModel;
+  final String paddleOcrModel;
   final String promptPreset;
 }
 
@@ -1928,12 +1966,18 @@ InputDecoration _inputDecoration(String label) {
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
 String _ocrProviderLabel(AiOcrConfig config) {
+  if (config.usesPaddleOcr) {
+    return '飞桨OCR';
+  }
   return config.usesModelScopeOcr ? '魔搭' : '谷歌';
 }
 
 String _ocrModelLabel(AiOcrConfig config) {
-  final model =
-      config.usesModelScopeOcr ? config.modelscopeModel : config.geminiModel;
+  final model = config.usesPaddleOcr
+      ? config.paddleOcrModel
+      : config.usesModelScopeOcr
+          ? config.modelscopeModel
+          : config.geminiModel;
   final text = model.trim();
   if (text.isEmpty) {
     return '未选择模型';

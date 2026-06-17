@@ -23,8 +23,11 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _modelController = TextEditingController();
   final _modelscopeTokenController = TextEditingController();
   final _modelscopeModelController = TextEditingController();
+  final _paddleOcrTokenController = TextEditingController();
+  final _paddleOcrModelController = TextEditingController();
   List<String> _geminiModelPresets = [];
   List<String> _modelScopeModelPresets = [];
+  List<String> _paddleOcrModelPresets = [];
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -40,6 +43,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelController,
       _modelscopeTokenController,
       _modelscopeModelController,
+      _paddleOcrTokenController,
+      _paddleOcrModelController,
     ]) {
       controller.addListener(_scheduleAutoSave);
     }
@@ -56,6 +61,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     _modelController.dispose();
     _modelscopeTokenController.dispose();
     _modelscopeModelController.dispose();
+    _paddleOcrTokenController.dispose();
+    _paddleOcrModelController.dispose();
     super.dispose();
   }
 
@@ -70,11 +77,15 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelController.text = config.geminiModel;
       _modelscopeTokenController.text = config.modelscopeToken;
       _modelscopeModelController.text = config.modelscopeModel;
+      _paddleOcrTokenController.text = config.paddleOcrToken;
+      _paddleOcrModelController.text = config.paddleOcrModel;
       _geminiModelPresets = [...config.geminiModelPresets];
       _modelScopeModelPresets = [...config.modelScopeModelPresets];
+      _paddleOcrModelPresets = [...config.paddleOcrModelPresets];
       _ocrPromptPreset = config.ocrPromptPreset;
       if (_provider != AiOcrConfig.defaultProvider &&
-          _provider != AiOcrConfig.modelscopeProvider) {
+          _provider != AiOcrConfig.modelscopeProvider &&
+          _provider != AiOcrConfig.paddleOcrProvider) {
         _provider = AiOcrConfig.defaultProvider;
       }
       _autoSaveReady = true;
@@ -160,6 +171,18 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-paddleocr'),
+                            meta: _providerMeta(AiOcrConfig.paddleOcrProvider),
+                            selected:
+                                _provider == AiOcrConfig.paddleOcrProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.paddleOcrProvider,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -220,6 +243,10 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return _modelscopeTokenController.text.trim().isNotEmpty &&
           _modelscopeModelController.text.trim().isNotEmpty;
     }
+    if (_provider == AiOcrConfig.paddleOcrProvider) {
+      return _paddleOcrTokenController.text.trim().isNotEmpty &&
+          _paddleOcrModelController.text.trim().isNotEmpty;
+    }
     return _apiKeyController.text.trim().isNotEmpty &&
         _modelController.text.trim().isNotEmpty;
   }
@@ -237,6 +264,22 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
             _addModelPreset(AiOcrConfig.modelscopeProvider, model),
         onRemovePreset: (model) => _deleteModelPreset(
           AiOcrConfig.modelscopeProvider,
+          model,
+        ),
+      );
+    }
+    if (_provider == AiOcrConfig.paddleOcrProvider) {
+      return _PaddleOcrFields(
+        key: const ValueKey('paddleOcrFields'),
+        tokenController: _paddleOcrTokenController,
+        modelController: _paddleOcrModelController,
+        presets: _paddleOcrModelPresets,
+        onApplyPreset: (model) =>
+            _applyModelPreset(_paddleOcrModelController, model),
+        onAddPreset: (model) =>
+            _addModelPreset(AiOcrConfig.paddleOcrProvider, model),
+        onRemovePreset: (model) => _deleteModelPreset(
+          AiOcrConfig.paddleOcrProvider,
           model,
         ),
       );
@@ -301,6 +344,12 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
           ? null
           : '请填写魔搭 API KEY 和模型';
     }
+    if (_provider == AiOcrConfig.paddleOcrProvider) {
+      return _paddleOcrTokenController.text.trim().isNotEmpty &&
+              _paddleOcrModelController.text.trim().isNotEmpty
+          ? null
+          : '请填写飞桨OCR Token 和模型';
+    }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
         ? null
@@ -322,10 +371,13 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       baiduSecretKey: '',
       modelscopeToken: _modelscopeTokenController.text.trim(),
       modelscopeModel: _modelscopeModelController.text.trim(),
+      paddleOcrToken: _paddleOcrTokenController.text.trim(),
+      paddleOcrModel: _paddleOcrModelController.text.trim(),
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
       geminiModelPresets: _geminiModelPresets,
       modelScopeModelPresets: _modelScopeModelPresets,
+      paddleOcrModelPresets: _paddleOcrModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
       ocrPromptPreset: _ocrPromptPreset,
     );
@@ -342,9 +394,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     if (normalized.isEmpty) {
       return;
     }
-    final controller = provider == AiOcrConfig.modelscopeProvider
-        ? _modelscopeModelController
-        : _modelController;
+    final controller = _modelControllerByProvider(provider);
     controller.text = normalized;
     controller.selection = TextSelection.fromPosition(
       TextPosition(offset: normalized.length),
@@ -359,9 +409,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   }
 
   void _deleteModelPreset(String provider, String model) {
-    final controller = provider == AiOcrConfig.modelscopeProvider
-        ? _modelscopeModelController
-        : _modelController;
+    final controller = _modelControllerByProvider(provider);
     final removeTarget = model.trim();
     final shouldReset = controller.text.trim() == removeTarget;
     final nextModel = _presetsByProvider(provider).firstWhere(
@@ -381,7 +429,20 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     if (provider == AiOcrConfig.modelscopeProvider) {
       return _modelScopeModelPresets;
     }
+    if (provider == AiOcrConfig.paddleOcrProvider) {
+      return _paddleOcrModelPresets;
+    }
     return _geminiModelPresets;
+  }
+
+  TextEditingController _modelControllerByProvider(String provider) {
+    if (provider == AiOcrConfig.modelscopeProvider) {
+      return _modelscopeModelController;
+    }
+    if (provider == AiOcrConfig.paddleOcrProvider) {
+      return _paddleOcrModelController;
+    }
+    return _modelController;
   }
 
   void _scheduleAutoSave() {
@@ -407,6 +468,15 @@ _ProviderMeta _providerMeta(String provider) {
       formHint: '填写魔搭 API KEY 和模型（Model ID）。',
       icon: Icons.document_scanner_outlined,
       color: Color(0xFF2563EB),
+    );
+  }
+  if (provider == AiOcrConfig.paddleOcrProvider) {
+    return const _ProviderMeta(
+      provider: AiOcrConfig.paddleOcrProvider,
+      name: '飞桨OCR',
+      formHint: '填写飞桨OCR Token 和模型，模型可自定义新增或删除。',
+      icon: Icons.document_scanner_outlined,
+      color: Color(0xFF0891B2),
     );
   }
   return const _ProviderMeta(
@@ -729,6 +799,49 @@ class _ModelScopeFields extends StatelessWidget {
         const SizedBox(height: 8),
         _ModelPresetEditor(
           providerName: '魔搭',
+          selectedModel: modelController.text.trim(),
+          presets: presets,
+          onApplyPreset: onApplyPreset,
+          onAddPreset: onAddPreset,
+          onRemovePreset: onRemovePreset,
+        ),
+      ],
+    );
+  }
+}
+
+class _PaddleOcrFields extends StatelessWidget {
+  const _PaddleOcrFields({
+    super.key,
+    required this.tokenController,
+    required this.modelController,
+    required this.presets,
+    required this.onApplyPreset,
+    required this.onAddPreset,
+    required this.onRemovePreset,
+  });
+
+  final TextEditingController tokenController;
+  final TextEditingController modelController;
+  final List<String> presets;
+  final ValueChanged<String> onApplyPreset;
+  final ValueChanged<String> onAddPreset;
+  final ValueChanged<String> onRemovePreset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ConfigField(
+          key: const Key('paddleOcrTokenField'),
+          controller: tokenController,
+          label: '飞桨OCR Token',
+          icon: Icons.key_outlined,
+          obscureText: true,
+        ),
+        const SizedBox(height: 8),
+        _ModelPresetEditor(
+          providerName: '飞桨OCR',
           selectedModel: modelController.text.trim(),
           presets: presets,
           onApplyPreset: onApplyPreset,

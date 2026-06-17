@@ -179,6 +179,10 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     if (decoded is! Map<String, Object?>) {
       throw const ModelScopeWaybillOcrException('魔搭返回格式无效');
     }
+    final responseError = _responseErrorMessage(decoded);
+    if (responseError != null) {
+      throw ModelScopeWaybillOcrException(responseError);
+    }
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) {
       throw const ModelScopeWaybillOcrException('魔搭未返回识别结果');
@@ -204,6 +208,33 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     logOcrMerchantDiagnosis(provider: 'modelscope', draft: draft);
     return draft;
   }
+}
+
+String? _responseErrorMessage(Map<String, Object?> decoded) {
+  final error = decoded['error'];
+  if (error is! Map) {
+    return null;
+  }
+  final code = error['http_code']?.toString().trim() ??
+      error['code']?.toString().trim() ??
+      '';
+  final message = error['message']?.toString().trim() ?? '';
+  final type = error['type']?.toString().trim() ?? '';
+  final requestId = decoded['request_id']?.toString().trim() ?? '';
+  final isInsufficientBalance = code == '402' ||
+      type.contains('insufficient_balance') ||
+      message.contains('insufficient balance');
+  final title = isInsufficientBalance
+      ? '魔搭余额不足或额度不足（402）'
+      : code.isEmpty
+          ? '魔搭请求失败'
+          : '魔搭请求失败（$code）';
+  final details = <String>[
+    if (message.isNotEmpty) message,
+    if (type.isNotEmpty) type,
+    if (requestId.isNotEmpty) 'request_id=$requestId',
+  ];
+  return details.isEmpty ? title : '$title：${details.join('；')}';
 }
 
 class ModelScopeWaybillOcrException implements Exception {

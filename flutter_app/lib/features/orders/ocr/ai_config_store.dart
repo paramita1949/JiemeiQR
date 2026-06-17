@@ -19,10 +19,13 @@ class AiOcrConfig {
     required this.baiduSecretKey,
     this.modelscopeToken = '',
     this.modelscopeModel = defaultModelScopeModel,
+    this.paddleOcrToken = '',
+    this.paddleOcrModel = defaultPaddleOcrModel,
     this.openRouterApiKey = '',
     this.openRouterModel = defaultOpenRouterModel,
     this.geminiModelPresets = defaultGeminiModelPresets,
     this.modelScopeModelPresets = defaultModelScopeModelPresets,
+    this.paddleOcrModelPresets = defaultPaddleOcrModelPresets,
     this.openRouterModelPresets = defaultOpenRouterModelPresets,
     this.ocrPromptPreset = defaultOcrPromptPreset,
   });
@@ -33,10 +36,12 @@ class AiOcrConfig {
   static const aliyunProvider = 'aliyun';
   static const baiduProvider = 'baidu';
   static const modelscopeProvider = 'modelscope';
+  static const paddleOcrProvider = 'paddleocr';
   static const openRouterProvider = 'openrouter';
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
+  static const defaultPaddleOcrModel = 'PP-OCRv6';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
   static const ocrPromptPresetGeneral = 'general';
   static const ocrPromptPresetWaybillTemplateV2 = 'waybill_template_v2';
@@ -46,6 +51,9 @@ class AiOcrConfig {
   ];
   static const defaultModelScopeModelPresets = [
     defaultModelScopeModel,
+  ];
+  static const defaultPaddleOcrModelPresets = [
+    defaultPaddleOcrModel,
   ];
   static const defaultOpenRouterModelPresets = [
     defaultOpenRouterModel,
@@ -66,10 +74,13 @@ class AiOcrConfig {
   final String baiduSecretKey;
   final String modelscopeToken;
   final String modelscopeModel;
+  final String paddleOcrToken;
+  final String paddleOcrModel;
   final String openRouterApiKey;
   final String openRouterModel;
   final List<String> geminiModelPresets;
   final List<String> modelScopeModelPresets;
+  final List<String> paddleOcrModelPresets;
   final List<String> openRouterModelPresets;
   final String ocrPromptPreset;
 
@@ -78,6 +89,7 @@ class AiOcrConfig {
   bool get usesAliyunOcr => provider == aliyunProvider;
   bool get usesBaiduOcr => provider == baiduProvider;
   bool get usesModelScopeOcr => provider == modelscopeProvider;
+  bool get usesPaddleOcr => provider == paddleOcrProvider;
   bool get usesOpenRouterOcr => provider == openRouterProvider;
   bool get hasTencentCredential =>
       tencentSecretId.trim().isNotEmpty && tencentSecretKey.trim().isNotEmpty;
@@ -87,6 +99,7 @@ class AiOcrConfig {
   bool get hasBaiduCredential =>
       baiduApiKey.trim().isNotEmpty && baiduSecretKey.trim().isNotEmpty;
   bool get hasModelScopeCredential => modelscopeToken.trim().isNotEmpty;
+  bool get hasPaddleOcrCredential => paddleOcrToken.trim().isNotEmpty;
   bool get hasOpenRouterCredential => openRouterApiKey.trim().isNotEmpty;
 
   Map<String, Object?> toJson() => {
@@ -103,10 +116,13 @@ class AiOcrConfig {
         'baiduSecretKey': baiduSecretKey,
         'modelscopeToken': modelscopeToken,
         'modelscopeModel': modelscopeModel,
+        'paddleOcrToken': paddleOcrToken,
+        'paddleOcrModel': paddleOcrModel,
         'openRouterApiKey': openRouterApiKey,
         'openRouterModel': openRouterModel,
         'geminiModelPresets': geminiModelPresets,
         'modelScopeModelPresets': modelScopeModelPresets,
+        'paddleOcrModelPresets': paddleOcrModelPresets,
         'openRouterModelPresets': openRouterModelPresets,
         'ocrPromptPreset': ocrPromptPreset,
       };
@@ -117,6 +133,7 @@ class AiOcrConfig {
       aliyunProvider => aliyunProvider,
       baiduProvider => baiduProvider,
       modelscopeProvider => modelscopeProvider,
+      paddleOcrProvider => paddleOcrProvider,
       _ => defaultProvider,
     };
     return AiOcrConfig(
@@ -143,6 +160,11 @@ class AiOcrConfig {
           json['modelscopeModel']?.toString().trim().isNotEmpty == true
               ? _normalizeModelScopeModel(json['modelscopeModel'].toString())
               : defaultModelScopeModel,
+      paddleOcrToken: json['paddleOcrToken']?.toString() ?? '',
+      paddleOcrModel:
+          json['paddleOcrModel']?.toString().trim().isNotEmpty == true
+              ? json['paddleOcrModel'].toString().trim()
+              : defaultPaddleOcrModel,
       openRouterApiKey: json['openRouterApiKey']?.toString() ?? '',
       openRouterModel:
           json['openRouterModel']?.toString().trim().isNotEmpty == true
@@ -159,6 +181,11 @@ class AiOcrConfig {
         fallback: defaultModelScopeModelPresets,
         ensureIncludes: defaultModelScopeModelPresets,
         excludeModels: _removedModelScopeModels,
+      ),
+      paddleOcrModelPresets: _decodePresetList(
+        json['paddleOcrModelPresets'],
+        fallback: defaultPaddleOcrModelPresets,
+        ensureIncludes: defaultPaddleOcrModelPresets,
       ),
       openRouterModelPresets: _decodePresetList(
         json['openRouterModelPresets'],
@@ -185,10 +212,13 @@ class AiOcrConfig {
     String? baiduSecretKey,
     String? modelscopeToken,
     String? modelscopeModel,
+    String? paddleOcrToken,
+    String? paddleOcrModel,
     String? openRouterApiKey,
     String? openRouterModel,
     List<String>? geminiModelPresets,
     List<String>? modelScopeModelPresets,
+    List<String>? paddleOcrModelPresets,
     List<String>? openRouterModelPresets,
     String? ocrPromptPreset,
   }) {
@@ -207,11 +237,15 @@ class AiOcrConfig {
       baiduSecretKey: baiduSecretKey ?? this.baiduSecretKey,
       modelscopeToken: modelscopeToken ?? this.modelscopeToken,
       modelscopeModel: modelscopeModel ?? this.modelscopeModel,
+      paddleOcrToken: paddleOcrToken ?? this.paddleOcrToken,
+      paddleOcrModel: paddleOcrModel ?? this.paddleOcrModel,
       openRouterApiKey: openRouterApiKey ?? this.openRouterApiKey,
       openRouterModel: openRouterModel ?? this.openRouterModel,
       geminiModelPresets: geminiModelPresets ?? this.geminiModelPresets,
       modelScopeModelPresets:
           modelScopeModelPresets ?? this.modelScopeModelPresets,
+      paddleOcrModelPresets:
+          paddleOcrModelPresets ?? this.paddleOcrModelPresets,
       openRouterModelPresets:
           openRouterModelPresets ?? this.openRouterModelPresets,
       ocrPromptPreset: ocrPromptPreset ?? this.ocrPromptPreset,
@@ -245,10 +279,13 @@ class FileAiConfigStore {
         baiduSecretKey: '',
         modelscopeToken: '',
         modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+        paddleOcrToken: '',
+        paddleOcrModel: AiOcrConfig.defaultPaddleOcrModel,
         openRouterApiKey: '',
         openRouterModel: AiOcrConfig.defaultOpenRouterModel,
         geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
         modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+        paddleOcrModelPresets: AiOcrConfig.defaultPaddleOcrModelPresets,
         openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
         ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
       );
@@ -275,10 +312,13 @@ class FileAiConfigStore {
       baiduSecretKey: '',
       modelscopeToken: '',
       modelscopeModel: AiOcrConfig.defaultModelScopeModel,
+      paddleOcrToken: '',
+      paddleOcrModel: AiOcrConfig.defaultPaddleOcrModel,
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
       geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
       modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
+      paddleOcrModelPresets: AiOcrConfig.defaultPaddleOcrModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
       ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
     );
