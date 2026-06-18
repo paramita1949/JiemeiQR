@@ -887,10 +887,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
           Future<void> saveConfig(AppUpdateDownloadLineConfig next) async {
             config = next;
             await _appUpdateLineStore.save(next);
@@ -898,84 +901,94 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               'APP_UPDATE',
               'line_config_saved lines=${next.lines.length} default=${next.defaultLineId}',
             );
-            if (dialogContext.mounted) {
-              setDialogState(() {});
+            if (sheetContext.mounted) {
+              setSheetState(() {});
             }
           }
 
-          return AlertDialog(
-            title: const Text('下载线路管理'),
-            content: SizedBox(
-              width: 460,
-              child: SingleChildScrollView(
+          final media = MediaQuery.of(context);
+          final defaultLine = config.lines.isEmpty
+              ? null
+              : config.lines.firstWhere(
+                  (line) => line.id == config.defaultLineId,
+                  orElse: () => config.lines.first,
+                );
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: media.viewInsets.bottom + 16,
+              ),
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxHeight: media.size.height * 0.82),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '下载线路',
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        _UpdateLineBadge(
+                          label: '${config.lines.length} 条',
+                          foreground: AppTheme.textSecondary,
+                          background: const Color(0xFFF3F4F6),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      '默认线路会优先尝试；失败、过慢或手动换源时继续使用下面其他线路。',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      '当前默认：${defaultLine?.name ?? '未设置'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    for (final line in config.lines)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          onTap: () async {
-                            await saveConfig(
-                              config.copyWith(defaultLineId: line.id),
-                            );
-                          },
-                          leading: Icon(
-                            line.id == config.defaultLineId
-                                ? Icons.radio_button_checked_rounded
-                                : Icons.radio_button_off_rounded,
-                            color: line.id == config.defaultLineId
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.outline,
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  line.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                line.builtIn ? '内置' : '自定义',
+                    Expanded(
+                      child: config.lines.isEmpty
+                          ? const Center(
+                              child: Text(
+                                '暂无下载线路',
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ],
-                          ),
-                          subtitle: Text(
-                            line.prefix.isEmpty
-                                ? '官方 GitHub 下载地址'
-                                : line.prefix,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: IconButton(
-                            tooltip: '删除线路',
-                            onPressed: config.lines.length <= 1
-                                ? null
-                                : () async {
+                            )
+                          : ListView.separated(
+                              itemCount: config.lines.length,
+                              itemBuilder: (context, index) {
+                                final line = config.lines[index];
+                                return _UpdateLineRow(
+                                  line: line,
+                                  selected: line.id == config.defaultLineId,
+                                  canDelete: config.lines.length > 1,
+                                  onSelect: () async {
+                                    if (line.id == config.defaultLineId) {
+                                      return;
+                                    }
+                                    await saveConfig(
+                                      config.copyWith(defaultLineId: line.id),
+                                    );
+                                  },
+                                  onDelete: () async {
                                     final confirmed =
                                         await _confirmDeleteUpdateLine(
-                                      context,
+                                      sheetContext,
                                       line,
                                     );
                                     if (confirmed != true) {
@@ -985,43 +998,77 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       config.removeLine(line.id),
                                     );
                                   },
-                            icon: const Icon(Icons.delete_outline_rounded),
-                          ),
-                        ),
-                      ),
+                                );
+                              },
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 390;
+                        final restoreButton = OutlinedButton.icon(
+                          onPressed: () async {
+                            await saveConfig(
+                              AppUpdateDownloadLineConfig.defaults(),
+                            );
+                          },
+                          icon: const Icon(Icons.restore_rounded),
+                          label: const Text('恢复默认'),
+                        );
+                        final addButton = OutlinedButton.icon(
+                          onPressed: () async {
+                            final line = await _showAddUpdateLineDialog(
+                              sheetContext,
+                              config,
+                            );
+                            if (line == null) {
+                              return;
+                            }
+                            await saveConfig(
+                              config.addCustomLine(
+                                prefix: line.prefix,
+                                name: line.name,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('新增线路'),
+                        );
+                        final doneButton = FilledButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          child: const Text('完成'),
+                        );
+
+                        if (compact) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              restoreButton,
+                              const SizedBox(height: 8),
+                              addButton,
+                              const SizedBox(height: 8),
+                              doneButton,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: restoreButton),
+                            const SizedBox(width: 8),
+                            Expanded(child: addButton),
+                            const SizedBox(width: 8),
+                            Expanded(child: doneButton),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
             ),
-            actions: [
-              TextButton.icon(
-                onPressed: () async {
-                  await saveConfig(AppUpdateDownloadLineConfig.defaults());
-                },
-                icon: const Icon(Icons.restore_rounded),
-                label: const Text('恢复默认'),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  final line = await _showAddUpdateLineDialog(
-                    dialogContext,
-                    config,
-                  );
-                  if (line == null) {
-                    return;
-                  }
-                  await saveConfig(
-                    config.addCustomLine(prefix: line.prefix, name: line.name),
-                  );
-                },
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('新增线路'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('完成'),
-              ),
-            ],
           );
         },
       ),
@@ -1276,6 +1323,159 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return event;
     }
     return event.substring(marker + 2);
+  }
+}
+
+class _UpdateLineRow extends StatelessWidget {
+  const _UpdateLineRow({
+    required this.line,
+    required this.selected,
+    required this.canDelete,
+    required this.onSelect,
+    required this.onDelete,
+  });
+
+  final AppUpdateDownloadLine line;
+  final bool selected;
+  final bool canDelete;
+  final VoidCallback onSelect;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? AppTheme.primary : const Color(0xFFE5E7EB);
+    final lineAddress = line.prefix.isEmpty ? '官方 GitHub 下载地址' : line.prefix;
+    return Material(
+      color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onSelect,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: borderColor,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected ? AppTheme.primary : const Color(0xFF9CA3AF),
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            line.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (selected) ...[
+                          const _UpdateLineBadge(
+                            label: '默认',
+                            foreground: AppTheme.primary,
+                            background: Color(0xFFDCEBFF),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        _UpdateLineBadge(
+                          label: line.builtIn ? '内置' : '自定义',
+                          foreground: line.builtIn
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFF047857),
+                          background: line.builtIn
+                              ? const Color(0xFFEFF6FF)
+                              : const Color(0xFFECFDF5),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      lineAddress,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: canDelete ? '删除线路' : '至少保留一条线路',
+                onPressed: canDelete ? onDelete : null,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpdateLineBadge extends StatelessWidget {
+  const _UpdateLineBadge({
+    required this.label,
+    required this.foreground,
+    required this.background,
+  });
+
+  final String label;
+  final Color foreground;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          height: 1,
+        ),
+      ),
+    );
   }
 }
 

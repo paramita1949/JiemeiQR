@@ -41,7 +41,7 @@ class AiOcrConfig {
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
-  static const defaultPaddleOcrModel = 'PP-OCRv6';
+  static const defaultPaddleOcrModel = 'PaddleOCR-VL-1.6';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
   static const ocrPromptPresetGeneral = 'general';
   static const ocrPromptPresetWaybillTemplateV2 = 'waybill_template_v2';
@@ -163,7 +163,7 @@ class AiOcrConfig {
       paddleOcrToken: json['paddleOcrToken']?.toString() ?? '',
       paddleOcrModel:
           json['paddleOcrModel']?.toString().trim().isNotEmpty == true
-              ? json['paddleOcrModel'].toString().trim()
+              ? _normalizePaddleOcrModel(json['paddleOcrModel'].toString())
               : defaultPaddleOcrModel,
       openRouterApiKey: json['openRouterApiKey']?.toString() ?? '',
       openRouterModel:
@@ -186,6 +186,7 @@ class AiOcrConfig {
         json['paddleOcrModelPresets'],
         fallback: defaultPaddleOcrModelPresets,
         ensureIncludes: defaultPaddleOcrModelPresets,
+        excludeModels: _removedPaddleOcrModels,
       ),
       openRouterModelPresets: _decodePresetList(
         json['openRouterModelPresets'],
@@ -372,6 +373,10 @@ const Set<String> _removedGeminiModels = {
   'gemini-2.5-pro',
 };
 
+const Set<String> _removedPaddleOcrModels = {
+  'PP-OCRv6',
+};
+
 String _normalizeModelScopeModel(String raw) {
   final value = raw.trim();
   if (value.isEmpty || _removedModelScopeModels.contains(value)) {
@@ -384,6 +389,14 @@ String _normalizeGeminiModel(String raw) {
   final value = raw.trim();
   if (value.isEmpty || _removedGeminiModels.contains(value)) {
     return AiOcrConfig.defaultModel;
+  }
+  return value;
+}
+
+String _normalizePaddleOcrModel(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || _removedPaddleOcrModels.contains(value)) {
+    return AiOcrConfig.defaultPaddleOcrModel;
   }
   return value;
 }

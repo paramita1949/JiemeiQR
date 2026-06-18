@@ -179,7 +179,6 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
                 .where((text) => text.isNotEmpty)
                 .toList();
             lines.addAll(cellTexts);
-            rows.addAll(_parseRowsFromCells(cellTexts));
           }
         }
       }
@@ -255,57 +254,6 @@ Map<String, String> _extractHeaderFields(String fullText) {
   return fields;
 }
 
-List<WaybillOcrRow> _parseRowsFromCells(List<String> cells) {
-  final rows = <WaybillOcrRow>[];
-  for (var i = 0; i < cells.length - 2; i += 1) {
-    final productCode = cells[i].trim();
-    if (!_isProductCode(productCode)) {
-      continue;
-    }
-    final row = _parseRowStartingAtProductCode(cells, i, productCode);
-    if (row != null) {
-      rows.add(row);
-    }
-  }
-  return rows;
-}
-
-WaybillOcrRow? _parseRowStartingAtProductCode(
-  List<String> cells,
-  int productIndex,
-  String productCode,
-) {
-  final maxBatchIndex =
-      productIndex + 9 < cells.length - 1 ? productIndex + 9 : cells.length - 1;
-  for (var batchIndex = productIndex + 2;
-      batchIndex < maxBatchIndex;
-      batchIndex += 1) {
-    final actualBatch = _normalizedBatchCode(cells[batchIndex]);
-    final dateBatch = cells[batchIndex + 1].trim();
-    if (!_isBatchCode(actualBatch) || !_isDateText(dateBatch)) {
-      continue;
-    }
-    final productName = _joinProductNameCells(
-      cells.sublist(productIndex + 1, batchIndex),
-    );
-    if (productName.isEmpty) {
-      continue;
-    }
-    final boxes = _boxesAfterDate(cells, batchIndex + 2);
-    if (boxes <= 0) {
-      continue;
-    }
-    return WaybillOcrRow(
-      productCode: productCode,
-      productName: productName,
-      actualBatch: actualBatch,
-      dateBatch: dateBatch,
-      boxes: boxes,
-    );
-  }
-  return null;
-}
-
 List<WaybillOcrRow> _parseRowsFromHtmlTables(String text) {
   final rows = <WaybillOcrRow>[];
   final rowPattern = RegExp(
@@ -372,38 +320,6 @@ WaybillOcrRow? _rowFromMappedCells(List<String> headers, List<String> cells) {
   );
 }
 
-int _boxesAfterDate(List<String> cells, int start) {
-  final end = (start + 8).clamp(0, cells.length);
-  final window = cells.sublist(start, end);
-  final locationIndex = window.indexWhere(_isWarehouseLocation);
-  if (locationIndex >= 0) {
-    final intsAfterLocation = window
-        .skip(locationIndex + 1)
-        .map(_integerCell)
-        .whereType<int>()
-        .toList();
-    if (intsAfterLocation.length >= 2) {
-      return intsAfterLocation[1];
-    }
-    if (intsAfterLocation.isNotEmpty) {
-      return intsAfterLocation.first;
-    }
-  }
-  final ints = window.map(_integerCell).whereType<int>().toList();
-  if (ints.length >= 2) {
-    return ints[1];
-  }
-  return ints.isEmpty ? 0 : ints.first;
-}
-
-int? _integerCell(String value) {
-  final text = value.trim();
-  if (!RegExp(r'^\d+$').hasMatch(text)) {
-    return null;
-  }
-  return int.tryParse(text);
-}
-
 bool _isProductCode(String value) => RegExp(r'^\d{4,6}$').hasMatch(value);
 
 bool _isBatchCode(String value) =>
@@ -414,35 +330,6 @@ String _normalizedBatchCode(String value) =>
 
 bool _isDateText(String value) =>
     RegExp(r'^\d{4}[.\-/年]\d{1,2}[.\-/月]\d{1,2}日?$').hasMatch(value);
-
-bool _isWarehouseLocation(String value) =>
-    RegExp(r'^[A-Z]{1,4}\d{1,3}$', caseSensitive: false).hasMatch(value);
-
-String _joinProductNameCells(List<String> cells) {
-  return cells
-      .map((cell) => cell.trim())
-      .where((cell) => cell.isNotEmpty)
-      .where((cell) => !_isProductNameNoise(cell))
-      .join();
-}
-
-bool _isProductNameNoise(String value) {
-  const noiseValues = {
-    '产品码',
-    '产品名称',
-    '批号',
-    '截止日期',
-    '库位',
-    '规格',
-    '箱数',
-    '零数',
-    '备注',
-    '扫描',
-    '收货',
-    'TS',
-  };
-  return noiseValues.contains(value.trim());
-}
 
 _PaddleMerchantResolution _resolvePaddleMerchantName({
   required String rawMerchantName,
