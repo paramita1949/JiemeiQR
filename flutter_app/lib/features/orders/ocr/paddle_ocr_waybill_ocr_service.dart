@@ -86,11 +86,22 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       token: _normalizeBearerToken(effectiveToken),
     );
     final jsonl = await _downloadResult(Uri.parse(jsonlUrl));
-    final fullText = _extractTextLines(jsonl).join('\n');
-    if (fullText.trim().isEmpty) {
+    final extracted = _extractResult(jsonl);
+    final fullText = extracted.lines.join('\n');
+    if (fullText.trim().isEmpty && extracted.rows.isEmpty) {
       throw const PaddleOcrWaybillOcrException('飞桨OCR未返回识别文本');
     }
-    return parseWaybillOcrText(fullText: fullText);
+    final textDraft = parseWaybillOcrText(
+      fields: _extractHeaderFields(fullText),
+      fullText: fullText,
+    );
+    return WaybillOcrDraft(
+      waybillNo: textDraft.waybillNo,
+      merchantName: textDraft.merchantName,
+      orderDateText: textDraft.orderDateText,
+      rows: extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows,
+      warnings: textDraft.warnings,
+    );
   }
 
   Future<String> _waitForResultUrl({
@@ -127,8 +138,9 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
     throw const PaddleOcrWaybillOcrException('飞桨OCR任务等待超时');
   }
 
-  List<String> _extractTextLines(String jsonl) {
+  _PaddleOcrExtractedResult _extractResult(String jsonl) {
     final lines = <String>[];
+    final rows = <WaybillOcrRow>[];
     for (final rawLine in jsonl.split('\n')) {
       final line = rawLine.trim();
       if (line.isEmpty) {
@@ -140,28 +152,56 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       }
       final result = _mapValue(decoded, 'result');
       final ocrResults = result['ocrResults'];
-      if (ocrResults is! List) {
-        continue;
+      if (ocrResults is List) {
+        for (final item in ocrResults) {
+          if (item is! Map) {
+            continue;
+          }
+          final prunedResult = _mapValue(item, 'prunedResult');
+          final recTexts = prunedResult['rec_texts'];
+          if (recTexts is List) {
+            final cellTexts = recTexts
+                .map((text) => text?.toString().trim() ?? '')
+                .where((text) => text.isNotEmpty)
+                .toList();
+            lines.addAll(cellTexts);
+            rows.addAll(_parseRowsFromCells(cellTexts));
+          }
+        }
       }
-      for (final item in ocrResults) {
-        if (item is! Map) {
-          continue;
-        }
-        final prunedResult = _mapValue(item, 'prunedResult');
-        final recTexts = prunedResult['rec_texts'];
-        if (recTexts is! List) {
-          continue;
-        }
-        for (final text in recTexts) {
-          final value = text?.toString().trim() ?? '';
-          if (value.isNotEmpty) {
-            lines.add(value);
+
+      final layoutResults = result['layoutParsingResults'];
+      if (layoutResults is List) {
+        for (final item in layoutResults) {
+          if (item is! Map) {
+            continue;
+          }
+          final markdown = item['markdown'];
+          final markdownText = markdown is Map
+              ? markdown['text']?.toString().trim() ?? ''
+              : markdown?.toString().trim() ?? '';
+          if (markdownText.isNotEmpty) {
+            lines.add(markdownText);
+            rows.addAll(_parseRowsFromHtmlTables(markdownText));
           }
         }
       }
     }
-    return lines;
+    return _PaddleOcrExtractedResult(
+      lines: lines,
+      rows: _dedupeRows(rows),
+    );
   }
+}
+
+class _PaddleOcrExtractedResult {
+  const _PaddleOcrExtractedResult({
+    required this.lines,
+    required this.rows,
+  });
+
+  final List<String> lines;
+  final List<WaybillOcrRow> rows;
 }
 
 class PaddleOcrWaybillOcrException implements Exception {
@@ -171,6 +211,212 @@ class PaddleOcrWaybillOcrException implements Exception {
 
   @override
   String toString() => message;
+}
+
+Map<String, String> _extractHeaderFields(String fullText) {
+  final fields = <String, String>{};
+  final plainText = _stripHtml(fullText);
+  final waybillNo = RegExp(r'运单号\s*[:：]\s*([A-Za-z0-9]+)')
+      .firstMatch(plainText)
+      ?.group(1)
+      ?.trim();
+  if (waybillNo != null && waybillNo.isNotEmpty) {
+    fields['运单号'] = waybillNo;
+  }
+  final merchantName = RegExp(r'收货方\s*[:：]\s*([^\n\r]+)')
+      .firstMatch(plainText)
+      ?.group(1)
+      ?.trim();
+  if (merchantName != null && merchantName.isNotEmpty) {
+    fields['收货方'] = merchantName;
+  }
+  final orderDate =
+      RegExp(r'起运日\s*[:：]?\s*(\d{4}[.\-/年]\d{1,2}[.\-/月]\d{1,2}日?)')
+          .firstMatch(plainText)
+          ?.group(1)
+          ?.trim();
+  if (orderDate != null && orderDate.isNotEmpty) {
+    fields['日期'] = orderDate;
+  }
+  return fields;
+}
+
+List<WaybillOcrRow> _parseRowsFromCells(List<String> cells) {
+  final rows = <WaybillOcrRow>[];
+  for (var i = 0; i < cells.length - 3; i += 1) {
+    final productCode = cells[i].trim();
+    if (!_isProductCode(productCode)) {
+      continue;
+    }
+    final productName = cells[i + 1].trim();
+    final actualBatch = cells[i + 2].trim();
+    final dateBatch = cells[i + 3].trim();
+    if (productName.isEmpty ||
+        !_isBatchCode(actualBatch) ||
+        !_isDateText(dateBatch)) {
+      continue;
+    }
+    final boxes = _boxesAfterDate(cells, i + 4);
+    if (boxes <= 0) {
+      continue;
+    }
+    rows.add(
+      WaybillOcrRow(
+        productCode: productCode,
+        productName: productName,
+        actualBatch: actualBatch,
+        dateBatch: dateBatch,
+        boxes: boxes,
+      ),
+    );
+  }
+  return rows;
+}
+
+List<WaybillOcrRow> _parseRowsFromHtmlTables(String text) {
+  final rows = <WaybillOcrRow>[];
+  final rowPattern = RegExp(
+    r'<tr\b[^>]*>(.*?)</tr>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  final cellPattern = RegExp(
+    r'<t[dh]\b[^>]*>(.*?)</t[dh]>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  List<String>? headers;
+  for (final rowMatch in rowPattern.allMatches(text)) {
+    final cells = cellPattern
+        .allMatches(rowMatch.group(1) ?? '')
+        .map((match) => _stripHtml(match.group(1) ?? ''))
+        .toList();
+    if (cells.isEmpty) {
+      continue;
+    }
+    if (headers == null && cells.any((cell) => cell.contains('产品码'))) {
+      headers = cells;
+      continue;
+    }
+    if (headers == null) {
+      continue;
+    }
+    final row = _rowFromMappedCells(headers, cells);
+    if (row != null) {
+      rows.add(row);
+    }
+  }
+  return rows;
+}
+
+WaybillOcrRow? _rowFromMappedCells(List<String> headers, List<String> cells) {
+  String cell(String header) {
+    final index = headers.indexWhere((item) => item.contains(header));
+    if (index < 0 || index >= cells.length) {
+      return '';
+    }
+    return cells[index].trim();
+  }
+
+  final productCode = cell('产品码');
+  final productName = cell('产品名称');
+  final actualBatch = cell('批号');
+  final dateBatch = cell('截止日期');
+  final boxes = int.tryParse(cell('箱数').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+  if (!_isProductCode(productCode) ||
+      productName.isEmpty ||
+      !_isBatchCode(actualBatch) ||
+      !_isDateText(dateBatch) ||
+      boxes <= 0) {
+    return null;
+  }
+  return WaybillOcrRow(
+    productCode: productCode,
+    productName: productName,
+    actualBatch: actualBatch,
+    dateBatch: dateBatch,
+    boxes: boxes,
+  );
+}
+
+int _boxesAfterDate(List<String> cells, int start) {
+  final end = (start + 8).clamp(0, cells.length);
+  final window = cells.sublist(start, end);
+  final locationIndex = window.indexWhere(_isWarehouseLocation);
+  if (locationIndex >= 0) {
+    final intsAfterLocation = window
+        .skip(locationIndex + 1)
+        .map(_integerCell)
+        .whereType<int>()
+        .toList();
+    if (intsAfterLocation.length >= 2) {
+      return intsAfterLocation[1];
+    }
+    if (intsAfterLocation.isNotEmpty) {
+      return intsAfterLocation.first;
+    }
+  }
+  final ints = window.map(_integerCell).whereType<int>().toList();
+  if (ints.length >= 2) {
+    return ints[1];
+  }
+  return ints.isEmpty ? 0 : ints.first;
+}
+
+int? _integerCell(String value) {
+  final text = value.trim();
+  if (!RegExp(r'^\d+$').hasMatch(text)) {
+    return null;
+  }
+  return int.tryParse(text);
+}
+
+bool _isProductCode(String value) => RegExp(r'^\d{4,6}$').hasMatch(value);
+
+bool _isBatchCode(String value) => RegExp(r'^[A-Z0-9]{5,}$').hasMatch(value);
+
+bool _isDateText(String value) =>
+    RegExp(r'^\d{4}[.\-/年]\d{1,2}[.\-/月]\d{1,2}日?$').hasMatch(value);
+
+bool _isWarehouseLocation(String value) =>
+    RegExp(r'^[A-Z]{1,4}\d{1,3}$', caseSensitive: false).hasMatch(value);
+
+List<WaybillOcrRow> _dedupeRows(List<WaybillOcrRow> rows) {
+  final seen = <String>{};
+  final deduped = <WaybillOcrRow>[];
+  for (final row in rows) {
+    final key = [
+      row.productCode,
+      row.productName,
+      row.actualBatch,
+      row.dateBatch,
+      row.boxes,
+    ].join('|');
+    if (seen.add(key)) {
+      deduped.add(row);
+    }
+  }
+  return deduped;
+}
+
+String _stripHtml(String value) {
+  return _decodeHtmlEntities(
+    value
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .trim(),
+  );
+}
+
+String _decodeHtmlEntities(String value) {
+  return value
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'");
 }
 
 Future<String> _defaultSubmitJob({
