@@ -56,6 +56,7 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final config = await configStore.load();
     final provider = config.usesPaddleOcr
@@ -76,18 +77,21 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
       return _paddleOcrServiceFactory(configStore, config).recognize(
         image,
         merchantHistoryNames: merchantHistoryNames,
+        onProgress: onProgress,
       );
     }
     if (config.usesModelScopeOcr) {
       return _modelScopeServiceFactory(configStore, config).recognize(
         image,
         merchantHistoryNames: merchantHistoryNames,
+        onProgress: onProgress,
       );
     }
     try {
       return await _geminiServiceFactory(configStore, config).recognize(
         image,
         merchantHistoryNames: merchantHistoryNames,
+        onProgress: onProgress,
       );
     } catch (error) {
       DebugEventLog.add(
@@ -100,6 +104,7 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
       return _modelScopeServiceFactory(configStore, config).recognize(
         image,
         merchantHistoryNames: merchantHistoryNames,
+        onProgress: onProgress,
       );
     }
   }

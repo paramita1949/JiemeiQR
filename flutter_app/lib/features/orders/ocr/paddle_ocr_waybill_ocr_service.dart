@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,7 @@ import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_diagnostics.dart'
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_text_parser.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
+import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef PaddleOcrSubmitJob = Future<String> Function({
   required File image,
@@ -62,6 +64,7 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final needsConfig = token.trim().isEmpty || model.trim().isEmpty;
     final config = needsConfig ? await _configStore.load() : null;
@@ -77,16 +80,30 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       throw const PaddleOcrWaybillOcrException('缺少飞桨OCR Token');
     }
 
+    final normalizedToken = _normalizeBearerToken(effectiveToken);
+    final imageBytes = await image.length();
+    DebugEventLog.add(
+      'AI_OCR',
+      'paddleocr_submit_start model=$effectiveModel image_bytes=$imageBytes',
+    );
+    _reportPaddleProgress(onProgress, '正在上传图片到飞桨OCR...');
     final jobId = await _submitJob(
       image: image,
-      token: _normalizeBearerToken(effectiveToken),
+      token: normalizedToken,
       model: effectiveModel,
       optionalPayload: _optionalPayload,
     );
+    DebugEventLog.add(
+      'AI_OCR',
+      'paddleocr_job_submitted job=$jobId model=$effectiveModel',
+    );
+    _reportPaddleProgress(onProgress, '飞桨OCR已提交任务，等待服务端识别...');
     final jsonlUrl = await _waitForResultUrl(
       jobId: jobId,
-      token: _normalizeBearerToken(effectiveToken),
+      token: normalizedToken,
+      onProgress: onProgress,
     );
+    _reportPaddleProgress(onProgress, '飞桨OCR识别完成，正在下载结果...');
     final jsonl = await _downloadResult(Uri.parse(jsonlUrl));
     final extracted = _extractResult(jsonl);
     final fullText = extracted.lines.join('\n');
@@ -121,11 +138,18 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
   Future<String> _waitForResultUrl({
     required String jobId,
     required String token,
+    WaybillOcrProgressCallback? onProgress,
   }) async {
+    var lastState = '';
+    var lastProgress = '';
     for (var attempt = 0; attempt < _maxPollAttempts; attempt += 1) {
+      final attemptNumber = attempt + 1;
       final response = await _getJob(jobId: jobId, token: token);
       final data = _mapValue(response, 'data');
       final state = data['state']?.toString() ?? '';
+      final progress = _paddleExtractProgress(data);
+      lastState = state;
+      lastProgress = progress;
       if (state == 'done') {
         final resultUrl = _mapValue(data, 'resultUrl');
         final jsonUrl = resultUrl['jsonUrl']?.toString().trim() ?? '';
@@ -134,10 +158,18 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
             '飞桨OCR任务完成但未返回结果地址',
           );
         }
+        DebugEventLog.add(
+          'AI_OCR',
+          'paddleocr_poll job=$jobId attempt=$attemptNumber/$_maxPollAttempts state=done',
+        );
         return jsonUrl;
       }
       if (state == 'failed') {
         final message = data['errorMsg']?.toString().trim();
+        DebugEventLog.add(
+          'AI_OCR',
+          'paddleocr_poll job=$jobId attempt=$attemptNumber/$_maxPollAttempts state=failed error=${message ?? ''}',
+        );
         throw PaddleOcrWaybillOcrException(
           message == null || message.isEmpty ? '飞桨OCR任务失败' : message,
         );
@@ -145,11 +177,26 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       if (state != 'pending' && state != 'running') {
         throw PaddleOcrWaybillOcrException('飞桨OCR任务状态异常: $state');
       }
+      final progressMessage = _paddlePollProgressMessage(
+        state: state,
+        attempt: attemptNumber,
+        maxAttempts: _maxPollAttempts,
+        progress: progress,
+      );
+      _reportPaddleProgress(onProgress, progressMessage);
+      DebugEventLog.add(
+        'AI_OCR',
+        'paddleocr_poll job=$jobId attempt=$attemptNumber/$_maxPollAttempts state=$state${progress.isEmpty ? '' : ' progress=$progress'}',
+      );
       if (_pollInterval > Duration.zero) {
         await Future<void>.delayed(_pollInterval);
       }
     }
-    throw const PaddleOcrWaybillOcrException('飞桨OCR任务等待超时');
+    throw PaddleOcrWaybillOcrException(
+      '飞桨OCR任务等待超时（最后状态: ${lastState.isEmpty ? '未知' : lastState}，'
+      '查询 $_maxPollAttempts/$_maxPollAttempts 次'
+      '${lastProgress.isEmpty ? '' : '，进度 $lastProgress'}）',
+    );
   }
 
   _PaddleOcrExtractedResult _extractResult(String jsonl) {
@@ -215,6 +262,36 @@ class _PaddleOcrExtractedResult {
 
   final List<String> lines;
   final List<WaybillOcrRow> rows;
+}
+
+void _reportPaddleProgress(
+  WaybillOcrProgressCallback? onProgress,
+  String message,
+) {
+  onProgress?.call(message);
+}
+
+String _paddleExtractProgress(Map<String, Object?> data) {
+  final progress = _mapValue(data, 'extractProgress');
+  final totalPages = progress['totalPages'];
+  final extractedPages = progress['extractedPages'];
+  if (totalPages != null && extractedPages != null) {
+    return '$extractedPages/$totalPages 页';
+  }
+  return '';
+}
+
+String _paddlePollProgressMessage({
+  required String state,
+  required int attempt,
+  required int maxAttempts,
+  required String progress,
+}) {
+  if (state == 'pending') {
+    return '飞桨OCR排队中，第 $attempt/$maxAttempts 次查询';
+  }
+  final progressText = progress.isEmpty ? '' : '，进度 $progress';
+  return '飞桨OCR识别中，第 $attempt/$maxAttempts 次查询$progressText';
 }
 
 class PaddleOcrWaybillOcrException implements Exception {
@@ -560,6 +637,11 @@ String _decodeHtmlEntities(String value) {
       .replaceAll('&#39;', "'");
 }
 
+const _paddleConnectTimeout = Duration(seconds: 15);
+const _paddleSubmitTimeout = Duration(seconds: 45);
+const _paddleQueryTimeout = Duration(seconds: 20);
+const _paddleDownloadTimeout = Duration(seconds: 45);
+
 Future<String> _defaultSubmitJob({
   required File image,
   required String token,
@@ -568,9 +650,16 @@ Future<String> _defaultSubmitJob({
 }) async {
   final boundary = '----qrscan-paddle-${DateTime.now().microsecondsSinceEpoch}';
   final client = HttpClient();
+  client.connectionTimeout = _paddleConnectTimeout;
   try {
-    final request =
-        await client.postUrl(Uri.parse(PaddleOcrWaybillOcrService._jobUrl));
+    final request = await client
+        .postUrl(Uri.parse(PaddleOcrWaybillOcrService._jobUrl))
+        .timeout(
+          _paddleConnectTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR提交连接超时，请检查网络后重试',
+          ),
+        );
     request.headers.set(HttpHeaders.authorizationHeader, 'bearer $token');
     request.headers.contentType = ContentType(
       'multipart',
@@ -594,8 +683,18 @@ Future<String> _defaultSubmitJob({
     request.add(await image.readAsBytes());
     writeText('\r\n--$boundary--\r\n');
 
-    final response = await request.close();
-    final responseText = await response.transform(utf8.decoder).join();
+    final response = await request.close().timeout(
+          _paddleSubmitTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR提交超时，请检查网络或稍后重试',
+          ),
+        );
+    final responseText = await response.transform(utf8.decoder).join().timeout(
+          _paddleSubmitTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR提交响应超时，请稍后重试',
+          ),
+        );
     if (response.statusCode != 200) {
       throw PaddleOcrWaybillOcrException(
         '飞桨OCR提交失败: ${response.statusCode} ${responseText.trim()}',
@@ -614,6 +713,14 @@ Future<String> _defaultSubmitJob({
       );
     }
     return jobId;
+  } on PaddleOcrWaybillOcrException {
+    rethrow;
+  } on SocketException catch (error) {
+    throw PaddleOcrWaybillOcrException(
+      '飞桨OCR提交网络异常: ${error.message}',
+    );
+  } on TimeoutException {
+    throw const PaddleOcrWaybillOcrException('飞桨OCR提交超时，请稍后重试');
   } finally {
     client.close(force: true);
   }
@@ -624,13 +731,31 @@ Future<Map<String, Object?>> _defaultGetJob({
   required String token,
 }) async {
   final client = HttpClient();
+  client.connectionTimeout = _paddleConnectTimeout;
   try {
-    final request = await client.getUrl(
-      Uri.parse('${PaddleOcrWaybillOcrService._jobUrl}/$jobId'),
-    );
+    final request = await client
+        .getUrl(
+          Uri.parse('${PaddleOcrWaybillOcrService._jobUrl}/$jobId'),
+        )
+        .timeout(
+          _paddleConnectTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR查询连接超时，请检查网络后重试',
+          ),
+        );
     request.headers.set(HttpHeaders.authorizationHeader, 'bearer $token');
-    final response = await request.close();
-    final responseText = await response.transform(utf8.decoder).join();
+    final response = await request.close().timeout(
+          _paddleQueryTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR查询任务超时，请稍后重试',
+          ),
+        );
+    final responseText = await response.transform(utf8.decoder).join().timeout(
+          _paddleQueryTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR查询响应超时，请稍后重试',
+          ),
+        );
     if (response.statusCode != 200) {
       throw PaddleOcrWaybillOcrException(
         '飞桨OCR查询任务失败: ${response.statusCode} ${responseText.trim()}',
@@ -641,6 +766,14 @@ Future<Map<String, Object?>> _defaultGetJob({
       return decoded.cast<String, Object?>();
     }
     throw const PaddleOcrWaybillOcrException('飞桨OCR查询返回格式无效');
+  } on PaddleOcrWaybillOcrException {
+    rethrow;
+  } on SocketException catch (error) {
+    throw PaddleOcrWaybillOcrException(
+      '飞桨OCR查询网络异常: ${error.message}',
+    );
+  } on TimeoutException {
+    throw const PaddleOcrWaybillOcrException('飞桨OCR查询任务超时，请稍后重试');
   } finally {
     client.close(force: true);
   }
@@ -648,16 +781,40 @@ Future<Map<String, Object?>> _defaultGetJob({
 
 Future<String> _defaultDownloadResult(Uri uri) async {
   final client = HttpClient();
+  client.connectionTimeout = _paddleConnectTimeout;
   try {
-    final request = await client.getUrl(uri);
-    final response = await request.close();
-    final responseText = await response.transform(utf8.decoder).join();
+    final request = await client.getUrl(uri).timeout(
+          _paddleConnectTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR下载连接超时，请稍后重试',
+          ),
+        );
+    final response = await request.close().timeout(
+          _paddleDownloadTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR下载结果超时，请稍后重试',
+          ),
+        );
+    final responseText = await response.transform(utf8.decoder).join().timeout(
+          _paddleDownloadTimeout,
+          onTimeout: () => throw const PaddleOcrWaybillOcrException(
+            '飞桨OCR下载响应超时，请稍后重试',
+          ),
+        );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw PaddleOcrWaybillOcrException(
         '飞桨OCR下载结果失败: ${response.statusCode}',
       );
     }
     return responseText;
+  } on PaddleOcrWaybillOcrException {
+    rethrow;
+  } on SocketException catch (error) {
+    throw PaddleOcrWaybillOcrException(
+      '飞桨OCR下载网络异常: ${error.message}',
+    );
+  } on TimeoutException {
+    throw const PaddleOcrWaybillOcrException('飞桨OCR下载结果超时，请稍后重试');
   } finally {
     client.close(force: true);
   }

@@ -47,6 +47,7 @@ class TencentWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final needsConfig =
         secretId.trim().isEmpty || secretKey.trim().isEmpty || region.isEmpty;

@@ -31,6 +31,7 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final needsConfig = apiKey.trim().isEmpty;
     final config = needsConfig ? await _configStore.load() : null;

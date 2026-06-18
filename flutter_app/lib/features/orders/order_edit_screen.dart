@@ -753,6 +753,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       final draft = await _effectiveOcrService.recognize(
         image,
         merchantHistoryNames: _merchantHistoryNames,
+        onProgress: (message) {
+          DebugEventLog.add('AI_OCR', 'progress $message');
+          _setOcrProgress(message);
+        },
       );
       recognizeStopwatch.stop();
       DebugEventLog.add(

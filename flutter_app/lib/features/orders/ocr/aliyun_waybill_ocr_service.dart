@@ -51,6 +51,7 @@ class AliyunWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final needsConfig = accessKeyId.trim().isEmpty ||
         accessKeySecret.trim().isEmpty ||

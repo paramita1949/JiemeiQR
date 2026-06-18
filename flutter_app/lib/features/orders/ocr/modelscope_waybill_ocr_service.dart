@@ -71,6 +71,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
   Future<WaybillOcrDraft> recognize(
     File image, {
     Iterable<String> merchantHistoryNames = const [],
+    WaybillOcrProgressCallback? onProgress,
   }) async {
     final config = await _configStore.load();
     final effectiveApiKey = apiKey.trim().isNotEmpty
