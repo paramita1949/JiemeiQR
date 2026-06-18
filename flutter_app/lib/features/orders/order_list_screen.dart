@@ -37,6 +37,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   late final AppDatabase _database;
   late final OrderDao _orderDao;
   late final SearchPreferenceStore _searchPreferenceStore;
+  Future<void>? _searchRecordsLoad;
   late final bool _ownsDatabase;
   late final ScrollController _scrollController;
   late DateTimeRange? _dateRange;
@@ -75,6 +76,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
         : _OrderQuickFilter.custom;
     _status = null;
     unawaited(_loadSearchModePreference());
+    _searchRecordsLoad = _loadSearchRecordsPreference();
+    unawaited(_searchRecordsLoad!);
     _refreshOrders();
   }
 
@@ -562,6 +565,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _showOrderSearchSheet() async {
+    await _searchRecordsLoad;
+    if (!mounted) {
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -571,7 +578,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         initialMode: _rememberedSearchMode,
         onModeChanged: _persistSearchMode,
         initialRecords: _searchRecords,
-        onRecordsChanged: (records) => _searchRecords = records,
+        onRecordsChanged: _updateSearchRecords,
         onOpenOrder: (order) {
           Navigator.of(sheetContext).pop();
           Future<void>.microtask(() {
@@ -594,11 +601,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _rememberedSearchMode = mode;
   }
 
+  Future<void> _loadSearchRecordsPreference() async {
+    final saved = await _searchPreferenceStore.loadOrderSearchRecords();
+    final records = saved
+        .map(_orderSearchRecordFromPreference)
+        .whereType<_OrderSearchRecord>()
+        .toList(growable: false);
+    if (!mounted) {
+      return;
+    }
+    _searchRecords = records;
+  }
+
   void _persistSearchMode(OrderSearchMode mode) {
     _rememberedSearchMode = mode;
     unawaited(
       _searchPreferenceStore.saveOrderSearchMode(
         _orderSearchModePreference(mode),
+      ),
+    );
+  }
+
+  void _updateSearchRecords(List<_OrderSearchRecord> records) {
+    _searchRecords = List<_OrderSearchRecord>.unmodifiable(records);
+    unawaited(
+      _searchPreferenceStore.saveOrderSearchRecords(
+        _searchRecords.map(_orderSearchRecordPreference).toList(
+              growable: false,
+            ),
       ),
     );
   }
@@ -1463,6 +1493,26 @@ String _orderSearchModePreference(OrderSearchMode mode) {
     OrderSearchMode.waybill => FileSearchPreferenceStore.orderWaybill,
     OrderSearchMode.merchant => FileSearchPreferenceStore.orderMerchant,
   };
+}
+
+_OrderSearchRecord? _orderSearchRecordFromPreference(
+  SearchRecordPreference preference,
+) {
+  final mode = _orderSearchModeFromPreference(preference.mode);
+  final query = preference.query.trim();
+  if (mode == null || query.isEmpty) {
+    return null;
+  }
+  return _OrderSearchRecord(mode: mode, query: query);
+}
+
+SearchRecordPreference _orderSearchRecordPreference(
+  _OrderSearchRecord record,
+) {
+  return SearchRecordPreference(
+    mode: _orderSearchModePreference(record.mode),
+    query: record.query,
+  );
 }
 
 class _OrderSearchRecord {

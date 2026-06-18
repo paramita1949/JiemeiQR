@@ -68,6 +68,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final BackupImportIntentService _backupImportIntentService =
       const BackupImportIntentService();
   final AppUpdateService _appUpdateService = const AppUpdateService();
+  final FileAppUpdateDownloadLineStore _appUpdateLineStore =
+      const FileAppUpdateDownloadLineStore();
   _HomeStats? _stats;
   bool _loadingStats = true;
   bool _handlingIntentImport = false;
@@ -570,6 +572,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => _DebugLogSheet(
         report: report,
         onCheckUpdate: _checkForUpdateFromLogPanel,
+        onManageUpdateLines: _openUpdateLineManager,
         onCopy: (latestReport) async {
           await Clipboard.setData(ClipboardData(text: latestReport.rawText));
           if (!context.mounted) return;
@@ -879,6 +882,264 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _buildDebugReport();
   }
 
+  Future<void> _openUpdateLineManager() async {
+    var config = await _appUpdateLineStore.load();
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> saveConfig(AppUpdateDownloadLineConfig next) async {
+            config = next;
+            await _appUpdateLineStore.save(next);
+            DebugEventLog.add(
+              'APP_UPDATE',
+              'line_config_saved lines=${next.lines.length} default=${next.defaultLineId}',
+            );
+            if (dialogContext.mounted) {
+              setDialogState(() {});
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('下载线路管理'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '默认线路会优先尝试；失败、过慢或手动换源时继续使用下面其他线路。',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    for (final line in config.lines)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          onTap: () async {
+                            await saveConfig(
+                              config.copyWith(defaultLineId: line.id),
+                            );
+                          },
+                          leading: Icon(
+                            line.id == config.defaultLineId
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_off_rounded,
+                            color: line.id == config.defaultLineId
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.outline,
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  line.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                line.builtIn ? '内置' : '自定义',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            line.prefix.isEmpty
+                                ? '官方 GitHub 下载地址'
+                                : line.prefix,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: IconButton(
+                            tooltip: '删除线路',
+                            onPressed: config.lines.length <= 1
+                                ? null
+                                : () async {
+                                    final confirmed =
+                                        await _confirmDeleteUpdateLine(
+                                      context,
+                                      line,
+                                    );
+                                    if (confirmed != true) {
+                                      return;
+                                    }
+                                    await saveConfig(
+                                      config.removeLine(line.id),
+                                    );
+                                  },
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () async {
+                  await saveConfig(AppUpdateDownloadLineConfig.defaults());
+                },
+                icon: const Icon(Icons.restore_rounded),
+                label: const Text('恢复默认'),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final line = await _showAddUpdateLineDialog(
+                    dialogContext,
+                    config,
+                  );
+                  if (line == null) {
+                    return;
+                  }
+                  await saveConfig(
+                    config.addCustomLine(prefix: line.prefix, name: line.name),
+                  );
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('新增线路'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('完成'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<AppUpdateDownloadLine?> _showAddUpdateLineDialog(
+    BuildContext context,
+    AppUpdateDownloadLineConfig config,
+  ) async {
+    final nameController = TextEditingController();
+    final prefixController = TextEditingController();
+    String? errorText;
+    try {
+      return await showDialog<AppUpdateDownloadLine>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            String? validatePrefix() {
+              final normalized = normalizeAppUpdateDownloadLinePrefix(
+                prefixController.text,
+              );
+              if (normalized.isEmpty) {
+                return '请输入代理前缀';
+              }
+              final uri = Uri.tryParse(normalized);
+              if (uri == null ||
+                  uri.host.isEmpty ||
+                  (uri.scheme != 'http' && uri.scheme != 'https')) {
+                return '请输入 http 或 https 开头的地址';
+              }
+              if (config.lines.any((line) => line.id == normalized)) {
+                return '这条线路已经存在';
+              }
+              return null;
+            }
+
+            return AlertDialog(
+              title: const Text('新增下载线路'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: '名称',
+                      hintText: '例如：备用加速',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: prefixController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: '代理前缀',
+                      hintText: 'https://gh-proxy.com/',
+                      helperText: '会自动拼接 GitHub APK 下载地址',
+                      errorText: errorText,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final error = validatePrefix();
+                    if (error != null) {
+                      setDialogState(() => errorText = error);
+                      return;
+                    }
+                    Navigator.of(context).pop(
+                      AppUpdateDownloadLine.custom(
+                        prefix: prefixController.text,
+                        name: nameController.text,
+                      ),
+                    );
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      nameController.dispose();
+      prefixController.dispose();
+    }
+  }
+
+  Future<bool> _confirmDeleteUpdateLine(
+    BuildContext context,
+    AppUpdateDownloadLine line,
+  ) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('删除下载线路'),
+            content: Text('确定删除“${line.name}”吗？删除后可用“恢复默认”找回内置线路。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<_DebugLogReport> _buildDebugReport() async {
     final buffer = StringBuffer();
     String dbStatus = '正常';
@@ -1046,11 +1307,13 @@ class _DebugLogSheet extends StatefulWidget {
   const _DebugLogSheet({
     required this.report,
     required this.onCheckUpdate,
+    required this.onManageUpdateLines,
     required this.onCopy,
   });
 
   final _DebugLogReport report;
   final Future<_DebugLogReport> Function() onCheckUpdate;
+  final Future<void> Function() onManageUpdateLines;
   final Future<void> Function(_DebugLogReport report) onCopy;
 
   @override
@@ -1197,6 +1460,15 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
                         )
                       : const Icon(Icons.system_update_alt_rounded),
                   label: Text(_checkingUpdate ? '正在检查更新' : '检查更新'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: widget.onManageUpdateLines,
+                  icon: const Icon(Icons.route_rounded),
+                  label: const Text('下载线路'),
                 ),
               ),
               const SizedBox(height: 8),

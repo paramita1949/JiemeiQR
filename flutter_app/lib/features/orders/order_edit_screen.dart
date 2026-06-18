@@ -62,6 +62,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   List<ProductInventoryOption> _productOptions = const [];
   List<Product> _products = const [];
   List<AvailableBatch> _availableBatches = const [];
+  List<String> _merchantHistoryNames = const [];
   Map<String, List<String>> _batchCodesByProductDate = const {};
   AiOcrConfig _aiConfig = const AiOcrConfig(
     provider: AiOcrConfig.defaultProvider,
@@ -292,6 +293,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
 
   Future<_OrderEditState> _loadState() async {
     final merchants = await _orderDao.recentMerchantNames(limit: 1000);
+    _merchantHistoryNames = merchants;
     _batchCodesByProductDate = await _productDao.batchCodesByProductDate();
     _productOptions = await _productDao.productsForOrderEntry();
     _products = _productOptions.map((option) => option.product).toList();
@@ -748,7 +750,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     try {
       _setOcrProgress('正在上传图片至${_ocrProviderLabel(_aiConfig)}，等待识别...');
       final recognizeStopwatch = Stopwatch()..start();
-      final draft = await _effectiveOcrService.recognize(image);
+      final draft = await _effectiveOcrService.recognize(
+        image,
+        merchantHistoryNames: _merchantHistoryNames,
+      );
       recognizeStopwatch.stop();
       DebugEventLog.add(
         'AI_OCR_TIMING',

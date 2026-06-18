@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
+import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_diagnostics.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_text_parser.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -95,13 +97,25 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       fields: _extractHeaderFields(fullText),
       fullText: fullText,
     );
-    return WaybillOcrDraft(
+    final merchantResolution = _resolvePaddleMerchantName(
+      rawMerchantName: textDraft.merchantName,
+      historyNames: merchantHistoryNames,
+    );
+    final draft = WaybillOcrDraft(
       waybillNo: textDraft.waybillNo,
-      merchantName: textDraft.merchantName,
+      merchantName: merchantResolution.name,
+      rawMerchantName: merchantResolution.rawName,
+      matchedHistoryMerchant: merchantResolution.matchedHistoryMerchant,
+      merchantConfidence:
+          merchantResolution.matchedHistoryMerchant.isEmpty ? '' : 'high',
+      merchantMatchReason:
+          merchantResolution.matchedHistoryMerchant.isEmpty ? '' : '历史商家简称匹配',
       orderDateText: textDraft.orderDateText,
       rows: extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows,
       warnings: textDraft.warnings,
     );
+    logOcrMerchantDiagnosis(provider: 'paddleocr', draft: draft);
+    return draft;
   }
 
   Future<String> _waitForResultUrl({
@@ -243,34 +257,53 @@ Map<String, String> _extractHeaderFields(String fullText) {
 
 List<WaybillOcrRow> _parseRowsFromCells(List<String> cells) {
   final rows = <WaybillOcrRow>[];
-  for (var i = 0; i < cells.length - 3; i += 1) {
+  for (var i = 0; i < cells.length - 2; i += 1) {
     final productCode = cells[i].trim();
     if (!_isProductCode(productCode)) {
       continue;
     }
-    final productName = cells[i + 1].trim();
-    final actualBatch = cells[i + 2].trim();
-    final dateBatch = cells[i + 3].trim();
-    if (productName.isEmpty ||
-        !_isBatchCode(actualBatch) ||
-        !_isDateText(dateBatch)) {
+    final row = _parseRowStartingAtProductCode(cells, i, productCode);
+    if (row != null) {
+      rows.add(row);
+    }
+  }
+  return rows;
+}
+
+WaybillOcrRow? _parseRowStartingAtProductCode(
+  List<String> cells,
+  int productIndex,
+  String productCode,
+) {
+  final maxBatchIndex =
+      productIndex + 9 < cells.length - 1 ? productIndex + 9 : cells.length - 1;
+  for (var batchIndex = productIndex + 2;
+      batchIndex < maxBatchIndex;
+      batchIndex += 1) {
+    final actualBatch = _normalizedBatchCode(cells[batchIndex]);
+    final dateBatch = cells[batchIndex + 1].trim();
+    if (!_isBatchCode(actualBatch) || !_isDateText(dateBatch)) {
       continue;
     }
-    final boxes = _boxesAfterDate(cells, i + 4);
+    final productName = _joinProductNameCells(
+      cells.sublist(productIndex + 1, batchIndex),
+    );
+    if (productName.isEmpty) {
+      continue;
+    }
+    final boxes = _boxesAfterDate(cells, batchIndex + 2);
     if (boxes <= 0) {
       continue;
     }
-    rows.add(
-      WaybillOcrRow(
-        productCode: productCode,
-        productName: productName,
-        actualBatch: actualBatch,
-        dateBatch: dateBatch,
-        boxes: boxes,
-      ),
+    return WaybillOcrRow(
+      productCode: productCode,
+      productName: productName,
+      actualBatch: actualBatch,
+      dateBatch: dateBatch,
+      boxes: boxes,
     );
   }
-  return rows;
+  return null;
 }
 
 List<WaybillOcrRow> _parseRowsFromHtmlTables(String text) {
@@ -320,7 +353,7 @@ WaybillOcrRow? _rowFromMappedCells(List<String> headers, List<String> cells) {
 
   final productCode = cell('产品码');
   final productName = cell('产品名称');
-  final actualBatch = cell('批号');
+  final actualBatch = _normalizedBatchCode(cell('批号'));
   final dateBatch = cell('截止日期');
   final boxes = int.tryParse(cell('箱数').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
   if (!_isProductCode(productCode) ||
@@ -373,13 +406,234 @@ int? _integerCell(String value) {
 
 bool _isProductCode(String value) => RegExp(r'^\d{4,6}$').hasMatch(value);
 
-bool _isBatchCode(String value) => RegExp(r'^[A-Z0-9]{5,}$').hasMatch(value);
+bool _isBatchCode(String value) =>
+    RegExp(r'^[A-Z0-9]{5,}$').hasMatch(_normalizedBatchCode(value));
+
+String _normalizedBatchCode(String value) =>
+    value.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
 
 bool _isDateText(String value) =>
     RegExp(r'^\d{4}[.\-/年]\d{1,2}[.\-/月]\d{1,2}日?$').hasMatch(value);
 
 bool _isWarehouseLocation(String value) =>
     RegExp(r'^[A-Z]{1,4}\d{1,3}$', caseSensitive: false).hasMatch(value);
+
+String _joinProductNameCells(List<String> cells) {
+  return cells
+      .map((cell) => cell.trim())
+      .where((cell) => cell.isNotEmpty)
+      .where((cell) => !_isProductNameNoise(cell))
+      .join();
+}
+
+bool _isProductNameNoise(String value) {
+  const noiseValues = {
+    '产品码',
+    '产品名称',
+    '批号',
+    '截止日期',
+    '库位',
+    '规格',
+    '箱数',
+    '零数',
+    '备注',
+    '扫描',
+    '收货',
+    'TS',
+  };
+  return noiseValues.contains(value.trim());
+}
+
+_PaddleMerchantResolution _resolvePaddleMerchantName({
+  required String rawMerchantName,
+  required Iterable<String> historyNames,
+}) {
+  final rawName = rawMerchantName.trim();
+  if (rawName.isEmpty) {
+    return const _PaddleMerchantResolution(
+      name: '',
+      rawName: '',
+      matchedHistoryMerchant: '',
+    );
+  }
+
+  final historyFromRaw = resolveMerchantNameFromHistory(
+    recognizedName: rawName,
+    historyNames: historyNames,
+  );
+  if (historyFromRaw != rawName) {
+    return _PaddleMerchantResolution(
+      name: historyFromRaw,
+      rawName: rawName,
+      matchedHistoryMerchant: historyFromRaw,
+    );
+  }
+
+  final shortened = _shortenPaddleMerchantName(rawName);
+  final candidate = shortened.isEmpty ? rawName : shortened;
+  final historyFromShortened = resolveMerchantNameFromHistory(
+    recognizedName: candidate,
+    historyNames: historyNames,
+  );
+  return _PaddleMerchantResolution(
+    name: historyFromShortened,
+    rawName: rawName,
+    matchedHistoryMerchant:
+        historyFromShortened == candidate ? '' : historyFromShortened,
+  );
+}
+
+String _shortenPaddleMerchantName(String value) {
+  var text = value
+      .trim()
+      .replaceAll(RegExp(r'\s+'), '')
+      .replaceAll(RegExp(r'[（(][^）)]*[）)]'), '')
+      .replaceFirst(RegExp(r'二级.*$'), '');
+  text = _normalizePaddleMerchantSuffix(text);
+  text = _stripPaddleMerchantAdministrativePrefix(text);
+  text = _normalizePaddleMerchantSuffix(text);
+  return text.length >= 2 ? text : value.trim();
+}
+
+String _normalizePaddleMerchantSuffix(String value) {
+  var text = value.trim();
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (final replacement in _paddleMerchantSuffixReplacements.entries) {
+      final suffix = replacement.key;
+      if (!text.endsWith(suffix) || text.length <= suffix.length) {
+        continue;
+      }
+      text = text.substring(0, text.length - suffix.length) + replacement.value;
+      changed = true;
+      break;
+    }
+  }
+  return text;
+}
+
+String _stripPaddleMerchantAdministrativePrefix(String value) {
+  var text = value.trim();
+  var changed = true;
+  while (changed) {
+    changed = false;
+    final markedPrefix =
+        RegExp(r'^[\u4e00-\u9fa5]{2,8}(省|市|县|区|镇|乡|街道|街)').firstMatch(text);
+    if (markedPrefix != null && text.length > markedPrefix.end + 1) {
+      text = text.substring(markedPrefix.end);
+      changed = true;
+      continue;
+    }
+    for (final prefix in _paddleMerchantAdministrativePrefixes) {
+      if (text.startsWith(prefix) && text.length > prefix.length + 1) {
+        text = text.substring(prefix.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return text;
+}
+
+const _paddleMerchantSuffixReplacements = {
+  '贸易发展有限公司': '贸易',
+  '日用品有限公司': '日用',
+  '日用品商行': '日用',
+  '日用品经营部': '日用',
+  '日用品': '日用',
+  '化妆品经营部': '',
+  '有限责任公司': '',
+  '股份有限公司': '',
+  '有限公司': '',
+  '商贸公司': '商贸',
+  '贸易公司': '贸易',
+  '经销商': '',
+  '经营部': '',
+  '商行': '',
+  '公司': '',
+  '客户': '',
+};
+
+const _paddleMerchantAdministrativePrefixes = [
+  '黑龙江省',
+  '内蒙古',
+  '浙江省',
+  '上海市',
+  '北京市',
+  '天津市',
+  '重庆市',
+  '杭州市',
+  '宁波市',
+  '温州市',
+  '嘉兴市',
+  '湖州市',
+  '绍兴市',
+  '金华市',
+  '衢州市',
+  '舟山市',
+  '台州市',
+  '丽水市',
+  '义乌市',
+  '永康市',
+  '龙游县',
+  '黑龙江',
+  '浙江',
+  '江苏',
+  '安徽',
+  '福建',
+  '江西',
+  '山东',
+  '河南',
+  '湖北',
+  '湖南',
+  '广东',
+  '广西',
+  '海南',
+  '四川',
+  '贵州',
+  '云南',
+  '陕西',
+  '甘肃',
+  '青海',
+  '宁夏',
+  '新疆',
+  '西藏',
+  '辽宁',
+  '吉林',
+  '河北',
+  '山西',
+  '北京',
+  '上海',
+  '天津',
+  '重庆',
+  '杭州',
+  '宁波',
+  '温州',
+  '嘉兴',
+  '湖州',
+  '绍兴',
+  '金华',
+  '衢州',
+  '舟山',
+  '台州',
+  '丽水',
+  '义乌',
+  '永康',
+  '龙游',
+];
+
+class _PaddleMerchantResolution {
+  const _PaddleMerchantResolution({
+    required this.name,
+    required this.rawName,
+    required this.matchedHistoryMerchant,
+  });
+
+  final String name;
+  final String rawName;
+  final String matchedHistoryMerchant;
+}
 
 List<WaybillOcrRow> _dedupeRows(List<WaybillOcrRow> rows) {
   final seen = <String>{};

@@ -44,6 +44,197 @@ typedef AppUpdateDownloadStatusChanged = void Function(
   AppUpdateDownloadStatus status,
 );
 
+class AppUpdateDownloadLine {
+  const AppUpdateDownloadLine({
+    required this.id,
+    required this.name,
+    required this.prefix,
+    required this.builtIn,
+  });
+
+  const AppUpdateDownloadLine.official()
+      : id = AppUpdateDownloadLineConfig.officialLineId,
+        name = '官方地址',
+        prefix = '',
+        builtIn = true;
+
+  factory AppUpdateDownloadLine.custom({
+    required String prefix,
+    String? name,
+  }) {
+    final normalizedPrefix = normalizeAppUpdateDownloadLinePrefix(prefix);
+    final uri = Uri.tryParse(normalizedPrefix);
+    return AppUpdateDownloadLine(
+      id: normalizedPrefix,
+      name: name?.trim().isNotEmpty == true
+          ? name!.trim()
+          : uri?.host.isNotEmpty == true
+              ? uri!.host
+              : normalizedPrefix,
+      prefix: normalizedPrefix,
+      builtIn: false,
+    );
+  }
+
+  factory AppUpdateDownloadLine.fromJson(Map<String, Object?> json) {
+    return AppUpdateDownloadLine(
+      id: json['id']?.toString().trim() ?? '',
+      name: json['name']?.toString().trim() ?? '',
+      prefix: normalizeAppUpdateDownloadLinePrefix(
+        json['prefix']?.toString() ?? '',
+      ),
+      builtIn: json['builtIn'] == true,
+    );
+  }
+
+  final String id;
+  final String name;
+  final String prefix;
+  final bool builtIn;
+
+  Uri resolve(String officialUrl) {
+    final normalized = officialUrl.trim();
+    return Uri.parse(prefix.isEmpty ? normalized : '$prefix$normalized');
+  }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'prefix': prefix,
+        'builtIn': builtIn,
+      };
+}
+
+class AppUpdateDownloadLineConfig {
+  const AppUpdateDownloadLineConfig({
+    required this.lines,
+    required this.defaultLineId,
+  });
+
+  factory AppUpdateDownloadLineConfig.defaults() {
+    return AppUpdateDownloadLineConfig(
+      lines: defaultAppUpdateDownloadLines(),
+      defaultLineId: officialLineId,
+    );
+  }
+
+  factory AppUpdateDownloadLineConfig.fromJson(Map<String, Object?> json) {
+    final rawLines = json['lines'];
+    final decodedLines = rawLines is List
+        ? rawLines
+            .whereType<Map>()
+            .map(
+              (line) => AppUpdateDownloadLine.fromJson(
+                Map<String, Object?>.from(line),
+              ),
+            )
+            .where((line) => line.id.trim().isNotEmpty)
+            .toList(growable: false)
+        : const <AppUpdateDownloadLine>[];
+    final lines =
+        decodedLines.isEmpty ? defaultAppUpdateDownloadLines() : decodedLines;
+    final requestedDefault = json['defaultLineId']?.toString().trim();
+    final defaultLineId = lines.any((line) => line.id == requestedDefault)
+        ? requestedDefault!
+        : lines.first.id;
+    return AppUpdateDownloadLineConfig(
+      lines: lines,
+      defaultLineId: defaultLineId,
+    );
+  }
+
+  static const officialLineId = 'official';
+
+  final List<AppUpdateDownloadLine> lines;
+  final String defaultLineId;
+
+  AppUpdateDownloadLineConfig copyWith({
+    List<AppUpdateDownloadLine>? lines,
+    String? defaultLineId,
+  }) {
+    final nextLines = lines ?? this.lines;
+    final requestedDefault = defaultLineId ?? this.defaultLineId;
+    return AppUpdateDownloadLineConfig(
+      lines: nextLines,
+      defaultLineId: nextLines.any((line) => line.id == requestedDefault)
+          ? requestedDefault
+          : nextLines.isNotEmpty
+              ? nextLines.first.id
+              : AppUpdateDownloadLineConfig.officialLineId,
+    );
+  }
+
+  AppUpdateDownloadLineConfig addCustomLine({
+    required String prefix,
+    String? name,
+  }) {
+    final line = AppUpdateDownloadLine.custom(prefix: prefix, name: name);
+    final nextLines = [
+      for (final existing in lines)
+        if (existing.id != line.id) existing,
+      line,
+    ];
+    return copyWith(lines: nextLines);
+  }
+
+  AppUpdateDownloadLineConfig removeLine(String id) {
+    if (lines.length <= 1) {
+      return this;
+    }
+    final nextLines = [
+      for (final line in lines)
+        if (line.id != id) line,
+    ];
+    if (nextLines.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      lines: nextLines,
+      defaultLineId: defaultLineId == id ? nextLines.first.id : defaultLineId,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'defaultLineId': defaultLineId,
+        'lines': lines.map((line) => line.toJson()).toList(growable: false),
+      };
+}
+
+typedef AppUpdateDownloadLineSettingsFileProvider = Future<File> Function();
+
+class FileAppUpdateDownloadLineStore {
+  const FileAppUpdateDownloadLineStore({
+    AppUpdateDownloadLineSettingsFileProvider? settingsFileProvider,
+  }) : _settingsFileProvider =
+            settingsFileProvider ?? _defaultDownloadLineSettingsFile;
+
+  final AppUpdateDownloadLineSettingsFileProvider _settingsFileProvider;
+
+  Future<AppUpdateDownloadLineConfig> load() async {
+    final file = await _settingsFileProvider();
+    if (!await file.exists()) {
+      return AppUpdateDownloadLineConfig.defaults();
+    }
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is Map<String, Object?>) {
+        return AppUpdateDownloadLineConfig.fromJson(decoded);
+      }
+    } catch (_) {
+      // Invalid settings should not block update checks.
+    }
+    return AppUpdateDownloadLineConfig.defaults();
+  }
+
+  Future<void> save(AppUpdateDownloadLineConfig config) async {
+    final file = await _settingsFileProvider();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(jsonEncode(config.toJson()));
+  }
+
+  Future<void> reset() => save(AppUpdateDownloadLineConfig.defaults());
+}
+
 class AppUpdateDownloadSwitchController {
   final _requests = StreamController<void>.broadcast();
   var _disposed = false;
@@ -70,10 +261,12 @@ class AppUpdateService {
   const AppUpdateService({
     this.owner = 'paramita1949',
     this.repo = 'JiemeiQR',
+    this.lineStore = const FileAppUpdateDownloadLineStore(),
   });
 
   final String owner;
   final String repo;
+  final FileAppUpdateDownloadLineStore lineStore;
 
   static const _channel = MethodChannel('com.jiemei.hualushui/app_update');
 
@@ -130,21 +323,26 @@ class AppUpdateService {
         : 'jiemei-${info.latestVersion}.apk';
     final file = File(p.join(updatesDir.path, fileName));
     AppUpdateException? lastError;
-    final candidates = appUpdateDownloadUris(info.apkUrl);
+    final lineConfig = await lineStore.load();
+    final candidates = appUpdateDownloadUris(info.apkUrl, config: lineConfig);
     onStatus?.call(
       AppUpdateDownloadStatus(
-        message: _downloadCandidatesMessage(candidates, info.apkUrl),
+        message: _downloadCandidatesMessage(
+          candidates,
+          info.apkUrl,
+          config: lineConfig,
+        ),
       ),
     );
-    final uris = await _prioritizeDownloadUris(
-      candidates,
-      officialUrl: info.apkUrl,
-      onStatus: onStatus,
-    );
+    final uris = candidates;
 
     for (var index = 0; index < uris.length; index += 1) {
       final uri = uris[index];
-      final label = appUpdateDownloadUriLabel(uri, officialUrl: info.apkUrl);
+      final label = appUpdateDownloadLineLabel(
+        uri,
+        officialUrl: info.apkUrl,
+        config: lineConfig,
+      );
       final canSwitchLine = switchController != null && index < uris.length - 1;
       onStatus?.call(
         AppUpdateDownloadStatus(
@@ -486,27 +684,79 @@ List<int> _versionParts(String version) {
       .toList(growable: false);
 }
 
-List<Uri> appUpdateDownloadUris(String officialUrl) {
+List<Uri> appUpdateDownloadUris(
+  String officialUrl, {
+  AppUpdateDownloadLineConfig? config,
+}) {
   final normalized = officialUrl.trim();
   if (normalized.isEmpty) {
     return const [];
   }
-  return [
-    normalized,
-    for (final proxy in _githubDownloadProxyPrefixes) '$proxy$normalized',
-  ].map(Uri.parse).toList(growable: false);
+  final lineConfig = config ?? AppUpdateDownloadLineConfig.defaults();
+  return _orderedAppUpdateDownloadLines(lineConfig)
+      .map((line) => line.resolve(normalized))
+      .toList(growable: false);
 }
 
 String appUpdateDownloadUriLabel(Uri uri, {String? officialUrl}) {
+  return appUpdateDownloadLineLabel(uri, officialUrl: officialUrl);
+}
+
+String appUpdateDownloadLineLabel(
+  Uri uri, {
+  String? officialUrl,
+  AppUpdateDownloadLineConfig? config,
+}) {
   if (officialUrl != null && uri.toString() == officialUrl.trim()) {
+    for (final line
+        in (config ?? AppUpdateDownloadLineConfig.defaults()).lines) {
+      if (line.id == AppUpdateDownloadLineConfig.officialLineId) {
+        return line.name;
+      }
+    }
     return '官方地址';
   }
-  for (final proxy in _githubDownloadProxyPrefixes) {
-    if (uri.toString().startsWith(proxy)) {
-      return Uri.parse(proxy).host;
+  for (final line in (config ?? AppUpdateDownloadLineConfig.defaults()).lines) {
+    if (line.prefix.isNotEmpty && uri.toString().startsWith(line.prefix)) {
+      return line.name;
     }
   }
   return uri.host.isNotEmpty ? uri.host : uri.toString();
+}
+
+List<AppUpdateDownloadLine> defaultAppUpdateDownloadLines() {
+  return [
+    const AppUpdateDownloadLine.official(),
+    for (final proxy in _githubDownloadProxyPrefixes)
+      AppUpdateDownloadLine(
+        id: proxy,
+        name: Uri.parse(proxy).host,
+        prefix: proxy,
+        builtIn: true,
+      ),
+  ];
+}
+
+String normalizeAppUpdateDownloadLinePrefix(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return trimmed.endsWith('/') ? trimmed : '$trimmed/';
+}
+
+List<AppUpdateDownloadLine> _orderedAppUpdateDownloadLines(
+  AppUpdateDownloadLineConfig config,
+) {
+  final defaultLines = [
+    for (final line in config.lines)
+      if (line.id == config.defaultLineId) line,
+  ];
+  return [
+    ...defaultLines,
+    for (final line in config.lines)
+      if (line.id != config.defaultLineId) line,
+  ];
 }
 
 typedef AppUpdateDownloadProbe = Future<void> Function(Uri uri);
@@ -549,50 +799,32 @@ Future<Uri> chooseFastestAppUpdateDownloadUri(
   return completer.future;
 }
 
-Future<List<Uri>> _prioritizeDownloadUris(
-  List<Uri> uris, {
-  required String officialUrl,
-  AppUpdateDownloadStatusChanged? onStatus,
-}) async {
-  if (uris.length <= 1) {
-    return uris;
-  }
-  onStatus?.call(
-    AppUpdateDownloadStatus(message: '正在测速：${uris.length} 条下载线路'),
-  );
-  try {
-    final fastest = await chooseFastestAppUpdateDownloadUri(uris);
-    onStatus?.call(
-      AppUpdateDownloadStatus(
-        message:
-            '测速完成，优先使用 ${appUpdateDownloadUriLabel(fastest, officialUrl: officialUrl)}',
-        uri: fastest,
-      ),
-    );
-    return orderAppUpdateDownloadUrisAfterProbeForTesting(
-      uris,
-      fastest: fastest,
-      officialUrl: officialUrl,
-    );
-  } on Object {
-    onStatus?.call(
-      const AppUpdateDownloadStatus(message: '测速失败，按默认顺序自动尝试'),
-    );
-    return uris;
-  }
-}
-
-String _downloadCandidatesMessage(List<Uri> uris, String officialUrl) {
+String _downloadCandidatesMessage(
+  List<Uri> uris,
+  String officialUrl, {
+  AppUpdateDownloadLineConfig? config,
+}) {
   if (uris.isEmpty) {
     return '没有可用下载线路';
   }
   final labels = uris
-      .map((uri) => appUpdateDownloadUriLabel(uri, officialUrl: officialUrl))
+      .map(
+        (uri) => appUpdateDownloadLineLabel(
+          uri,
+          officialUrl: officialUrl,
+          config: config,
+        ),
+      )
       .toList(growable: false);
   if (labels.length <= 4) {
     return '候选线路：${labels.join('、')}';
   }
   return '候选线路：${labels.take(4).join('、')} 等 ${labels.length} 条';
+}
+
+Future<File> _defaultDownloadLineSettingsFile() async {
+  final directory = await getApplicationSupportDirectory();
+  return File(p.join(directory.path, 'app_update_download_lines.json'));
 }
 
 @visibleForTesting
