@@ -6,6 +6,7 @@ class WaybillOcrDraft {
     required this.merchantName,
     required this.orderDateText,
     required this.rows,
+    this.totalBoxes = 0,
     this.rawMerchantName = '',
     this.matchedHistoryMerchant = '',
     this.merchantConfidence = '',
@@ -21,6 +22,7 @@ class WaybillOcrDraft {
   final String merchantMatchReason;
   final String orderDateText;
   final List<WaybillOcrRow> rows;
+  final int totalBoxes;
   final List<String> warnings;
 
   factory WaybillOcrDraft.fromJson(Map<String, Object?> json) {
@@ -33,6 +35,23 @@ class WaybillOcrDraft {
             .toList()
         : const <WaybillOcrRow>[];
     final warningValues = json['warnings'];
+    final warnings = warningValues is List
+        ? warningValues
+            .map(_stringValue)
+            .where((value) => value.isNotEmpty)
+            .toList()
+        : <String>[];
+    final totalBoxes = _intValue(
+      json['totalBoxes'] ??
+          json['totalBoxCount'] ??
+          json['totalQuantity'] ??
+          json['recognizedTotalBoxes'],
+    );
+    _appendBoxTotalWarning(
+      warnings: warnings,
+      rows: rows,
+      totalBoxes: totalBoxes,
+    );
     return WaybillOcrDraft(
       waybillNo: _stringValue(json['waybillNo']),
       merchantName: _stringValue(json['merchantName']),
@@ -42,12 +61,8 @@ class WaybillOcrDraft {
       merchantMatchReason: _stringValue(json['merchantMatchReason']),
       orderDateText: _stringValue(json['orderDate']),
       rows: rows,
-      warnings: warningValues is List
-          ? warningValues
-              .map(_stringValue)
-              .where((value) => value.isNotEmpty)
-              .toList()
-          : const <String>[],
+      totalBoxes: totalBoxes,
+      warnings: warnings,
     );
   }
 }
@@ -155,4 +170,22 @@ int _intValue(Object? value) {
   }
   final text = _stringValue(value).replaceAll(RegExp(r'[^0-9]'), '');
   return int.tryParse(text) ?? 0;
+}
+
+void _appendBoxTotalWarning({
+  required List<String> warnings,
+  required List<WaybillOcrRow> rows,
+  required int totalBoxes,
+}) {
+  if (totalBoxes <= 0) {
+    return;
+  }
+  final rowTotal = rows.fold<int>(0, (sum, row) => sum + row.boxes);
+  if (rowTotal == totalBoxes) {
+    return;
+  }
+  final warning = '明细箱数合计$rowTotal箱，与图片总计$totalBoxes箱不一致';
+  if (!warnings.contains(warning)) {
+    warnings.add(warning);
+  }
 }

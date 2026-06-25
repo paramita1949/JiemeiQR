@@ -118,6 +118,9 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       rawMerchantName: textDraft.merchantName,
       historyNames: merchantHistoryNames,
     );
+    final rows = extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows;
+    final totalBoxes =
+        extracted.totalBoxes > 0 ? extracted.totalBoxes : textDraft.totalBoxes;
     final draft = WaybillOcrDraft(
       waybillNo: textDraft.waybillNo,
       merchantName: merchantResolution.name,
@@ -128,8 +131,13 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       merchantMatchReason:
           merchantResolution.matchedHistoryMerchant.isEmpty ? '' : '历史商家简称匹配',
       orderDateText: textDraft.orderDateText,
-      rows: extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows,
-      warnings: textDraft.warnings,
+      rows: rows,
+      totalBoxes: totalBoxes,
+      warnings: _warningsWithBoxTotalCheck(
+        warnings: textDraft.warnings,
+        rows: rows,
+        totalBoxes: totalBoxes,
+      ),
     );
     logOcrMerchantDiagnosis(provider: 'paddleocr', draft: draft);
     return draft;
@@ -202,6 +210,7 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
   _PaddleOcrExtractedResult _extractResult(String jsonl) {
     final lines = <String>[];
     final rows = <WaybillOcrRow>[];
+    var totalBoxes = 0;
     for (final rawLine in jsonl.split('\n')) {
       final line = rawLine.trim();
       if (line.isEmpty) {
@@ -243,6 +252,12 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
           if (markdownText.isNotEmpty) {
             lines.add(markdownText);
             rows.addAll(_parseRowsFromHtmlTables(markdownText));
+            final tableTotals = _parseTotalsFromHtmlTables(markdownText);
+            if (tableTotals.grandTotalBoxes > 0) {
+              totalBoxes = tableTotals.grandTotalBoxes;
+            } else if (totalBoxes == 0 && tableTotals.pageTotalBoxes > 0) {
+              totalBoxes = tableTotals.pageTotalBoxes;
+            }
           }
         }
       }
@@ -250,6 +265,7 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
     return _PaddleOcrExtractedResult(
       lines: lines,
       rows: _dedupeRows(rows),
+      totalBoxes: totalBoxes,
     );
   }
 }
@@ -258,10 +274,12 @@ class _PaddleOcrExtractedResult {
   const _PaddleOcrExtractedResult({
     required this.lines,
     required this.rows,
+    required this.totalBoxes,
   });
 
   final List<String> lines;
   final List<WaybillOcrRow> rows;
+  final int totalBoxes;
 }
 
 void _reportPaddleProgress(
@@ -367,6 +385,55 @@ List<WaybillOcrRow> _parseRowsFromHtmlTables(String text) {
   return rows;
 }
 
+_HtmlTableTotals _parseTotalsFromHtmlTables(String text) {
+  final rowPattern = RegExp(
+    r'<tr\b[^>]*>(.*?)</tr>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  final cellPattern = RegExp(
+    r'<t[dh]\b[^>]*>(.*?)</t[dh]>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  List<String>? headers;
+  var pageTotalBoxes = 0;
+  var grandTotalBoxes = 0;
+  for (final rowMatch in rowPattern.allMatches(text)) {
+    final cells = cellPattern
+        .allMatches(rowMatch.group(1) ?? '')
+        .map((match) => _stripHtml(match.group(1) ?? ''))
+        .toList();
+    if (cells.isEmpty) {
+      continue;
+    }
+    if (headers == null && cells.any((cell) => cell.contains('产品码'))) {
+      headers = cells;
+      continue;
+    }
+    if (headers == null) {
+      continue;
+    }
+    final rowText = cells.join(' ');
+    if (!rowText.contains('页小计') && !rowText.contains('总计')) {
+      continue;
+    }
+    final boxes = _totalBoxesFromMappedCells(headers, cells);
+    if (boxes <= 0) {
+      continue;
+    }
+    if (rowText.contains('总计')) {
+      grandTotalBoxes = boxes;
+    } else if (rowText.contains('页小计')) {
+      pageTotalBoxes = boxes;
+    }
+  }
+  return _HtmlTableTotals(
+    pageTotalBoxes: pageTotalBoxes,
+    grandTotalBoxes: grandTotalBoxes,
+  );
+}
+
 WaybillOcrRow? _rowFromMappedCells(List<String> headers, List<String> cells) {
   String cell(String header) {
     final index = headers.indexWhere((item) => item.contains(header));
@@ -395,6 +462,50 @@ WaybillOcrRow? _rowFromMappedCells(List<String> headers, List<String> cells) {
     dateBatch: dateBatch,
     boxes: boxes,
   );
+}
+
+int _totalBoxesFromMappedCells(List<String> headers, List<String> cells) {
+  final boxesIndex = headers.indexWhere((item) => item.contains('箱数'));
+  if (boxesIndex >= 0 && boxesIndex < cells.length) {
+    final boxes = int.tryParse(
+          cells[boxesIndex].replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        0;
+    if (boxes > 0) {
+      return boxes;
+    }
+  }
+  final labelIndex = cells.indexWhere(
+    (cell) => cell.contains('页小计') || cell.contains('总计'),
+  );
+  final searchCells = labelIndex >= 0 ? cells.skip(labelIndex + 1) : cells;
+  for (final cell in searchCells) {
+    final value = int.tryParse(cell.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    if (value > 0) {
+      return value;
+    }
+  }
+  return 0;
+}
+
+List<String> _warningsWithBoxTotalCheck({
+  required List<String> warnings,
+  required List<WaybillOcrRow> rows,
+  required int totalBoxes,
+}) {
+  final checked = warnings.toList();
+  if (totalBoxes <= 0) {
+    return checked;
+  }
+  final rowTotal = rows.fold<int>(0, (sum, row) => sum + row.boxes);
+  if (rowTotal == totalBoxes) {
+    return checked;
+  }
+  final warning = '明细箱数合计$rowTotal箱，与图片总计$totalBoxes箱不一致';
+  if (!checked.contains(warning)) {
+    checked.add(warning);
+  }
+  return checked;
 }
 
 bool _isProductCode(String value) => RegExp(r'^\d{4,6}$').hasMatch(value);
@@ -597,6 +708,16 @@ class _PaddleMerchantResolution {
   final String name;
   final String rawName;
   final String matchedHistoryMerchant;
+}
+
+class _HtmlTableTotals {
+  const _HtmlTableTotals({
+    required this.pageTotalBoxes,
+    required this.grandTotalBoxes,
+  });
+
+  final int pageTotalBoxes;
+  final int grandTotalBoxes;
 }
 
 List<WaybillOcrRow> _dedupeRows(List<WaybillOcrRow> rows) {

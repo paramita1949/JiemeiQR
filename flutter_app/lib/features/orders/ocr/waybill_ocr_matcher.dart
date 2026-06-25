@@ -64,6 +64,19 @@ class WaybillOcrMatcher {
           reasons.add(fromProductDate.reason);
           status = fromProductDate.status;
           candidateBatches = fromProductDate.candidateBatches;
+        } else {
+          final fromProductCode = _fallbackByProductCodeNearestBatch(
+            product: product,
+            row: row,
+            batches: batchesByProduct[product.id] ?? const [],
+            availableBoxesByBatchId: availableBoxesByBatchId,
+          );
+          if (fromProductCode != null) {
+            batch = fromProductCode.batch;
+            reasons.add(fromProductCode.reason);
+            status = fromProductCode.status;
+            candidateBatches = fromProductCode.candidateBatches;
+          }
         }
       } else if (product != null && batch != null) {
         status = OcrLineStatus.matched;
@@ -312,6 +325,33 @@ class WaybillOcrMatcher {
     );
   }
 
+  _BatchProductMatch? _fallbackByProductCodeNearestBatch({
+    required Product product,
+    required WaybillOcrRow row,
+    required List<BatchRecord> batches,
+    required Map<int, int> availableBoxesByBatchId,
+  }) {
+    if (_norm(row.productCode) != _norm(product.code) || batches.isEmpty) {
+      return null;
+    }
+    final sorted = batches.toList()
+      ..sort(
+        (a, b) => _compareNearestDateBatchCandidates(
+          a,
+          b,
+          availableBoxesByBatchId: availableBoxesByBatchId,
+          requestedBoxes: row.boxes,
+        ),
+      );
+    return _BatchProductMatch(
+      product: product,
+      batch: sorted.first,
+      reason: '产品码已识别，已按最近日期代选批号',
+      status: OcrLineStatus.needReview,
+      candidateBatches: sorted,
+    );
+  }
+
   _BatchProductMatch? _preferAvailableSameDateBatch({
     required Product product,
     required WaybillOcrRow row,
@@ -382,6 +422,48 @@ class WaybillOcrMatcher {
       return rankCompare;
     }
     return a.actualBatch.compareTo(b.actualBatch);
+  }
+
+  int _compareNearestDateBatchCandidates(
+    BatchRecord a,
+    BatchRecord b, {
+    required Map<int, int> availableBoxesByBatchId,
+    required int requestedBoxes,
+  }) {
+    final rankCompare = _availabilityRank(
+      a,
+      availableBoxesByBatchId,
+      requestedBoxes: requestedBoxes,
+    ).compareTo(
+      _availabilityRank(
+        b,
+        availableBoxesByBatchId,
+        requestedBoxes: requestedBoxes,
+      ),
+    );
+    if (rankCompare != 0) {
+      return rankCompare;
+    }
+    final dateCompare = _compareBatchDate(a.dateBatch, b.dateBatch);
+    if (dateCompare != 0) {
+      return dateCompare;
+    }
+    return a.actualBatch.compareTo(b.actualBatch);
+  }
+
+  int _compareBatchDate(String a, String b) {
+    final dateA = _parseDate(_dateBatchKey(a));
+    final dateB = _parseDate(_dateBatchKey(b));
+    if (dateA == null && dateB == null) {
+      return _dateBatchKey(a).compareTo(_dateBatchKey(b));
+    }
+    if (dateA == null) {
+      return 1;
+    }
+    if (dateB == null) {
+      return -1;
+    }
+    return dateA.compareTo(dateB);
   }
 
   int _availabilityRank(
