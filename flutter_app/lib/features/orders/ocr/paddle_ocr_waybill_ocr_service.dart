@@ -118,7 +118,9 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       rawMerchantName: textDraft.merchantName,
       historyNames: merchantHistoryNames,
     );
-    final rows = extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows;
+    final rows = aggregateWaybillOcrRows(
+      extracted.rows.isNotEmpty ? extracted.rows : textDraft.rows,
+    );
     final totalBoxes =
         extracted.totalBoxes > 0 ? extracted.totalBoxes : textDraft.totalBoxes;
     final draft = WaybillOcrDraft(
@@ -264,7 +266,7 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
     }
     return _PaddleOcrExtractedResult(
       lines: lines,
-      rows: _dedupeRows(rows),
+      rows: rows,
       totalBoxes: totalBoxes,
     );
   }
@@ -718,24 +720,6 @@ class _HtmlTableTotals {
 
   final int pageTotalBoxes;
   final int grandTotalBoxes;
-}
-
-List<WaybillOcrRow> _dedupeRows(List<WaybillOcrRow> rows) {
-  final seen = <String>{};
-  final deduped = <WaybillOcrRow>[];
-  for (final row in rows) {
-    final key = [
-      row.productCode,
-      row.productName,
-      row.actualBatch,
-      row.dateBatch,
-      row.boxes,
-    ].join('|');
-    if (seen.add(key)) {
-      deduped.add(row);
-    }
-  }
-  return deduped;
 }
 
 String _stripHtml(String value) {

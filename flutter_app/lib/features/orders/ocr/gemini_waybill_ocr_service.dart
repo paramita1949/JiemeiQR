@@ -165,10 +165,10 @@ const _ocrPromptGeneral = '''
 - waybillNo: 右上区域的运单号/通单号
 - rawMerchantName: 优先读取左上信息区“收货方：”后面的公司全称；可去掉括号内数字编码；不要简称；读不到则空字符串
 - merchantName: 从rawMerchantName提取收货方业务短称；不要用承运方、售达方、托运方、发货方、发货仓、收货地址、收货方联系人、底部收货人推断商家；读不到则空字符串
-- rows: 表格每一行的 productCode、productName、actualBatch、dateBatch、boxes
+- rows: 按“产品码+批号+截止日期”分组聚合后的 productCode、productName、actualBatch、dateBatch、boxes
 - totalBoxes: 表格底部“页小计/总计”行中“箱数”列的整数；读不到则0
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
-不同实际批号必须作为不同原始行输出。
+同一产品码+批号+截止日期出现多行时，把箱数累加成一行；不同实际批号或不同截止日期必须分开输出。
 返回前必须计算 rows 中 boxes 的合计，并与 totalBoxes 对比；如果 totalBoxes>0 且不一致，在warnings写“明细箱数合计X箱，与图片总计Y箱不一致”。
 merchantName规则：行政区划前缀一律删除（省/市/县/区/镇/乡/街道等地区名称只作为前缀时不要放进merchantName）；括号内数字编码、从“二级”开始的后续门店说明不要放进merchantName；日用品/日用品商行可归一为日用。
 商家简称示例：义乌市杜超日化有限公司 -> 杜超日化；湖州鑫唐贸易有限公司二级... -> 鑫唐贸易；金华市曦鑫商贸有限公司 -> 曦鑫商贸；浙江省义乌市名人贸易发展有限公司 -> 名人贸易；龙游华凯日用品商行（个体工商户） -> 华凯日用；宁波市宝敏瑞贸易有限公司 -> 宝敏瑞贸易。
@@ -183,7 +183,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 - waybillNo: 右上区域“运单号”
 - rawMerchantName: 左上信息区“收货方：”后面的公司全称；可去掉括号内数字编码；不要简称；读不到则空字符串
 - merchantName: 优先取“收货方”的业务短称，没有则取“客户/经销商/售达方”中的业务短称
-- rows: 明细表每一行的 productCode、productName、actualBatch、dateBatch、boxes
+- rows: 明细表按“产品码+批号+截止日期”分组聚合后的 productCode、productName、actualBatch、dateBatch、boxes
 - totalBoxes: 明细表底部“页小计/总计”行中“箱数”列的整数；如果同时有页小计和总计，取“总计”；读不到则0
 列映射固定为：
 - productCode <- 产品码
@@ -194,7 +194,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 规则：
 - productCode 仅保留数字字符；读不清则空字符串
 - actualBatch 优先识别英数串，注意 O/0、I/1；不确定则空字符串
-- 不同实际批号必须作为不同原始行输出，不要合并
+- 同一产品码+批号+截止日期出现多行时，把箱数累加成一行；不同实际批号或不同截止日期必须分开输出，不要合并
 - 返回前必须计算 rows 中 boxes 的合计，并与 totalBoxes 对比；如果 totalBoxes>0 且不一致，在warnings写“明细箱数合计X箱，与图片总计Y箱不一致”
 - merchantName 提取规则（仅通过语义，不要机械截断）：
   - 对此类电子原图，商家在左上信息区，通常位于“发货地址：”下一行、“收货方联系人：”上一行；只以“收货方：”后面的公司名称为准

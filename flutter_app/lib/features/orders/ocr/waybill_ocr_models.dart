@@ -27,13 +27,14 @@ class WaybillOcrDraft {
 
   factory WaybillOcrDraft.fromJson(Map<String, Object?> json) {
     final rowValues = json['rows'] ?? json['items'];
-    final rows = rowValues is List
+    final rawRows = rowValues is List
         ? rowValues
             .whereType<Map>()
             .map((row) => WaybillOcrRow.fromJson(row.cast<String, Object?>()))
             .where((row) => row.hasContent)
             .toList()
         : const <WaybillOcrRow>[];
+    final rows = aggregateWaybillOcrRows(rawRows);
     final warningValues = json['warnings'];
     final warnings = warningValues is List
         ? warningValues
@@ -65,6 +66,41 @@ class WaybillOcrDraft {
       warnings: warnings,
     );
   }
+}
+
+List<WaybillOcrRow> aggregateWaybillOcrRows(List<WaybillOcrRow> rows) {
+  final byKey = <String, WaybillOcrRow>{};
+  for (final row in rows) {
+    final key = [
+      _rowKeyPart(row.productCode),
+      _rowKeyPart(row.actualBatch),
+      _dateKeyPart(row.dateBatch),
+    ].join('|');
+    if (key == '||') {
+      byKey['${byKey.length}|${row.productName}|${row.boxes}'] = row;
+      continue;
+    }
+    final existing = byKey[key];
+    if (existing == null) {
+      byKey[key] = row;
+      continue;
+    }
+    byKey[key] = WaybillOcrRow(
+      productCode: existing.productCode.isNotEmpty
+          ? existing.productCode
+          : row.productCode,
+      productName: existing.productName.isNotEmpty
+          ? existing.productName
+          : row.productName,
+      actualBatch: existing.actualBatch.isNotEmpty
+          ? existing.actualBatch
+          : row.actualBatch,
+      dateBatch:
+          existing.dateBatch.isNotEmpty ? existing.dateBatch : row.dateBatch,
+      boxes: existing.boxes + row.boxes,
+    );
+  }
+  return byKey.values.toList(growable: false);
 }
 
 class WaybillOcrRow {
@@ -160,6 +196,19 @@ class MatchedWaybillOcrLine {
 }
 
 String _stringValue(Object? value) => value?.toString().trim() ?? '';
+
+String _rowKeyPart(String value) =>
+    value.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+
+String _dateKeyPart(String value) {
+  final normalized = _rowKeyPart(value).replaceAll('。', '.');
+  final match = RegExp(r'(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})日?')
+      .firstMatch(normalized);
+  if (match == null) {
+    return normalized;
+  }
+  return '${match.group(1)}.${int.parse(match.group(2)!)}.${int.parse(match.group(3)!)}';
+}
 
 int _intValue(Object? value) {
   if (value is int) {
