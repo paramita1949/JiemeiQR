@@ -6364,6 +6364,968 @@ class ScannerGunsCompanion extends UpdateCompanion<ScannerGun> {
   }
 }
 
+class $DeliveryPlanRecordsTable extends DeliveryPlanRecords
+    with TableInfo<$DeliveryPlanRecordsTable, DeliveryPlanRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeliveryPlanRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _sourceImagePathMeta =
+      const VerificationMeta('sourceImagePath');
+  @override
+  late final GeneratedColumn<String> sourceImagePath = GeneratedColumn<String>(
+      'source_image_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _lineCountMeta =
+      const VerificationMeta('lineCount');
+  @override
+  late final GeneratedColumn<int> lineCount = GeneratedColumn<int>(
+      'line_count', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _totalNeedBoxesMeta =
+      const VerificationMeta('totalNeedBoxes');
+  @override
+  late final GeneratedColumn<int> totalNeedBoxes = GeneratedColumn<int>(
+      'total_need_boxes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _warningsJsonMeta =
+      const VerificationMeta('warningsJson');
+  @override
+  late final GeneratedColumn<String> warningsJson = GeneratedColumn<String>(
+      'warnings_json', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('[]'));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        sourceImagePath,
+        lineCount,
+        totalNeedBoxes,
+        warningsJson,
+        createdAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'delivery_plan_records';
+  @override
+  VerificationContext validateIntegrity(Insertable<DeliveryPlanRecord> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('source_image_path')) {
+      context.handle(
+          _sourceImagePathMeta,
+          sourceImagePath.isAcceptableOrUnknown(
+              data['source_image_path']!, _sourceImagePathMeta));
+    }
+    if (data.containsKey('line_count')) {
+      context.handle(_lineCountMeta,
+          lineCount.isAcceptableOrUnknown(data['line_count']!, _lineCountMeta));
+    }
+    if (data.containsKey('total_need_boxes')) {
+      context.handle(
+          _totalNeedBoxesMeta,
+          totalNeedBoxes.isAcceptableOrUnknown(
+              data['total_need_boxes']!, _totalNeedBoxesMeta));
+    }
+    if (data.containsKey('warnings_json')) {
+      context.handle(
+          _warningsJsonMeta,
+          warningsJson.isAcceptableOrUnknown(
+              data['warnings_json']!, _warningsJsonMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DeliveryPlanRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeliveryPlanRecord(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      sourceImagePath: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}source_image_path']),
+      lineCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}line_count'])!,
+      totalNeedBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}total_need_boxes'])!,
+      warningsJson: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}warnings_json'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at']),
+    );
+  }
+
+  @override
+  $DeliveryPlanRecordsTable createAlias(String alias) {
+    return $DeliveryPlanRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class DeliveryPlanRecord extends DataClass
+    implements Insertable<DeliveryPlanRecord> {
+  final int id;
+  final String? sourceImagePath;
+  final int lineCount;
+  final int totalNeedBoxes;
+  final String warningsJson;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  const DeliveryPlanRecord(
+      {required this.id,
+      this.sourceImagePath,
+      required this.lineCount,
+      required this.totalNeedBoxes,
+      required this.warningsJson,
+      required this.createdAt,
+      this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || sourceImagePath != null) {
+      map['source_image_path'] = Variable<String>(sourceImagePath);
+    }
+    map['line_count'] = Variable<int>(lineCount);
+    map['total_need_boxes'] = Variable<int>(totalNeedBoxes);
+    map['warnings_json'] = Variable<String>(warningsJson);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
+    return map;
+  }
+
+  DeliveryPlanRecordsCompanion toCompanion(bool nullToAbsent) {
+    return DeliveryPlanRecordsCompanion(
+      id: Value(id),
+      sourceImagePath: sourceImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceImagePath),
+      lineCount: Value(lineCount),
+      totalNeedBoxes: Value(totalNeedBoxes),
+      warningsJson: Value(warningsJson),
+      createdAt: Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
+    );
+  }
+
+  factory DeliveryPlanRecord.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeliveryPlanRecord(
+      id: serializer.fromJson<int>(json['id']),
+      sourceImagePath: serializer.fromJson<String?>(json['sourceImagePath']),
+      lineCount: serializer.fromJson<int>(json['lineCount']),
+      totalNeedBoxes: serializer.fromJson<int>(json['totalNeedBoxes']),
+      warningsJson: serializer.fromJson<String>(json['warningsJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sourceImagePath': serializer.toJson<String?>(sourceImagePath),
+      'lineCount': serializer.toJson<int>(lineCount),
+      'totalNeedBoxes': serializer.toJson<int>(totalNeedBoxes),
+      'warningsJson': serializer.toJson<String>(warningsJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+    };
+  }
+
+  DeliveryPlanRecord copyWith(
+          {int? id,
+          Value<String?> sourceImagePath = const Value.absent(),
+          int? lineCount,
+          int? totalNeedBoxes,
+          String? warningsJson,
+          DateTime? createdAt,
+          Value<DateTime?> updatedAt = const Value.absent()}) =>
+      DeliveryPlanRecord(
+        id: id ?? this.id,
+        sourceImagePath: sourceImagePath.present
+            ? sourceImagePath.value
+            : this.sourceImagePath,
+        lineCount: lineCount ?? this.lineCount,
+        totalNeedBoxes: totalNeedBoxes ?? this.totalNeedBoxes,
+        warningsJson: warningsJson ?? this.warningsJson,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+      );
+  DeliveryPlanRecord copyWithCompanion(DeliveryPlanRecordsCompanion data) {
+    return DeliveryPlanRecord(
+      id: data.id.present ? data.id.value : this.id,
+      sourceImagePath: data.sourceImagePath.present
+          ? data.sourceImagePath.value
+          : this.sourceImagePath,
+      lineCount: data.lineCount.present ? data.lineCount.value : this.lineCount,
+      totalNeedBoxes: data.totalNeedBoxes.present
+          ? data.totalNeedBoxes.value
+          : this.totalNeedBoxes,
+      warningsJson: data.warningsJson.present
+          ? data.warningsJson.value
+          : this.warningsJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryPlanRecord(')
+          ..write('id: $id, ')
+          ..write('sourceImagePath: $sourceImagePath, ')
+          ..write('lineCount: $lineCount, ')
+          ..write('totalNeedBoxes: $totalNeedBoxes, ')
+          ..write('warningsJson: $warningsJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, sourceImagePath, lineCount,
+      totalNeedBoxes, warningsJson, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeliveryPlanRecord &&
+          other.id == this.id &&
+          other.sourceImagePath == this.sourceImagePath &&
+          other.lineCount == this.lineCount &&
+          other.totalNeedBoxes == this.totalNeedBoxes &&
+          other.warningsJson == this.warningsJson &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class DeliveryPlanRecordsCompanion extends UpdateCompanion<DeliveryPlanRecord> {
+  final Value<int> id;
+  final Value<String?> sourceImagePath;
+  final Value<int> lineCount;
+  final Value<int> totalNeedBoxes;
+  final Value<String> warningsJson;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> updatedAt;
+  const DeliveryPlanRecordsCompanion({
+    this.id = const Value.absent(),
+    this.sourceImagePath = const Value.absent(),
+    this.lineCount = const Value.absent(),
+    this.totalNeedBoxes = const Value.absent(),
+    this.warningsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  DeliveryPlanRecordsCompanion.insert({
+    this.id = const Value.absent(),
+    this.sourceImagePath = const Value.absent(),
+    this.lineCount = const Value.absent(),
+    this.totalNeedBoxes = const Value.absent(),
+    this.warningsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  static Insertable<DeliveryPlanRecord> custom({
+    Expression<int>? id,
+    Expression<String>? sourceImagePath,
+    Expression<int>? lineCount,
+    Expression<int>? totalNeedBoxes,
+    Expression<String>? warningsJson,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceImagePath != null) 'source_image_path': sourceImagePath,
+      if (lineCount != null) 'line_count': lineCount,
+      if (totalNeedBoxes != null) 'total_need_boxes': totalNeedBoxes,
+      if (warningsJson != null) 'warnings_json': warningsJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  DeliveryPlanRecordsCompanion copyWith(
+      {Value<int>? id,
+      Value<String?>? sourceImagePath,
+      Value<int>? lineCount,
+      Value<int>? totalNeedBoxes,
+      Value<String>? warningsJson,
+      Value<DateTime>? createdAt,
+      Value<DateTime?>? updatedAt}) {
+    return DeliveryPlanRecordsCompanion(
+      id: id ?? this.id,
+      sourceImagePath: sourceImagePath ?? this.sourceImagePath,
+      lineCount: lineCount ?? this.lineCount,
+      totalNeedBoxes: totalNeedBoxes ?? this.totalNeedBoxes,
+      warningsJson: warningsJson ?? this.warningsJson,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sourceImagePath.present) {
+      map['source_image_path'] = Variable<String>(sourceImagePath.value);
+    }
+    if (lineCount.present) {
+      map['line_count'] = Variable<int>(lineCount.value);
+    }
+    if (totalNeedBoxes.present) {
+      map['total_need_boxes'] = Variable<int>(totalNeedBoxes.value);
+    }
+    if (warningsJson.present) {
+      map['warnings_json'] = Variable<String>(warningsJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryPlanRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceImagePath: $sourceImagePath, ')
+          ..write('lineCount: $lineCount, ')
+          ..write('totalNeedBoxes: $totalNeedBoxes, ')
+          ..write('warningsJson: $warningsJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DeliveryPlanItemsTable extends DeliveryPlanItems
+    with TableInfo<$DeliveryPlanItemsTable, DeliveryPlanItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeliveryPlanItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _recordIdMeta =
+      const VerificationMeta('recordId');
+  @override
+  late final GeneratedColumn<int> recordId = GeneratedColumn<int>(
+      'record_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES delivery_plan_records (id)'));
+  static const VerificationMeta _rowIndexMeta =
+      const VerificationMeta('rowIndex');
+  @override
+  late final GeneratedColumn<int> rowIndex = GeneratedColumn<int>(
+      'row_index', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _productCodeMeta =
+      const VerificationMeta('productCode');
+  @override
+  late final GeneratedColumn<String> productCode = GeneratedColumn<String>(
+      'product_code', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _productNameMeta =
+      const VerificationMeta('productName');
+  @override
+  late final GeneratedColumn<String> productName = GeneratedColumn<String>(
+      'product_name', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _actualBatchMeta =
+      const VerificationMeta('actualBatch');
+  @override
+  late final GeneratedColumn<String> actualBatch = GeneratedColumn<String>(
+      'actual_batch', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dateBatchMeta =
+      const VerificationMeta('dateBatch');
+  @override
+  late final GeneratedColumn<String> dateBatch = GeneratedColumn<String>(
+      'date_batch', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _stockTotalBoxesMeta =
+      const VerificationMeta('stockTotalBoxes');
+  @override
+  late final GeneratedColumn<int> stockTotalBoxes = GeneratedColumn<int>(
+      'stock_total_boxes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _deliveryPlanAvailableBoxesMeta =
+      const VerificationMeta('deliveryPlanAvailableBoxes');
+  @override
+  late final GeneratedColumn<int> deliveryPlanAvailableBoxes =
+      GeneratedColumn<int>('delivery_plan_available_boxes', aliasedName, false,
+          type: DriftSqlType.int,
+          requiredDuringInsert: false,
+          defaultValue: const Constant(0));
+  static const VerificationMeta _needBoxesMeta =
+      const VerificationMeta('needBoxes');
+  @override
+  late final GeneratedColumn<int> needBoxes = GeneratedColumn<int>(
+      'need_boxes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        recordId,
+        rowIndex,
+        productCode,
+        productName,
+        actualBatch,
+        dateBatch,
+        stockTotalBoxes,
+        deliveryPlanAvailableBoxes,
+        needBoxes,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'delivery_plan_items';
+  @override
+  VerificationContext validateIntegrity(Insertable<DeliveryPlanItem> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('record_id')) {
+      context.handle(_recordIdMeta,
+          recordId.isAcceptableOrUnknown(data['record_id']!, _recordIdMeta));
+    } else if (isInserting) {
+      context.missing(_recordIdMeta);
+    }
+    if (data.containsKey('row_index')) {
+      context.handle(_rowIndexMeta,
+          rowIndex.isAcceptableOrUnknown(data['row_index']!, _rowIndexMeta));
+    }
+    if (data.containsKey('product_code')) {
+      context.handle(
+          _productCodeMeta,
+          productCode.isAcceptableOrUnknown(
+              data['product_code']!, _productCodeMeta));
+    } else if (isInserting) {
+      context.missing(_productCodeMeta);
+    }
+    if (data.containsKey('product_name')) {
+      context.handle(
+          _productNameMeta,
+          productName.isAcceptableOrUnknown(
+              data['product_name']!, _productNameMeta));
+    }
+    if (data.containsKey('actual_batch')) {
+      context.handle(
+          _actualBatchMeta,
+          actualBatch.isAcceptableOrUnknown(
+              data['actual_batch']!, _actualBatchMeta));
+    } else if (isInserting) {
+      context.missing(_actualBatchMeta);
+    }
+    if (data.containsKey('date_batch')) {
+      context.handle(_dateBatchMeta,
+          dateBatch.isAcceptableOrUnknown(data['date_batch']!, _dateBatchMeta));
+    } else if (isInserting) {
+      context.missing(_dateBatchMeta);
+    }
+    if (data.containsKey('stock_total_boxes')) {
+      context.handle(
+          _stockTotalBoxesMeta,
+          stockTotalBoxes.isAcceptableOrUnknown(
+              data['stock_total_boxes']!, _stockTotalBoxesMeta));
+    }
+    if (data.containsKey('delivery_plan_available_boxes')) {
+      context.handle(
+          _deliveryPlanAvailableBoxesMeta,
+          deliveryPlanAvailableBoxes.isAcceptableOrUnknown(
+              data['delivery_plan_available_boxes']!,
+              _deliveryPlanAvailableBoxesMeta));
+    }
+    if (data.containsKey('need_boxes')) {
+      context.handle(_needBoxesMeta,
+          needBoxes.isAcceptableOrUnknown(data['need_boxes']!, _needBoxesMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DeliveryPlanItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeliveryPlanItem(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      recordId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}record_id'])!,
+      rowIndex: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}row_index'])!,
+      productCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_code'])!,
+      productName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_name'])!,
+      actualBatch: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}actual_batch'])!,
+      dateBatch: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}date_batch'])!,
+      stockTotalBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}stock_total_boxes'])!,
+      deliveryPlanAvailableBoxes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}delivery_plan_available_boxes'])!,
+      needBoxes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}need_boxes'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $DeliveryPlanItemsTable createAlias(String alias) {
+    return $DeliveryPlanItemsTable(attachedDatabase, alias);
+  }
+}
+
+class DeliveryPlanItem extends DataClass
+    implements Insertable<DeliveryPlanItem> {
+  final int id;
+  final int recordId;
+  final int rowIndex;
+  final String productCode;
+  final String productName;
+  final String actualBatch;
+  final String dateBatch;
+  final int stockTotalBoxes;
+  final int deliveryPlanAvailableBoxes;
+  final int needBoxes;
+  final DateTime createdAt;
+  const DeliveryPlanItem(
+      {required this.id,
+      required this.recordId,
+      required this.rowIndex,
+      required this.productCode,
+      required this.productName,
+      required this.actualBatch,
+      required this.dateBatch,
+      required this.stockTotalBoxes,
+      required this.deliveryPlanAvailableBoxes,
+      required this.needBoxes,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['record_id'] = Variable<int>(recordId);
+    map['row_index'] = Variable<int>(rowIndex);
+    map['product_code'] = Variable<String>(productCode);
+    map['product_name'] = Variable<String>(productName);
+    map['actual_batch'] = Variable<String>(actualBatch);
+    map['date_batch'] = Variable<String>(dateBatch);
+    map['stock_total_boxes'] = Variable<int>(stockTotalBoxes);
+    map['delivery_plan_available_boxes'] =
+        Variable<int>(deliveryPlanAvailableBoxes);
+    map['need_boxes'] = Variable<int>(needBoxes);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  DeliveryPlanItemsCompanion toCompanion(bool nullToAbsent) {
+    return DeliveryPlanItemsCompanion(
+      id: Value(id),
+      recordId: Value(recordId),
+      rowIndex: Value(rowIndex),
+      productCode: Value(productCode),
+      productName: Value(productName),
+      actualBatch: Value(actualBatch),
+      dateBatch: Value(dateBatch),
+      stockTotalBoxes: Value(stockTotalBoxes),
+      deliveryPlanAvailableBoxes: Value(deliveryPlanAvailableBoxes),
+      needBoxes: Value(needBoxes),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory DeliveryPlanItem.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeliveryPlanItem(
+      id: serializer.fromJson<int>(json['id']),
+      recordId: serializer.fromJson<int>(json['recordId']),
+      rowIndex: serializer.fromJson<int>(json['rowIndex']),
+      productCode: serializer.fromJson<String>(json['productCode']),
+      productName: serializer.fromJson<String>(json['productName']),
+      actualBatch: serializer.fromJson<String>(json['actualBatch']),
+      dateBatch: serializer.fromJson<String>(json['dateBatch']),
+      stockTotalBoxes: serializer.fromJson<int>(json['stockTotalBoxes']),
+      deliveryPlanAvailableBoxes:
+          serializer.fromJson<int>(json['deliveryPlanAvailableBoxes']),
+      needBoxes: serializer.fromJson<int>(json['needBoxes']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'recordId': serializer.toJson<int>(recordId),
+      'rowIndex': serializer.toJson<int>(rowIndex),
+      'productCode': serializer.toJson<String>(productCode),
+      'productName': serializer.toJson<String>(productName),
+      'actualBatch': serializer.toJson<String>(actualBatch),
+      'dateBatch': serializer.toJson<String>(dateBatch),
+      'stockTotalBoxes': serializer.toJson<int>(stockTotalBoxes),
+      'deliveryPlanAvailableBoxes':
+          serializer.toJson<int>(deliveryPlanAvailableBoxes),
+      'needBoxes': serializer.toJson<int>(needBoxes),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  DeliveryPlanItem copyWith(
+          {int? id,
+          int? recordId,
+          int? rowIndex,
+          String? productCode,
+          String? productName,
+          String? actualBatch,
+          String? dateBatch,
+          int? stockTotalBoxes,
+          int? deliveryPlanAvailableBoxes,
+          int? needBoxes,
+          DateTime? createdAt}) =>
+      DeliveryPlanItem(
+        id: id ?? this.id,
+        recordId: recordId ?? this.recordId,
+        rowIndex: rowIndex ?? this.rowIndex,
+        productCode: productCode ?? this.productCode,
+        productName: productName ?? this.productName,
+        actualBatch: actualBatch ?? this.actualBatch,
+        dateBatch: dateBatch ?? this.dateBatch,
+        stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
+        deliveryPlanAvailableBoxes:
+            deliveryPlanAvailableBoxes ?? this.deliveryPlanAvailableBoxes,
+        needBoxes: needBoxes ?? this.needBoxes,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  DeliveryPlanItem copyWithCompanion(DeliveryPlanItemsCompanion data) {
+    return DeliveryPlanItem(
+      id: data.id.present ? data.id.value : this.id,
+      recordId: data.recordId.present ? data.recordId.value : this.recordId,
+      rowIndex: data.rowIndex.present ? data.rowIndex.value : this.rowIndex,
+      productCode:
+          data.productCode.present ? data.productCode.value : this.productCode,
+      productName:
+          data.productName.present ? data.productName.value : this.productName,
+      actualBatch:
+          data.actualBatch.present ? data.actualBatch.value : this.actualBatch,
+      dateBatch: data.dateBatch.present ? data.dateBatch.value : this.dateBatch,
+      stockTotalBoxes: data.stockTotalBoxes.present
+          ? data.stockTotalBoxes.value
+          : this.stockTotalBoxes,
+      deliveryPlanAvailableBoxes: data.deliveryPlanAvailableBoxes.present
+          ? data.deliveryPlanAvailableBoxes.value
+          : this.deliveryPlanAvailableBoxes,
+      needBoxes: data.needBoxes.present ? data.needBoxes.value : this.needBoxes,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryPlanItem(')
+          ..write('id: $id, ')
+          ..write('recordId: $recordId, ')
+          ..write('rowIndex: $rowIndex, ')
+          ..write('productCode: $productCode, ')
+          ..write('productName: $productName, ')
+          ..write('actualBatch: $actualBatch, ')
+          ..write('dateBatch: $dateBatch, ')
+          ..write('stockTotalBoxes: $stockTotalBoxes, ')
+          ..write('deliveryPlanAvailableBoxes: $deliveryPlanAvailableBoxes, ')
+          ..write('needBoxes: $needBoxes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      recordId,
+      rowIndex,
+      productCode,
+      productName,
+      actualBatch,
+      dateBatch,
+      stockTotalBoxes,
+      deliveryPlanAvailableBoxes,
+      needBoxes,
+      createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeliveryPlanItem &&
+          other.id == this.id &&
+          other.recordId == this.recordId &&
+          other.rowIndex == this.rowIndex &&
+          other.productCode == this.productCode &&
+          other.productName == this.productName &&
+          other.actualBatch == this.actualBatch &&
+          other.dateBatch == this.dateBatch &&
+          other.stockTotalBoxes == this.stockTotalBoxes &&
+          other.deliveryPlanAvailableBoxes == this.deliveryPlanAvailableBoxes &&
+          other.needBoxes == this.needBoxes &&
+          other.createdAt == this.createdAt);
+}
+
+class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
+  final Value<int> id;
+  final Value<int> recordId;
+  final Value<int> rowIndex;
+  final Value<String> productCode;
+  final Value<String> productName;
+  final Value<String> actualBatch;
+  final Value<String> dateBatch;
+  final Value<int> stockTotalBoxes;
+  final Value<int> deliveryPlanAvailableBoxes;
+  final Value<int> needBoxes;
+  final Value<DateTime> createdAt;
+  const DeliveryPlanItemsCompanion({
+    this.id = const Value.absent(),
+    this.recordId = const Value.absent(),
+    this.rowIndex = const Value.absent(),
+    this.productCode = const Value.absent(),
+    this.productName = const Value.absent(),
+    this.actualBatch = const Value.absent(),
+    this.dateBatch = const Value.absent(),
+    this.stockTotalBoxes = const Value.absent(),
+    this.deliveryPlanAvailableBoxes = const Value.absent(),
+    this.needBoxes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  DeliveryPlanItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required int recordId,
+    this.rowIndex = const Value.absent(),
+    required String productCode,
+    this.productName = const Value.absent(),
+    required String actualBatch,
+    required String dateBatch,
+    this.stockTotalBoxes = const Value.absent(),
+    this.deliveryPlanAvailableBoxes = const Value.absent(),
+    this.needBoxes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  })  : recordId = Value(recordId),
+        productCode = Value(productCode),
+        actualBatch = Value(actualBatch),
+        dateBatch = Value(dateBatch);
+  static Insertable<DeliveryPlanItem> custom({
+    Expression<int>? id,
+    Expression<int>? recordId,
+    Expression<int>? rowIndex,
+    Expression<String>? productCode,
+    Expression<String>? productName,
+    Expression<String>? actualBatch,
+    Expression<String>? dateBatch,
+    Expression<int>? stockTotalBoxes,
+    Expression<int>? deliveryPlanAvailableBoxes,
+    Expression<int>? needBoxes,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (recordId != null) 'record_id': recordId,
+      if (rowIndex != null) 'row_index': rowIndex,
+      if (productCode != null) 'product_code': productCode,
+      if (productName != null) 'product_name': productName,
+      if (actualBatch != null) 'actual_batch': actualBatch,
+      if (dateBatch != null) 'date_batch': dateBatch,
+      if (stockTotalBoxes != null) 'stock_total_boxes': stockTotalBoxes,
+      if (deliveryPlanAvailableBoxes != null)
+        'delivery_plan_available_boxes': deliveryPlanAvailableBoxes,
+      if (needBoxes != null) 'need_boxes': needBoxes,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  DeliveryPlanItemsCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? recordId,
+      Value<int>? rowIndex,
+      Value<String>? productCode,
+      Value<String>? productName,
+      Value<String>? actualBatch,
+      Value<String>? dateBatch,
+      Value<int>? stockTotalBoxes,
+      Value<int>? deliveryPlanAvailableBoxes,
+      Value<int>? needBoxes,
+      Value<DateTime>? createdAt}) {
+    return DeliveryPlanItemsCompanion(
+      id: id ?? this.id,
+      recordId: recordId ?? this.recordId,
+      rowIndex: rowIndex ?? this.rowIndex,
+      productCode: productCode ?? this.productCode,
+      productName: productName ?? this.productName,
+      actualBatch: actualBatch ?? this.actualBatch,
+      dateBatch: dateBatch ?? this.dateBatch,
+      stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
+      deliveryPlanAvailableBoxes:
+          deliveryPlanAvailableBoxes ?? this.deliveryPlanAvailableBoxes,
+      needBoxes: needBoxes ?? this.needBoxes,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (recordId.present) {
+      map['record_id'] = Variable<int>(recordId.value);
+    }
+    if (rowIndex.present) {
+      map['row_index'] = Variable<int>(rowIndex.value);
+    }
+    if (productCode.present) {
+      map['product_code'] = Variable<String>(productCode.value);
+    }
+    if (productName.present) {
+      map['product_name'] = Variable<String>(productName.value);
+    }
+    if (actualBatch.present) {
+      map['actual_batch'] = Variable<String>(actualBatch.value);
+    }
+    if (dateBatch.present) {
+      map['date_batch'] = Variable<String>(dateBatch.value);
+    }
+    if (stockTotalBoxes.present) {
+      map['stock_total_boxes'] = Variable<int>(stockTotalBoxes.value);
+    }
+    if (deliveryPlanAvailableBoxes.present) {
+      map['delivery_plan_available_boxes'] =
+          Variable<int>(deliveryPlanAvailableBoxes.value);
+    }
+    if (needBoxes.present) {
+      map['need_boxes'] = Variable<int>(needBoxes.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryPlanItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('recordId: $recordId, ')
+          ..write('rowIndex: $rowIndex, ')
+          ..write('productCode: $productCode, ')
+          ..write('productName: $productName, ')
+          ..write('actualBatch: $actualBatch, ')
+          ..write('dateBatch: $dateBatch, ')
+          ..write('stockTotalBoxes: $stockTotalBoxes, ')
+          ..write('deliveryPlanAvailableBoxes: $deliveryPlanAvailableBoxes, ')
+          ..write('needBoxes: $needBoxes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6383,6 +7345,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $StocktakeSessionsTable(this);
   late final $StocktakeItemsTable stocktakeItems = $StocktakeItemsTable(this);
   late final $ScannerGunsTable scannerGuns = $ScannerGunsTable(this);
+  late final $DeliveryPlanRecordsTable deliveryPlanRecords =
+      $DeliveryPlanRecordsTable(this);
+  late final $DeliveryPlanItemsTable deliveryPlanItems =
+      $DeliveryPlanItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6399,7 +7365,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         geofenceDailyStates,
         stocktakeSessions,
         stocktakeItems,
-        scannerGuns
+        scannerGuns,
+        deliveryPlanRecords,
+        deliveryPlanItems
       ];
 }
 
@@ -10889,6 +11857,669 @@ typedef $$ScannerGunsTableProcessedTableManager = ProcessedTableManager<
     (ScannerGun, BaseReferences<_$AppDatabase, $ScannerGunsTable, ScannerGun>),
     ScannerGun,
     PrefetchHooks Function()>;
+typedef $$DeliveryPlanRecordsTableCreateCompanionBuilder
+    = DeliveryPlanRecordsCompanion Function({
+  Value<int> id,
+  Value<String?> sourceImagePath,
+  Value<int> lineCount,
+  Value<int> totalNeedBoxes,
+  Value<String> warningsJson,
+  Value<DateTime> createdAt,
+  Value<DateTime?> updatedAt,
+});
+typedef $$DeliveryPlanRecordsTableUpdateCompanionBuilder
+    = DeliveryPlanRecordsCompanion Function({
+  Value<int> id,
+  Value<String?> sourceImagePath,
+  Value<int> lineCount,
+  Value<int> totalNeedBoxes,
+  Value<String> warningsJson,
+  Value<DateTime> createdAt,
+  Value<DateTime?> updatedAt,
+});
+
+final class $$DeliveryPlanRecordsTableReferences extends BaseReferences<
+    _$AppDatabase, $DeliveryPlanRecordsTable, DeliveryPlanRecord> {
+  $$DeliveryPlanRecordsTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$DeliveryPlanItemsTable, List<DeliveryPlanItem>>
+      _deliveryPlanItemsRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.deliveryPlanItems,
+              aliasName: $_aliasNameGenerator(
+                  db.deliveryPlanRecords.id, db.deliveryPlanItems.recordId));
+
+  $$DeliveryPlanItemsTableProcessedTableManager get deliveryPlanItemsRefs {
+    final manager =
+        $$DeliveryPlanItemsTableTableManager($_db, $_db.deliveryPlanItems)
+            .filter((f) => f.recordId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache =
+        $_typedResult.readTableOrNull(_deliveryPlanItemsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
+
+class $$DeliveryPlanRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanRecordsTable> {
+  $$DeliveryPlanRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get sourceImagePath => $composableBuilder(
+      column: $table.sourceImagePath,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get lineCount => $composableBuilder(
+      column: $table.lineCount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get totalNeedBoxes => $composableBuilder(
+      column: $table.totalNeedBoxes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get warningsJson => $composableBuilder(
+      column: $table.warningsJson, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> deliveryPlanItemsRefs(
+      Expression<bool> Function($$DeliveryPlanItemsTableFilterComposer f) f) {
+    final $$DeliveryPlanItemsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.deliveryPlanItems,
+        getReferencedColumn: (t) => t.recordId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DeliveryPlanItemsTableFilterComposer(
+              $db: $db,
+              $table: $db.deliveryPlanItems,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+}
+
+class $$DeliveryPlanRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanRecordsTable> {
+  $$DeliveryPlanRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get sourceImagePath => $composableBuilder(
+      column: $table.sourceImagePath,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get lineCount => $composableBuilder(
+      column: $table.lineCount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get totalNeedBoxes => $composableBuilder(
+      column: $table.totalNeedBoxes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get warningsJson => $composableBuilder(
+      column: $table.warningsJson,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$DeliveryPlanRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanRecordsTable> {
+  $$DeliveryPlanRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceImagePath => $composableBuilder(
+      column: $table.sourceImagePath, builder: (column) => column);
+
+  GeneratedColumn<int> get lineCount =>
+      $composableBuilder(column: $table.lineCount, builder: (column) => column);
+
+  GeneratedColumn<int> get totalNeedBoxes => $composableBuilder(
+      column: $table.totalNeedBoxes, builder: (column) => column);
+
+  GeneratedColumn<String> get warningsJson => $composableBuilder(
+      column: $table.warningsJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> deliveryPlanItemsRefs<T extends Object>(
+      Expression<T> Function($$DeliveryPlanItemsTableAnnotationComposer a) f) {
+    final $$DeliveryPlanItemsTableAnnotationComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.id,
+            referencedTable: $db.deliveryPlanItems,
+            getReferencedColumn: (t) => t.recordId,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$DeliveryPlanItemsTableAnnotationComposer(
+                  $db: $db,
+                  $table: $db.deliveryPlanItems,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return f(composer);
+  }
+}
+
+class $$DeliveryPlanRecordsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $DeliveryPlanRecordsTable,
+    DeliveryPlanRecord,
+    $$DeliveryPlanRecordsTableFilterComposer,
+    $$DeliveryPlanRecordsTableOrderingComposer,
+    $$DeliveryPlanRecordsTableAnnotationComposer,
+    $$DeliveryPlanRecordsTableCreateCompanionBuilder,
+    $$DeliveryPlanRecordsTableUpdateCompanionBuilder,
+    (DeliveryPlanRecord, $$DeliveryPlanRecordsTableReferences),
+    DeliveryPlanRecord,
+    PrefetchHooks Function({bool deliveryPlanItemsRefs})> {
+  $$DeliveryPlanRecordsTableTableManager(
+      _$AppDatabase db, $DeliveryPlanRecordsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeliveryPlanRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeliveryPlanRecordsTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeliveryPlanRecordsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String?> sourceImagePath = const Value.absent(),
+            Value<int> lineCount = const Value.absent(),
+            Value<int> totalNeedBoxes = const Value.absent(),
+            Value<String> warningsJson = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> updatedAt = const Value.absent(),
+          }) =>
+              DeliveryPlanRecordsCompanion(
+            id: id,
+            sourceImagePath: sourceImagePath,
+            lineCount: lineCount,
+            totalNeedBoxes: totalNeedBoxes,
+            warningsJson: warningsJson,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String?> sourceImagePath = const Value.absent(),
+            Value<int> lineCount = const Value.absent(),
+            Value<int> totalNeedBoxes = const Value.absent(),
+            Value<String> warningsJson = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime?> updatedAt = const Value.absent(),
+          }) =>
+              DeliveryPlanRecordsCompanion.insert(
+            id: id,
+            sourceImagePath: sourceImagePath,
+            lineCount: lineCount,
+            totalNeedBoxes: totalNeedBoxes,
+            warningsJson: warningsJson,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$DeliveryPlanRecordsTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({deliveryPlanItemsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (deliveryPlanItemsRefs) db.deliveryPlanItems
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (deliveryPlanItemsRefs)
+                    await $_getPrefetchedData<DeliveryPlanRecord,
+                            $DeliveryPlanRecordsTable, DeliveryPlanItem>(
+                        currentTable: table,
+                        referencedTable: $$DeliveryPlanRecordsTableReferences
+                            ._deliveryPlanItemsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$DeliveryPlanRecordsTableReferences(db, table, p0)
+                                .deliveryPlanItemsRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.recordId == item.id),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$DeliveryPlanRecordsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $DeliveryPlanRecordsTable,
+    DeliveryPlanRecord,
+    $$DeliveryPlanRecordsTableFilterComposer,
+    $$DeliveryPlanRecordsTableOrderingComposer,
+    $$DeliveryPlanRecordsTableAnnotationComposer,
+    $$DeliveryPlanRecordsTableCreateCompanionBuilder,
+    $$DeliveryPlanRecordsTableUpdateCompanionBuilder,
+    (DeliveryPlanRecord, $$DeliveryPlanRecordsTableReferences),
+    DeliveryPlanRecord,
+    PrefetchHooks Function({bool deliveryPlanItemsRefs})>;
+typedef $$DeliveryPlanItemsTableCreateCompanionBuilder
+    = DeliveryPlanItemsCompanion Function({
+  Value<int> id,
+  required int recordId,
+  Value<int> rowIndex,
+  required String productCode,
+  Value<String> productName,
+  required String actualBatch,
+  required String dateBatch,
+  Value<int> stockTotalBoxes,
+  Value<int> deliveryPlanAvailableBoxes,
+  Value<int> needBoxes,
+  Value<DateTime> createdAt,
+});
+typedef $$DeliveryPlanItemsTableUpdateCompanionBuilder
+    = DeliveryPlanItemsCompanion Function({
+  Value<int> id,
+  Value<int> recordId,
+  Value<int> rowIndex,
+  Value<String> productCode,
+  Value<String> productName,
+  Value<String> actualBatch,
+  Value<String> dateBatch,
+  Value<int> stockTotalBoxes,
+  Value<int> deliveryPlanAvailableBoxes,
+  Value<int> needBoxes,
+  Value<DateTime> createdAt,
+});
+
+final class $$DeliveryPlanItemsTableReferences extends BaseReferences<
+    _$AppDatabase, $DeliveryPlanItemsTable, DeliveryPlanItem> {
+  $$DeliveryPlanItemsTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static $DeliveryPlanRecordsTable _recordIdTable(_$AppDatabase db) =>
+      db.deliveryPlanRecords.createAlias($_aliasNameGenerator(
+          db.deliveryPlanItems.recordId, db.deliveryPlanRecords.id));
+
+  $$DeliveryPlanRecordsTableProcessedTableManager get recordId {
+    final $_column = $_itemColumn<int>('record_id')!;
+
+    final manager =
+        $$DeliveryPlanRecordsTableTableManager($_db, $_db.deliveryPlanRecords)
+            .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_recordIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$DeliveryPlanItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanItemsTable> {
+  $$DeliveryPlanItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rowIndex => $composableBuilder(
+      column: $table.rowIndex, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productName => $composableBuilder(
+      column: $table.productName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get actualBatch => $composableBuilder(
+      column: $table.actualBatch, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get dateBatch => $composableBuilder(
+      column: $table.dateBatch, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get stockTotalBoxes => $composableBuilder(
+      column: $table.stockTotalBoxes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get deliveryPlanAvailableBoxes => $composableBuilder(
+      column: $table.deliveryPlanAvailableBoxes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get needBoxes => $composableBuilder(
+      column: $table.needBoxes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  $$DeliveryPlanRecordsTableFilterComposer get recordId {
+    final $$DeliveryPlanRecordsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.recordId,
+        referencedTable: $db.deliveryPlanRecords,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DeliveryPlanRecordsTableFilterComposer(
+              $db: $db,
+              $table: $db.deliveryPlanRecords,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$DeliveryPlanItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanItemsTable> {
+  $$DeliveryPlanItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rowIndex => $composableBuilder(
+      column: $table.rowIndex, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productName => $composableBuilder(
+      column: $table.productName, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get actualBatch => $composableBuilder(
+      column: $table.actualBatch, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get dateBatch => $composableBuilder(
+      column: $table.dateBatch, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get stockTotalBoxes => $composableBuilder(
+      column: $table.stockTotalBoxes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get deliveryPlanAvailableBoxes => $composableBuilder(
+      column: $table.deliveryPlanAvailableBoxes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get needBoxes => $composableBuilder(
+      column: $table.needBoxes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  $$DeliveryPlanRecordsTableOrderingComposer get recordId {
+    final $$DeliveryPlanRecordsTableOrderingComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.recordId,
+            referencedTable: $db.deliveryPlanRecords,
+            getReferencedColumn: (t) => t.id,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$DeliveryPlanRecordsTableOrderingComposer(
+                  $db: $db,
+                  $table: $db.deliveryPlanRecords,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return composer;
+  }
+}
+
+class $$DeliveryPlanItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DeliveryPlanItemsTable> {
+  $$DeliveryPlanItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get rowIndex =>
+      $composableBuilder(column: $table.rowIndex, builder: (column) => column);
+
+  GeneratedColumn<String> get productCode => $composableBuilder(
+      column: $table.productCode, builder: (column) => column);
+
+  GeneratedColumn<String> get productName => $composableBuilder(
+      column: $table.productName, builder: (column) => column);
+
+  GeneratedColumn<String> get actualBatch => $composableBuilder(
+      column: $table.actualBatch, builder: (column) => column);
+
+  GeneratedColumn<String> get dateBatch =>
+      $composableBuilder(column: $table.dateBatch, builder: (column) => column);
+
+  GeneratedColumn<int> get stockTotalBoxes => $composableBuilder(
+      column: $table.stockTotalBoxes, builder: (column) => column);
+
+  GeneratedColumn<int> get deliveryPlanAvailableBoxes => $composableBuilder(
+      column: $table.deliveryPlanAvailableBoxes, builder: (column) => column);
+
+  GeneratedColumn<int> get needBoxes =>
+      $composableBuilder(column: $table.needBoxes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$DeliveryPlanRecordsTableAnnotationComposer get recordId {
+    final $$DeliveryPlanRecordsTableAnnotationComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.recordId,
+            referencedTable: $db.deliveryPlanRecords,
+            getReferencedColumn: (t) => t.id,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$DeliveryPlanRecordsTableAnnotationComposer(
+                  $db: $db,
+                  $table: $db.deliveryPlanRecords,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return composer;
+  }
+}
+
+class $$DeliveryPlanItemsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $DeliveryPlanItemsTable,
+    DeliveryPlanItem,
+    $$DeliveryPlanItemsTableFilterComposer,
+    $$DeliveryPlanItemsTableOrderingComposer,
+    $$DeliveryPlanItemsTableAnnotationComposer,
+    $$DeliveryPlanItemsTableCreateCompanionBuilder,
+    $$DeliveryPlanItemsTableUpdateCompanionBuilder,
+    (DeliveryPlanItem, $$DeliveryPlanItemsTableReferences),
+    DeliveryPlanItem,
+    PrefetchHooks Function({bool recordId})> {
+  $$DeliveryPlanItemsTableTableManager(
+      _$AppDatabase db, $DeliveryPlanItemsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeliveryPlanItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeliveryPlanItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeliveryPlanItemsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> recordId = const Value.absent(),
+            Value<int> rowIndex = const Value.absent(),
+            Value<String> productCode = const Value.absent(),
+            Value<String> productName = const Value.absent(),
+            Value<String> actualBatch = const Value.absent(),
+            Value<String> dateBatch = const Value.absent(),
+            Value<int> stockTotalBoxes = const Value.absent(),
+            Value<int> deliveryPlanAvailableBoxes = const Value.absent(),
+            Value<int> needBoxes = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              DeliveryPlanItemsCompanion(
+            id: id,
+            recordId: recordId,
+            rowIndex: rowIndex,
+            productCode: productCode,
+            productName: productName,
+            actualBatch: actualBatch,
+            dateBatch: dateBatch,
+            stockTotalBoxes: stockTotalBoxes,
+            deliveryPlanAvailableBoxes: deliveryPlanAvailableBoxes,
+            needBoxes: needBoxes,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int recordId,
+            Value<int> rowIndex = const Value.absent(),
+            required String productCode,
+            Value<String> productName = const Value.absent(),
+            required String actualBatch,
+            required String dateBatch,
+            Value<int> stockTotalBoxes = const Value.absent(),
+            Value<int> deliveryPlanAvailableBoxes = const Value.absent(),
+            Value<int> needBoxes = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              DeliveryPlanItemsCompanion.insert(
+            id: id,
+            recordId: recordId,
+            rowIndex: rowIndex,
+            productCode: productCode,
+            productName: productName,
+            actualBatch: actualBatch,
+            dateBatch: dateBatch,
+            stockTotalBoxes: stockTotalBoxes,
+            deliveryPlanAvailableBoxes: deliveryPlanAvailableBoxes,
+            needBoxes: needBoxes,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$DeliveryPlanItemsTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({recordId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (recordId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.recordId,
+                    referencedTable:
+                        $$DeliveryPlanItemsTableReferences._recordIdTable(db),
+                    referencedColumn: $$DeliveryPlanItemsTableReferences
+                        ._recordIdTable(db)
+                        .id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$DeliveryPlanItemsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $DeliveryPlanItemsTable,
+    DeliveryPlanItem,
+    $$DeliveryPlanItemsTableFilterComposer,
+    $$DeliveryPlanItemsTableOrderingComposer,
+    $$DeliveryPlanItemsTableAnnotationComposer,
+    $$DeliveryPlanItemsTableCreateCompanionBuilder,
+    $$DeliveryPlanItemsTableUpdateCompanionBuilder,
+    (DeliveryPlanItem, $$DeliveryPlanItemsTableReferences),
+    DeliveryPlanItem,
+    PrefetchHooks Function({bool recordId})>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10917,4 +12548,8 @@ class $AppDatabaseManager {
       $$StocktakeItemsTableTableManager(_db, _db.stocktakeItems);
   $$ScannerGunsTableTableManager get scannerGuns =>
       $$ScannerGunsTableTableManager(_db, _db.scannerGuns);
+  $$DeliveryPlanRecordsTableTableManager get deliveryPlanRecords =>
+      $$DeliveryPlanRecordsTableTableManager(_db, _db.deliveryPlanRecords);
+  $$DeliveryPlanItemsTableTableManager get deliveryPlanItems =>
+      $$DeliveryPlanItemsTableTableManager(_db, _db.deliveryPlanItems);
 }

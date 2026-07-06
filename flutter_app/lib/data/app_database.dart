@@ -10,6 +10,8 @@ import 'database_enums.dart';
 import 'tables/batches.dart';
 import 'tables/attendance_records.dart';
 import 'tables/attendance_rules.dart';
+import 'tables/delivery_plan_items.dart';
+import 'tables/delivery_plan_records.dart';
 import 'tables/geofence_daily_states.dart';
 import 'tables/order_items.dart';
 import 'tables/orders.dart';
@@ -38,6 +40,8 @@ part 'app_database.g.dart';
     StocktakeSessions,
     StocktakeItems,
     ScannerGuns,
+    DeliveryPlanRecords,
+    DeliveryPlanItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -46,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -161,6 +165,14 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 20) {
             await _migrateAttendanceAccountScope(m);
+          }
+          if (from < 21) {
+            if (!await _hasTable('delivery_plan_records')) {
+              await m.createTable(deliveryPlanRecords);
+            }
+            if (!await _hasTable('delivery_plan_items')) {
+              await m.createTable(deliveryPlanItems);
+            }
           }
         },
         beforeOpen: (details) async {

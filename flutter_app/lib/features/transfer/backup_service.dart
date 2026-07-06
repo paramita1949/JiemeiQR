@@ -61,8 +61,8 @@ class BackupService {
   final int sqliteSchemaVersion;
   static const int maxSnapshotCount = 90;
   static const String aiConfigFileName = 'ai_ocr_config.json';
-  static const String defaultAppVersion = '4.4.9';
-  static const int currentSqliteSchemaVersion = 20;
+  static const String defaultAppVersion = '4.5.1';
+  static const int currentSqliteSchemaVersion = 21;
   static const Duration dailyAutoBackupInterval = Duration(hours: 24);
   static const Duration weeklyAutoBackupInterval = Duration(days: 7);
 

@@ -13,6 +13,7 @@ import 'package:qrscan_flutter/features/attendance/attendance_precheckin_guard_s
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
+import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_screen.dart';
 import 'package:qrscan_flutter/features/inventory/inventory_detail_screen.dart';
 import 'package:qrscan_flutter/features/orders/order_list_screen.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_screen.dart';
@@ -163,10 +164,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       subtitle: '浙江仓订单与库存工作台',
                     ),
                   ),
-                  IconButton.filledTonal(
-                    tooltip: '日志面板',
-                    onPressed: _openDebugLogPanel,
-                    icon: const Icon(Icons.bug_report_outlined),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton.filledTonal(
+                        tooltip: '交货计划',
+                        onPressed: _openDeliveryPlan,
+                        icon: const Icon(Icons.assignment_outlined),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        tooltip: '日志面板',
+                        onPressed: _openDebugLogPanel,
+                        icon: const Icon(Icons.bug_report_outlined),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -189,6 +201,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _openDeliveryPlan() async {
+    await pushAndRefresh(
+      context,
+      route: MaterialPageRoute(
+        builder: (_) => DeliveryPlanScreen(database: database),
+      ),
+      onRefresh: () => unawaited(_refreshStats()),
     );
   }
 
