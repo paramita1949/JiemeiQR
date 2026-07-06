@@ -7,6 +7,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/delivery_plan_dao.dart';
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.dart';
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
@@ -18,11 +19,13 @@ class DeliveryPlanScreen extends StatefulWidget {
     this.database,
     this.ocrService,
     this.imagePicker,
+    this.aiConfigStore = const FileAiConfigStore(),
   });
 
   final AppDatabase? database;
   final DeliveryPlanPhotoOcrService? ocrService;
   final DeliveryPlanImagePicker? imagePicker;
+  final FileAiConfigStore aiConfigStore;
 
   @override
   State<DeliveryPlanScreen> createState() => _DeliveryPlanScreenState();
@@ -34,6 +37,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
   late final DeliveryPlanDao _dao;
   late final DeliveryPlanPhotoOcrService _ocrService;
   late final DeliveryPlanImagePicker _imagePicker;
+  late final FileAiConfigStore _aiConfigStore;
   late Future<List<DeliveryPlanRecordSummary>> _recordsFuture;
   bool _ocrInProgress = false;
   String? _ocrProgressText;
@@ -44,7 +48,9 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
     _dao = DeliveryPlanDao(_database);
-    _ocrService = widget.ocrService ?? const ConfiguredDeliveryPlanOcrService();
+    _aiConfigStore = widget.aiConfigStore;
+    _ocrService = widget.ocrService ??
+        ConfiguredDeliveryPlanOcrService(configStore: _aiConfigStore);
     _imagePicker = widget.imagePicker ?? _pickImageWithSystemPicker;
     _recordsFuture = _dao.recordSummaries();
   }
@@ -78,40 +84,30 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
   }
 
   Future<void> _startAiScan() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () =>
-                      Navigator.of(context).pop(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('相册识别'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () =>
-                      Navigator.of(context).pop(ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: const Text('拍照识别'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (source == null) {
+    final currentConfig = await _aiConfigStore.load();
+    if (!mounted) {
       return;
     }
-    final image = await _imagePicker(source);
+    final plan = await showModalBottomSheet<_DeliveryPlanCapturePlan>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) =>
+          _DeliveryPlanCaptureSheet(initialConfig: currentConfig),
+    );
+    if (plan == null) {
+      return;
+    }
+    final nextConfig = currentConfig.copyWith(
+      provider: plan.provider,
+      geminiModel: plan.geminiModel,
+      modelscopeModel: plan.modelscopeModel,
+      paddleOcrModel: plan.paddleOcrModel,
+    );
+    await _aiConfigStore.save(nextConfig);
+    if (!mounted) {
+      return;
+    }
+    final image = await _imagePicker(plan.source);
     if (image == null) {
       return;
     }
@@ -273,6 +269,297 @@ Future<File?> _pickImageWithSystemPicker(ImageSource source) async {
     return null;
   }
   return File(picked.path);
+}
+
+class _DeliveryPlanCapturePlan {
+  const _DeliveryPlanCapturePlan({
+    required this.source,
+    required this.provider,
+    required this.geminiModel,
+    required this.modelscopeModel,
+    required this.paddleOcrModel,
+  });
+
+  final ImageSource source;
+  final String provider;
+  final String geminiModel;
+  final String modelscopeModel;
+  final String paddleOcrModel;
+}
+
+class _DeliveryPlanCaptureSheet extends StatefulWidget {
+  const _DeliveryPlanCaptureSheet({required this.initialConfig});
+
+  final AiOcrConfig initialConfig;
+
+  @override
+  State<_DeliveryPlanCaptureSheet> createState() =>
+      _DeliveryPlanCaptureSheetState();
+}
+
+class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
+  late String _provider;
+  late String _geminiModel;
+  late String _modelscopeModel;
+  late String _paddleOcrModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _provider = widget.initialConfig.provider;
+    _geminiModel = widget.initialConfig.geminiModel;
+    _modelscopeModel = widget.initialConfig.modelscopeModel;
+    _paddleOcrModel = widget.initialConfig.paddleOcrModel;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: const Text(
+                '交货计划专用提示词',
+                style: TextStyle(
+                  color: Color(0xFF1D4ED8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F7FC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFDCE4F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0F1E3A8A),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  _compactChoice(
+                    label: '谷歌',
+                    selected: _provider == AiOcrConfig.defaultProvider,
+                    enabled: widget.initialConfig.hasGeminiKey,
+                    onTap: () => setState(
+                      () => _provider = AiOcrConfig.defaultProvider,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _compactChoice(
+                    label: '魔搭',
+                    selected: _provider == AiOcrConfig.modelscopeProvider,
+                    enabled: widget.initialConfig.hasModelScopeCredential,
+                    onTap: () => setState(
+                      () => _provider = AiOcrConfig.modelscopeProvider,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _compactChoice(
+                    label: '飞桨',
+                    selected: _provider == AiOcrConfig.paddleOcrProvider,
+                    enabled: widget.initialConfig.hasPaddleOcrCredential,
+                    onTap: () => setState(
+                      () => _provider = AiOcrConfig.paddleOcrProvider,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: PopupMenuButton<String>(
+                      tooltip: '切换具体模型',
+                      onSelected: (value) => setState(() {
+                        if (_provider == AiOcrConfig.modelscopeProvider) {
+                          _modelscopeModel = value;
+                        } else if (_provider == AiOcrConfig.paddleOcrProvider) {
+                          _paddleOcrModel = value;
+                        } else {
+                          _geminiModel = value;
+                        }
+                      }),
+                      itemBuilder: (context) => _activeModelPresets()
+                          .map(
+                            (model) => PopupMenuItem<String>(
+                              value: model,
+                              child: Text(
+                                _shortModelName(model),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      child: Container(
+                        height: 33,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFDCE3EE)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _shortModelName(_activeModel()),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 16,
+                              color: Color(0xFF7A8598),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 46),
+                      backgroundColor: const Color(0xFFF8FAFD),
+                      foregroundColor: const Color(0xFF2C5FD1),
+                      side: const BorderSide(color: Color(0xFFD4DEEE)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => _finish(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('相册识别'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 46),
+                      elevation: 0,
+                      backgroundColor: const Color(0xFF2860E5),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => _finish(ImageSource.camera),
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('拍照识别'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _compactChoice({
+    required String label,
+    required bool selected,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE9F1FF) : const Color(0xFFF7F9FC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? const Color(0xFF8FAEF5) : const Color(0xFFE1E7F1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: enabled
+                ? selected
+                    ? const Color(0xFF2859CC)
+                    : AppTheme.textSecondary
+                : const Color(0xFFB6BDCA),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _activeModel() {
+    if (_provider == AiOcrConfig.modelscopeProvider) {
+      return _modelscopeModel;
+    }
+    if (_provider == AiOcrConfig.paddleOcrProvider) {
+      return _paddleOcrModel;
+    }
+    return _geminiModel;
+  }
+
+  List<String> _activeModelPresets() {
+    final presets = _provider == AiOcrConfig.modelscopeProvider
+        ? widget.initialConfig.modelScopeModelPresets
+        : _provider == AiOcrConfig.paddleOcrProvider
+            ? widget.initialConfig.paddleOcrModelPresets
+            : widget.initialConfig.geminiModelPresets;
+    return <String>{
+      if (_activeModel().trim().isNotEmpty) _activeModel().trim(),
+      ...presets.where((item) => item.trim().isNotEmpty),
+    }.toList();
+  }
+
+  String _shortModelName(String model) {
+    final text = model.trim();
+    if (text.isEmpty) {
+      return '未选择模型';
+    }
+    final slashIndex = text.lastIndexOf('/');
+    return slashIndex >= 0 ? text.substring(slashIndex + 1) : text;
+  }
+
+  void _finish(ImageSource source) {
+    Navigator.of(context).pop(
+      _DeliveryPlanCapturePlan(
+        source: source,
+        provider: _provider,
+        geminiModel: _geminiModel,
+        modelscopeModel: _modelscopeModel,
+        paddleOcrModel: _paddleOcrModel,
+      ),
+    );
+  }
 }
 
 class _DeliveryPlanEmptyState extends StatelessWidget {
