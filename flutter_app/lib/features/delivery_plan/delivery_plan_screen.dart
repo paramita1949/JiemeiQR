@@ -131,7 +131,11 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
         _ocrInProgress = false;
         _ocrProgressText = null;
       });
-      if (draft.positiveRows.isEmpty) {
+      final enrichedDraft = await _dao.draftWithBaseLocations(draft);
+      if (!mounted) {
+        return;
+      }
+      if (enrichedDraft.positiveRows.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('未识别到需要备货的交货计划行')),
         );
@@ -141,7 +145,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
         MaterialPageRoute(
           builder: (_) => _DeliveryPlanReviewScreen(
             dao: _dao,
-            draft: draft,
+            draft: enrichedDraft,
             sourceImagePath: image.path,
           ),
         ),
@@ -777,41 +781,24 @@ class _DeliveryPlanOcrRowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${row.productCode} · ${row.actualBatch} · ${row.dateBatch}',
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '可能备货 ${_formatInt(row.needBoxes)}箱',
-            style: const TextStyle(
-              color: Color(0xFFDC2626),
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '在库总箱数 ${_formatInt(row.stockTotalBoxes)} · 减交货计划可用量 ${_formatInt(row.deliveryPlanAvailableBoxes)}',
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+      child: Text(
+        _deliveryPlanLineText(
+          productCode: row.productCode,
+          actualBatch: row.actualBatch,
+          dateBatch: row.dateBatch,
+          location: row.location,
+          needBoxes: row.needBoxes,
+        ),
+        style: const TextStyle(
+          color: AppTheme.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -941,44 +928,44 @@ class _DeliveryPlanItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${item.productCode} · ${item.actualBatch} · ${item.dateBatch}',
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '可能备货 ${_formatInt(item.needBoxes)}箱',
-            style: const TextStyle(
-              color: Color(0xFFDC2626),
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '在库总箱数 ${_formatInt(item.stockTotalBoxes)} · 减交货计划可用量 ${_formatInt(item.deliveryPlanAvailableBoxes)}',
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+      child: Text(
+        _deliveryPlanLineText(
+          productCode: item.productCode,
+          actualBatch: item.actualBatch,
+          dateBatch: item.dateBatch,
+          location: item.location,
+          needBoxes: item.needBoxes,
+        ),
+        style: const TextStyle(
+          color: AppTheme.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
+}
+
+String _deliveryPlanLineText({
+  required String productCode,
+  required String actualBatch,
+  required String dateBatch,
+  required String location,
+  required int needBoxes,
+}) {
+  final parts = [
+    productCode.trim(),
+    actualBatch.trim(),
+    dateBatch.trim(),
+    if (location.trim().isNotEmpty) '库位 ${location.trim()}',
+    '预备 ${_formatInt(needBoxes)}箱',
+  ].where((part) => part.isNotEmpty);
+  return parts.join(' · ');
 }
 
 String _formatRecordTime(DateTime time) {

@@ -6805,6 +6805,14 @@ class $DeliveryPlanItemsTable extends DeliveryPlanItems
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant(''));
+  static const VerificationMeta _locationMeta =
+      const VerificationMeta('location');
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+      'location', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _actualBatchMeta =
       const VerificationMeta('actualBatch');
   @override
@@ -6856,6 +6864,7 @@ class $DeliveryPlanItemsTable extends DeliveryPlanItems
         rowIndex,
         productCode,
         productName,
+        location,
         actualBatch,
         dateBatch,
         stockTotalBoxes,
@@ -6899,6 +6908,10 @@ class $DeliveryPlanItemsTable extends DeliveryPlanItems
           _productNameMeta,
           productName.isAcceptableOrUnknown(
               data['product_name']!, _productNameMeta));
+    }
+    if (data.containsKey('location')) {
+      context.handle(_locationMeta,
+          location.isAcceptableOrUnknown(data['location']!, _locationMeta));
     }
     if (data.containsKey('actual_batch')) {
       context.handle(
@@ -6954,6 +6967,8 @@ class $DeliveryPlanItemsTable extends DeliveryPlanItems
           .read(DriftSqlType.string, data['${effectivePrefix}product_code'])!,
       productName: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}product_name'])!,
+      location: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}location'])!,
       actualBatch: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}actual_batch'])!,
       dateBatch: attachedDatabase.typeMapping
@@ -6983,6 +6998,7 @@ class DeliveryPlanItem extends DataClass
   final int rowIndex;
   final String productCode;
   final String productName;
+  final String location;
   final String actualBatch;
   final String dateBatch;
   final int stockTotalBoxes;
@@ -6995,6 +7011,7 @@ class DeliveryPlanItem extends DataClass
       required this.rowIndex,
       required this.productCode,
       required this.productName,
+      required this.location,
       required this.actualBatch,
       required this.dateBatch,
       required this.stockTotalBoxes,
@@ -7009,6 +7026,7 @@ class DeliveryPlanItem extends DataClass
     map['row_index'] = Variable<int>(rowIndex);
     map['product_code'] = Variable<String>(productCode);
     map['product_name'] = Variable<String>(productName);
+    map['location'] = Variable<String>(location);
     map['actual_batch'] = Variable<String>(actualBatch);
     map['date_batch'] = Variable<String>(dateBatch);
     map['stock_total_boxes'] = Variable<int>(stockTotalBoxes);
@@ -7026,6 +7044,7 @@ class DeliveryPlanItem extends DataClass
       rowIndex: Value(rowIndex),
       productCode: Value(productCode),
       productName: Value(productName),
+      location: Value(location),
       actualBatch: Value(actualBatch),
       dateBatch: Value(dateBatch),
       stockTotalBoxes: Value(stockTotalBoxes),
@@ -7044,6 +7063,7 @@ class DeliveryPlanItem extends DataClass
       rowIndex: serializer.fromJson<int>(json['rowIndex']),
       productCode: serializer.fromJson<String>(json['productCode']),
       productName: serializer.fromJson<String>(json['productName']),
+      location: serializer.fromJson<String>(json['location']),
       actualBatch: serializer.fromJson<String>(json['actualBatch']),
       dateBatch: serializer.fromJson<String>(json['dateBatch']),
       stockTotalBoxes: serializer.fromJson<int>(json['stockTotalBoxes']),
@@ -7062,6 +7082,7 @@ class DeliveryPlanItem extends DataClass
       'rowIndex': serializer.toJson<int>(rowIndex),
       'productCode': serializer.toJson<String>(productCode),
       'productName': serializer.toJson<String>(productName),
+      'location': serializer.toJson<String>(location),
       'actualBatch': serializer.toJson<String>(actualBatch),
       'dateBatch': serializer.toJson<String>(dateBatch),
       'stockTotalBoxes': serializer.toJson<int>(stockTotalBoxes),
@@ -7078,6 +7099,7 @@ class DeliveryPlanItem extends DataClass
           int? rowIndex,
           String? productCode,
           String? productName,
+          String? location,
           String? actualBatch,
           String? dateBatch,
           int? stockTotalBoxes,
@@ -7090,6 +7112,7 @@ class DeliveryPlanItem extends DataClass
         rowIndex: rowIndex ?? this.rowIndex,
         productCode: productCode ?? this.productCode,
         productName: productName ?? this.productName,
+        location: location ?? this.location,
         actualBatch: actualBatch ?? this.actualBatch,
         dateBatch: dateBatch ?? this.dateBatch,
         stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
@@ -7107,6 +7130,7 @@ class DeliveryPlanItem extends DataClass
           data.productCode.present ? data.productCode.value : this.productCode,
       productName:
           data.productName.present ? data.productName.value : this.productName,
+      location: data.location.present ? data.location.value : this.location,
       actualBatch:
           data.actualBatch.present ? data.actualBatch.value : this.actualBatch,
       dateBatch: data.dateBatch.present ? data.dateBatch.value : this.dateBatch,
@@ -7129,6 +7153,7 @@ class DeliveryPlanItem extends DataClass
           ..write('rowIndex: $rowIndex, ')
           ..write('productCode: $productCode, ')
           ..write('productName: $productName, ')
+          ..write('location: $location, ')
           ..write('actualBatch: $actualBatch, ')
           ..write('dateBatch: $dateBatch, ')
           ..write('stockTotalBoxes: $stockTotalBoxes, ')
@@ -7146,6 +7171,7 @@ class DeliveryPlanItem extends DataClass
       rowIndex,
       productCode,
       productName,
+      location,
       actualBatch,
       dateBatch,
       stockTotalBoxes,
@@ -7161,6 +7187,7 @@ class DeliveryPlanItem extends DataClass
           other.rowIndex == this.rowIndex &&
           other.productCode == this.productCode &&
           other.productName == this.productName &&
+          other.location == this.location &&
           other.actualBatch == this.actualBatch &&
           other.dateBatch == this.dateBatch &&
           other.stockTotalBoxes == this.stockTotalBoxes &&
@@ -7175,6 +7202,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
   final Value<int> rowIndex;
   final Value<String> productCode;
   final Value<String> productName;
+  final Value<String> location;
   final Value<String> actualBatch;
   final Value<String> dateBatch;
   final Value<int> stockTotalBoxes;
@@ -7187,6 +7215,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
     this.rowIndex = const Value.absent(),
     this.productCode = const Value.absent(),
     this.productName = const Value.absent(),
+    this.location = const Value.absent(),
     this.actualBatch = const Value.absent(),
     this.dateBatch = const Value.absent(),
     this.stockTotalBoxes = const Value.absent(),
@@ -7200,6 +7229,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
     this.rowIndex = const Value.absent(),
     required String productCode,
     this.productName = const Value.absent(),
+    this.location = const Value.absent(),
     required String actualBatch,
     required String dateBatch,
     this.stockTotalBoxes = const Value.absent(),
@@ -7216,6 +7246,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
     Expression<int>? rowIndex,
     Expression<String>? productCode,
     Expression<String>? productName,
+    Expression<String>? location,
     Expression<String>? actualBatch,
     Expression<String>? dateBatch,
     Expression<int>? stockTotalBoxes,
@@ -7229,6 +7260,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
       if (rowIndex != null) 'row_index': rowIndex,
       if (productCode != null) 'product_code': productCode,
       if (productName != null) 'product_name': productName,
+      if (location != null) 'location': location,
       if (actualBatch != null) 'actual_batch': actualBatch,
       if (dateBatch != null) 'date_batch': dateBatch,
       if (stockTotalBoxes != null) 'stock_total_boxes': stockTotalBoxes,
@@ -7245,6 +7277,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
       Value<int>? rowIndex,
       Value<String>? productCode,
       Value<String>? productName,
+      Value<String>? location,
       Value<String>? actualBatch,
       Value<String>? dateBatch,
       Value<int>? stockTotalBoxes,
@@ -7257,6 +7290,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
       rowIndex: rowIndex ?? this.rowIndex,
       productCode: productCode ?? this.productCode,
       productName: productName ?? this.productName,
+      location: location ?? this.location,
       actualBatch: actualBatch ?? this.actualBatch,
       dateBatch: dateBatch ?? this.dateBatch,
       stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
@@ -7284,6 +7318,9 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
     }
     if (productName.present) {
       map['product_name'] = Variable<String>(productName.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
     }
     if (actualBatch.present) {
       map['actual_batch'] = Variable<String>(actualBatch.value);
@@ -7315,6 +7352,7 @@ class DeliveryPlanItemsCompanion extends UpdateCompanion<DeliveryPlanItem> {
           ..write('rowIndex: $rowIndex, ')
           ..write('productCode: $productCode, ')
           ..write('productName: $productName, ')
+          ..write('location: $location, ')
           ..write('actualBatch: $actualBatch, ')
           ..write('dateBatch: $dateBatch, ')
           ..write('stockTotalBoxes: $stockTotalBoxes, ')
@@ -12157,6 +12195,7 @@ typedef $$DeliveryPlanItemsTableCreateCompanionBuilder
   Value<int> rowIndex,
   required String productCode,
   Value<String> productName,
+  Value<String> location,
   required String actualBatch,
   required String dateBatch,
   Value<int> stockTotalBoxes,
@@ -12171,6 +12210,7 @@ typedef $$DeliveryPlanItemsTableUpdateCompanionBuilder
   Value<int> rowIndex,
   Value<String> productCode,
   Value<String> productName,
+  Value<String> location,
   Value<String> actualBatch,
   Value<String> dateBatch,
   Value<int> stockTotalBoxes,
@@ -12221,6 +12261,9 @@ class $$DeliveryPlanItemsTableFilterComposer
 
   ColumnFilters<String> get productName => $composableBuilder(
       column: $table.productName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get location => $composableBuilder(
+      column: $table.location, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get actualBatch => $composableBuilder(
       column: $table.actualBatch, builder: (column) => ColumnFilters(column));
@@ -12284,6 +12327,9 @@ class $$DeliveryPlanItemsTableOrderingComposer
   ColumnOrderings<String> get productName => $composableBuilder(
       column: $table.productName, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get location => $composableBuilder(
+      column: $table.location, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get actualBatch => $composableBuilder(
       column: $table.actualBatch, builder: (column) => ColumnOrderings(column));
 
@@ -12346,6 +12392,9 @@ class $$DeliveryPlanItemsTableAnnotationComposer
 
   GeneratedColumn<String> get productName => $composableBuilder(
       column: $table.productName, builder: (column) => column);
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
 
   GeneratedColumn<String> get actualBatch => $composableBuilder(
       column: $table.actualBatch, builder: (column) => column);
@@ -12417,6 +12466,7 @@ class $$DeliveryPlanItemsTableTableManager extends RootTableManager<
             Value<int> rowIndex = const Value.absent(),
             Value<String> productCode = const Value.absent(),
             Value<String> productName = const Value.absent(),
+            Value<String> location = const Value.absent(),
             Value<String> actualBatch = const Value.absent(),
             Value<String> dateBatch = const Value.absent(),
             Value<int> stockTotalBoxes = const Value.absent(),
@@ -12430,6 +12480,7 @@ class $$DeliveryPlanItemsTableTableManager extends RootTableManager<
             rowIndex: rowIndex,
             productCode: productCode,
             productName: productName,
+            location: location,
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             stockTotalBoxes: stockTotalBoxes,
@@ -12443,6 +12494,7 @@ class $$DeliveryPlanItemsTableTableManager extends RootTableManager<
             Value<int> rowIndex = const Value.absent(),
             required String productCode,
             Value<String> productName = const Value.absent(),
+            Value<String> location = const Value.absent(),
             required String actualBatch,
             required String dateBatch,
             Value<int> stockTotalBoxes = const Value.absent(),
@@ -12456,6 +12508,7 @@ class $$DeliveryPlanItemsTableTableManager extends RootTableManager<
             rowIndex: rowIndex,
             productCode: productCode,
             productName: productName,
+            location: location,
             actualBatch: actualBatch,
             dateBatch: dateBatch,
             stockTotalBoxes: stockTotalBoxes,

@@ -38,6 +38,7 @@ class DeliveryPlanOcrRow {
   const DeliveryPlanOcrRow({
     required this.productCode,
     required this.productName,
+    this.location = '',
     required this.actualBatch,
     required this.dateBatch,
     required this.stockTotalBoxes,
@@ -46,6 +47,7 @@ class DeliveryPlanOcrRow {
 
   final String productCode;
   final String productName;
+  final String location;
   final String actualBatch;
   final String dateBatch;
   final int stockTotalBoxes;
@@ -58,6 +60,7 @@ class DeliveryPlanOcrRow {
 
   bool get hasContent =>
       productCode.trim().isNotEmpty ||
+      location.trim().isNotEmpty ||
       actualBatch.trim().isNotEmpty ||
       dateBatch.trim().isNotEmpty ||
       stockTotalBoxes > 0 ||
@@ -67,11 +70,33 @@ class DeliveryPlanOcrRow {
     return DeliveryPlanOcrRow(
       productCode: productCode.isNotEmpty ? productCode : other.productCode,
       productName: productName.isNotEmpty ? productName : other.productName,
+      location: _mergeLocations(location, other.location),
       actualBatch: actualBatch.isNotEmpty ? actualBatch : other.actualBatch,
       dateBatch: dateBatch.isNotEmpty ? dateBatch : other.dateBatch,
       stockTotalBoxes: stockTotalBoxes + other.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
           deliveryPlanAvailableBoxes + other.deliveryPlanAvailableBoxes,
+    );
+  }
+
+  DeliveryPlanOcrRow copyWith({
+    String? productCode,
+    String? productName,
+    String? location,
+    String? actualBatch,
+    String? dateBatch,
+    int? stockTotalBoxes,
+    int? deliveryPlanAvailableBoxes,
+  }) {
+    return DeliveryPlanOcrRow(
+      productCode: productCode ?? this.productCode,
+      productName: productName ?? this.productName,
+      location: location ?? this.location,
+      actualBatch: actualBatch ?? this.actualBatch,
+      dateBatch: dateBatch ?? this.dateBatch,
+      stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
+      deliveryPlanAvailableBoxes:
+          deliveryPlanAvailableBoxes ?? this.deliveryPlanAvailableBoxes,
     );
   }
 
@@ -150,4 +175,20 @@ int _intValue(Object? value) {
   }
   final text = _stringValue(value).replaceAll(RegExp(r'[^0-9]'), '');
   return int.tryParse(text) ?? 0;
+}
+
+String _mergeLocations(String current, String other) {
+  final values = <String>[];
+  void addAll(String text) {
+    for (final part in text.split(RegExp(r'[、,，;/；]+'))) {
+      final normalized = part.trim();
+      if (normalized.isNotEmpty && !values.contains(normalized)) {
+        values.add(normalized);
+      }
+    }
+  }
+
+  addAll(current);
+  addAll(other);
+  return values.join('、');
 }

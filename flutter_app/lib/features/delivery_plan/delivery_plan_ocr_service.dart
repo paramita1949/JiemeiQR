@@ -1057,14 +1057,18 @@ const _deliveryPlanPrompt = '''
 - productName: 物料名称
 - actualBatch: 批次/实际批号，优先读取英数串
 - dateBatch: 货架寿命到期日/截止日期/日期批号
-- stockTotalBoxes: “在库总箱数”列的整数
-- deliveryPlanAvailableBoxes: “减交货计划可用量箱数”列的整数
+- stockTotalBoxes: 兼容旧字段，固定填0；不要从截图提取在库总库存、在库总箱数或非限制库存
+- deliveryPlanAvailableBoxes: “减交货计划可用量箱数”列的整数；表头前有Σ、排序符号或空格也按这一列读取
 - warnings: 读不清或列缺失时，用中文简短说明
 
-不要把订单、交货计划件数、非限制库存件数当作 stockTotalBoxes。
+只把“减交货计划可用量箱数”提取到 deliveryPlanAvailableBoxes。
+不要把“交货计划”“Σ 交货计划”“交货计划件数”“交货计划可用用量”当作 deliveryPlanAvailableBoxes。
+不要把库位描述、库位、包装规格、Σ在库总库存、Σ冻结库存、Σ非限制库存、Σ在库总箱数、批次状态、产品组描述、非限制箱数提取为业务字段。
 不要根据件数、包装规格、金额、重量推算箱数。
-本地程序会计算：可能备货箱数 = 在库总箱数 - 减交货计划可用量箱数。
-如果某行这两个箱数字段读不到，填0并在warnings说明。
+本地程序会计算：可能备货箱数 = APP可用箱数 - 减交货计划可用量箱数；APP可用箱数来自本地库存明细，不由AI识别或推算。
+本地程序会再从基础资料匹配仓储位置，不要提取或补全位置字段。
+如果某行“减交货计划可用量箱数”读不到，deliveryPlanAvailableBoxes填0并在warnings说明。
+忽略底部合计行、黄色选中行样式和表格汇总数字。
 返回 JSON 对象，字段必须包含 rows 和 warnings。
 ''';
 

@@ -14,7 +14,8 @@ class DeliveryPlanDao {
     String? sourceImagePath,
     DateTime? createdAt,
   }) async {
-    final rows = draft.positiveRows;
+    final enrichedDraft = await draftWithBaseLocations(draft);
+    final rows = enrichedDraft.positiveRows;
     if (rows.isEmpty) {
       throw const EmptyDeliveryPlanException();
     }
@@ -25,8 +26,8 @@ class DeliveryPlanDao {
                 DeliveryPlanRecordsCompanion.insert(
                   sourceImagePath: Value(sourceImagePath),
                   lineCount: Value(rows.length),
-                  totalNeedBoxes: Value(draft.totalNeedBoxes),
-                  warningsJson: Value(jsonEncode(draft.warnings)),
+                  totalNeedBoxes: Value(enrichedDraft.totalNeedBoxes),
+                  warningsJson: Value(jsonEncode(enrichedDraft.warnings)),
                   createdAt: Value(recordCreatedAt),
                 ),
               );
@@ -38,6 +39,7 @@ class DeliveryPlanDao {
                 rowIndex: Value(index),
                 productCode: row.productCode,
                 productName: Value(row.productName),
+                location: Value(row.location),
                 actualBatch: row.actualBatch,
                 dateBatch: row.dateBatch,
                 stockTotalBoxes: Value(row.stockTotalBoxes),
@@ -50,6 +52,22 @@ class DeliveryPlanDao {
       }
       return recordId;
     });
+  }
+
+  Future<DeliveryPlanOcrDraft> draftWithBaseLocations(
+    DeliveryPlanOcrDraft draft,
+  ) async {
+    final rows = <DeliveryPlanOcrRow>[];
+    for (final row in draft.rows) {
+      final baseInfo = await _baseInfoForRow(row);
+      rows.add(
+        row.copyWith(
+          location: baseInfo.location,
+          stockTotalBoxes: baseInfo.appAvailableBoxes,
+        ),
+      );
+    }
+    return DeliveryPlanOcrDraft(rows: rows, warnings: draft.warnings);
   }
 
   Future<List<DeliveryPlanRecordSummary>> recordSummaries() async {
@@ -117,6 +135,116 @@ class DeliveryPlanDao {
     }
     return const <String>[];
   }
+
+  Future<_DeliveryPlanBaseInfo> _baseInfoForRow(
+    DeliveryPlanOcrRow row,
+  ) async {
+    final productCode = _keyPart(row.productCode);
+    if (productCode.isEmpty) {
+      return const _DeliveryPlanBaseInfo();
+    }
+    final candidates = await _database.customSelect(
+      '''
+      SELECT
+        b.id AS batch_id,
+        b.actual_batch AS actual_batch,
+        b.date_batch AS date_batch,
+        COALESCE(b.location, '') AS location,
+        b.initial_boxes AS initial_boxes,
+        b.frozen_boxes AS frozen_boxes,
+        COALESCE((
+          SELECT SUM(CASE
+            WHEN sm.type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+              THEN sm.boxes
+            ELSE -sm.boxes
+          END)
+          FROM stock_movements sm
+          WHERE sm.batch_id = b.id
+        ), 0) AS delta_boxes,
+        COALESCE((
+          SELECT SUM(oi.boxes)
+          FROM order_items oi
+          INNER JOIN orders o ON o.id = oi.order_id
+          WHERE oi.batch_id = b.id
+            AND o.status != ${OrderStatus.done.index}
+        ), 0) AS reserved_boxes
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      WHERE p.code = ?
+      ''',
+      variables: [Variable.withString(productCode)],
+      readsFrom: {
+        _database.products,
+        _database.batches,
+        _database.stockMovements,
+        _database.orderItems,
+        _database.orders,
+      },
+    ).get();
+    if (candidates.isEmpty) {
+      return const _DeliveryPlanBaseInfo();
+    }
+    final actualKey = _keyPart(row.actualBatch);
+    final dateKey = _dateKeyPart(row.dateBatch);
+    final exact = candidates.where((candidate) {
+      final data = candidate.data;
+      return actualKey.isNotEmpty &&
+          dateKey.isNotEmpty &&
+          _keyPart(data['actual_batch']?.toString() ?? '') == actualKey &&
+          _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
+    }).toList(growable: false);
+    if (exact.isNotEmpty) {
+      return _baseInfoFromRows(exact);
+    }
+    final actualMatches = candidates.where((candidate) {
+      final data = candidate.data;
+      return actualKey.isNotEmpty &&
+          _keyPart(data['actual_batch']?.toString() ?? '') == actualKey;
+    }).toList(growable: false);
+    if (actualMatches.isNotEmpty) {
+      return _baseInfoFromRows(actualMatches);
+    }
+    final dateMatches = candidates.where((candidate) {
+      final data = candidate.data;
+      return dateKey.isNotEmpty &&
+          _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
+    }).toList(growable: false);
+    return _baseInfoFromRows(dateMatches);
+  }
+
+  _DeliveryPlanBaseInfo _baseInfoFromRows(List<QueryRow> rows) {
+    final locations = <String>[];
+    var appAvailableBoxes = 0;
+    for (final row in rows) {
+      final data = row.data;
+      final location = data['location']?.toString().trim() ?? '';
+      if (location.isNotEmpty && !locations.contains(location)) {
+        locations.add(location);
+      }
+      final currentBoxes =
+          _intData(data['initial_boxes']) + _intData(data['delta_boxes']);
+      final available = currentBoxes -
+          _intData(data['frozen_boxes']) -
+          _intData(data['reserved_boxes']);
+      if (available > 0) {
+        appAvailableBoxes += available;
+      }
+    }
+    return _DeliveryPlanBaseInfo(
+      location: locations.join('、'),
+      appAvailableBoxes: appAvailableBoxes,
+    );
+  }
+}
+
+class _DeliveryPlanBaseInfo {
+  const _DeliveryPlanBaseInfo({
+    this.location = '',
+    this.appAvailableBoxes = 0,
+  });
+
+  final String location;
+  final int appAvailableBoxes;
 }
 
 class DeliveryPlanRecordSummary {
@@ -152,4 +280,27 @@ class EmptyDeliveryPlanException implements Exception {
 
   @override
   String toString() => '没有可生成记录的交货计划行';
+}
+
+String _keyPart(String value) =>
+    value.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+
+String _dateKeyPart(String value) {
+  final normalized = _keyPart(value).replaceAll('。', '.');
+  final match = RegExp(r'(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})日?')
+      .firstMatch(normalized);
+  if (match == null) {
+    return normalized;
+  }
+  return '${match.group(1)}.${int.parse(match.group(2)!)}.${int.parse(match.group(3)!)}';
+}
+
+int _intData(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

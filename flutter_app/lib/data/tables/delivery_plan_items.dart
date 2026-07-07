@@ -9,6 +9,7 @@ class DeliveryPlanItems extends Table {
   IntColumn get rowIndex => integer().withDefault(const Constant(0))();
   TextColumn get productCode => text()();
   TextColumn get productName => text().withDefault(const Constant(''))();
+  TextColumn get location => text().withDefault(const Constant(''))();
   TextColumn get actualBatch => text()();
   TextColumn get dateBatch => text()();
   IntColumn get stockTotalBoxes => integer().withDefault(const Constant(0))();
