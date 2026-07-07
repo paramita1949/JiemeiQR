@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       IconButton.filledTonal(
                         tooltip: '交货计划',
                         onPressed: _openDeliveryPlan,
-                        icon: const Icon(Icons.assignment_outlined),
+                        icon: const Icon(Icons.event_note_outlined),
                       ),
                       const SizedBox(width: 8),
                       IconButton.filledTonal(

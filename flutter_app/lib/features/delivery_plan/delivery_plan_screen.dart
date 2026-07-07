@@ -201,7 +201,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
                     children: [
                       const Expanded(
                         child: PageTitle(
-                          icon: Icons.assignment_outlined,
+                          icon: Icons.event_note_outlined,
                           title: '交货计划',
                           subtitle: '截图识别后的临时记录',
                         ),
@@ -580,7 +580,7 @@ class _DeliveryPlanEmptyState extends StatelessWidget {
       child: const Column(
         children: [
           Icon(
-            Icons.assignment_outlined,
+            Icons.event_note_outlined,
             color: AppTheme.textSecondary,
             size: 34,
           ),
@@ -969,13 +969,9 @@ String _deliveryPlanLineText({
 }
 
 String _formatRecordTime(DateTime time) {
-  final now = DateTime.now();
   final hour = time.hour.toString().padLeft(2, '0');
   final minute = time.minute.toString().padLeft(2, '0');
-  if (time.year == now.year && time.month == now.month && time.day == now.day) {
-    return '今天 $hour:$minute';
-  }
-  return '${time.year}.${time.month}.${time.day} $hour:$minute';
+  return '${time.month}.${time.day} $hour:$minute';
 }
 
 String _formatInt(int value) {
