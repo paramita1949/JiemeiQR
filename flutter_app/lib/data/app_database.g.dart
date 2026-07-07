@@ -2630,6 +2630,12 @@ class $AttendanceRulesTable extends AttendanceRules
           defaultConstraints: GeneratedColumn.constraintIsAlways(
               'CHECK ("checkout_reminder_enabled" IN (0, 1))'),
           defaultValue: const Constant(false));
+  static const VerificationMeta _autoCheckinPopupTextMeta =
+      const VerificationMeta('autoCheckinPopupText');
+  @override
+  late final GeneratedColumn<String> autoCheckinPopupText =
+      GeneratedColumn<String>('auto_checkin_popup_text', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _updatedAtMeta =
       const VerificationMeta('updatedAt');
   @override
@@ -2653,6 +2659,7 @@ class $AttendanceRulesTable extends AttendanceRules
         geofenceEnabled,
         checkinReminderEnabled,
         checkoutReminderEnabled,
+        autoCheckinPopupText,
         updatedAt
       ];
   @override
@@ -2738,6 +2745,12 @@ class $AttendanceRulesTable extends AttendanceRules
               data['checkout_reminder_enabled']!,
               _checkoutReminderEnabledMeta));
     }
+    if (data.containsKey('auto_checkin_popup_text')) {
+      context.handle(
+          _autoCheckinPopupTextMeta,
+          autoCheckinPopupText.isAcceptableOrUnknown(
+              data['auto_checkin_popup_text']!, _autoCheckinPopupTextMeta));
+    }
     if (data.containsKey('updated_at')) {
       context.handle(_updatedAtMeta,
           updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
@@ -2780,6 +2793,9 @@ class $AttendanceRulesTable extends AttendanceRules
       checkoutReminderEnabled: attachedDatabase.typeMapping.read(
           DriftSqlType.bool,
           data['${effectivePrefix}checkout_reminder_enabled'])!,
+      autoCheckinPopupText: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}auto_checkin_popup_text']),
       updatedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
     );
@@ -2805,6 +2821,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   final bool geofenceEnabled;
   final bool checkinReminderEnabled;
   final bool checkoutReminderEnabled;
+  final String? autoCheckinPopupText;
   final DateTime updatedAt;
   const AttendanceRule(
       {required this.id,
@@ -2820,6 +2837,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       required this.geofenceEnabled,
       required this.checkinReminderEnabled,
       required this.checkoutReminderEnabled,
+      this.autoCheckinPopupText,
       required this.updatedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2841,6 +2859,9 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
     map['geofence_enabled'] = Variable<bool>(geofenceEnabled);
     map['checkin_reminder_enabled'] = Variable<bool>(checkinReminderEnabled);
     map['checkout_reminder_enabled'] = Variable<bool>(checkoutReminderEnabled);
+    if (!nullToAbsent || autoCheckinPopupText != null) {
+      map['auto_checkin_popup_text'] = Variable<String>(autoCheckinPopupText);
+    }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
   }
@@ -2864,6 +2885,9 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       geofenceEnabled: Value(geofenceEnabled),
       checkinReminderEnabled: Value(checkinReminderEnabled),
       checkoutReminderEnabled: Value(checkoutReminderEnabled),
+      autoCheckinPopupText: autoCheckinPopupText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(autoCheckinPopupText),
       updatedAt: Value(updatedAt),
     );
   }
@@ -2888,6 +2912,8 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           serializer.fromJson<bool>(json['checkinReminderEnabled']),
       checkoutReminderEnabled:
           serializer.fromJson<bool>(json['checkoutReminderEnabled']),
+      autoCheckinPopupText:
+          serializer.fromJson<String?>(json['autoCheckinPopupText']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
@@ -2910,6 +2936,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       'checkinReminderEnabled': serializer.toJson<bool>(checkinReminderEnabled),
       'checkoutReminderEnabled':
           serializer.toJson<bool>(checkoutReminderEnabled),
+      'autoCheckinPopupText': serializer.toJson<String?>(autoCheckinPopupText),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
@@ -2928,6 +2955,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           bool? geofenceEnabled,
           bool? checkinReminderEnabled,
           bool? checkoutReminderEnabled,
+          Value<String?> autoCheckinPopupText = const Value.absent(),
           DateTime? updatedAt}) =>
       AttendanceRule(
         id: id ?? this.id,
@@ -2946,6 +2974,9 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
             checkinReminderEnabled ?? this.checkinReminderEnabled,
         checkoutReminderEnabled:
             checkoutReminderEnabled ?? this.checkoutReminderEnabled,
+        autoCheckinPopupText: autoCheckinPopupText.present
+            ? autoCheckinPopupText.value
+            : this.autoCheckinPopupText,
         updatedAt: updatedAt ?? this.updatedAt,
       );
   AttendanceRule copyWithCompanion(AttendanceRulesCompanion data) {
@@ -2980,6 +3011,9 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       checkoutReminderEnabled: data.checkoutReminderEnabled.present
           ? data.checkoutReminderEnabled.value
           : this.checkoutReminderEnabled,
+      autoCheckinPopupText: data.autoCheckinPopupText.present
+          ? data.autoCheckinPopupText.value
+          : this.autoCheckinPopupText,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -3000,6 +3034,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           ..write('geofenceEnabled: $geofenceEnabled, ')
           ..write('checkinReminderEnabled: $checkinReminderEnabled, ')
           ..write('checkoutReminderEnabled: $checkoutReminderEnabled, ')
+          ..write('autoCheckinPopupText: $autoCheckinPopupText, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -3020,6 +3055,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       geofenceEnabled,
       checkinReminderEnabled,
       checkoutReminderEnabled,
+      autoCheckinPopupText,
       updatedAt);
   @override
   bool operator ==(Object other) =>
@@ -3038,6 +3074,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           other.geofenceEnabled == this.geofenceEnabled &&
           other.checkinReminderEnabled == this.checkinReminderEnabled &&
           other.checkoutReminderEnabled == this.checkoutReminderEnabled &&
+          other.autoCheckinPopupText == this.autoCheckinPopupText &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -3055,6 +3092,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   final Value<bool> geofenceEnabled;
   final Value<bool> checkinReminderEnabled;
   final Value<bool> checkoutReminderEnabled;
+  final Value<String?> autoCheckinPopupText;
   final Value<DateTime> updatedAt;
   const AttendanceRulesCompanion({
     this.id = const Value.absent(),
@@ -3070,6 +3108,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.geofenceEnabled = const Value.absent(),
     this.checkinReminderEnabled = const Value.absent(),
     this.checkoutReminderEnabled = const Value.absent(),
+    this.autoCheckinPopupText = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   AttendanceRulesCompanion.insert({
@@ -3086,6 +3125,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.geofenceEnabled = const Value.absent(),
     this.checkinReminderEnabled = const Value.absent(),
     this.checkoutReminderEnabled = const Value.absent(),
+    this.autoCheckinPopupText = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   static Insertable<AttendanceRule> custom({
@@ -3102,6 +3142,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     Expression<bool>? geofenceEnabled,
     Expression<bool>? checkinReminderEnabled,
     Expression<bool>? checkoutReminderEnabled,
+    Expression<String>? autoCheckinPopupText,
     Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
@@ -3122,6 +3163,8 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
         'checkin_reminder_enabled': checkinReminderEnabled,
       if (checkoutReminderEnabled != null)
         'checkout_reminder_enabled': checkoutReminderEnabled,
+      if (autoCheckinPopupText != null)
+        'auto_checkin_popup_text': autoCheckinPopupText,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
@@ -3140,6 +3183,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       Value<bool>? geofenceEnabled,
       Value<bool>? checkinReminderEnabled,
       Value<bool>? checkoutReminderEnabled,
+      Value<String?>? autoCheckinPopupText,
       Value<DateTime>? updatedAt}) {
     return AttendanceRulesCompanion(
       id: id ?? this.id,
@@ -3158,6 +3202,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
           checkinReminderEnabled ?? this.checkinReminderEnabled,
       checkoutReminderEnabled:
           checkoutReminderEnabled ?? this.checkoutReminderEnabled,
+      autoCheckinPopupText: autoCheckinPopupText ?? this.autoCheckinPopupText,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -3207,6 +3252,10 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       map['checkout_reminder_enabled'] =
           Variable<bool>(checkoutReminderEnabled.value);
     }
+    if (autoCheckinPopupText.present) {
+      map['auto_checkin_popup_text'] =
+          Variable<String>(autoCheckinPopupText.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -3229,6 +3278,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
           ..write('geofenceEnabled: $geofenceEnabled, ')
           ..write('checkinReminderEnabled: $checkinReminderEnabled, ')
           ..write('checkoutReminderEnabled: $checkoutReminderEnabled, ')
+          ..write('autoCheckinPopupText: $autoCheckinPopupText, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -9763,6 +9813,7 @@ typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
   Value<bool> geofenceEnabled,
   Value<bool> checkinReminderEnabled,
   Value<bool> checkoutReminderEnabled,
+  Value<String?> autoCheckinPopupText,
   Value<DateTime> updatedAt,
 });
 typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
@@ -9780,6 +9831,7 @@ typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
   Value<bool> geofenceEnabled,
   Value<bool> checkinReminderEnabled,
   Value<bool> checkoutReminderEnabled,
+  Value<String?> autoCheckinPopupText,
   Value<DateTime> updatedAt,
 });
 
@@ -9835,6 +9887,10 @@ class $$AttendanceRulesTableFilterComposer
 
   ColumnFilters<bool> get checkoutReminderEnabled => $composableBuilder(
       column: $table.checkoutReminderEnabled,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get autoCheckinPopupText => $composableBuilder(
+      column: $table.autoCheckinPopupText,
       builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
@@ -9896,6 +9952,10 @@ class $$AttendanceRulesTableOrderingComposer
       column: $table.checkoutReminderEnabled,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get autoCheckinPopupText => $composableBuilder(
+      column: $table.autoCheckinPopupText,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
 }
@@ -9948,6 +10008,9 @@ class $$AttendanceRulesTableAnnotationComposer
   GeneratedColumn<bool> get checkoutReminderEnabled => $composableBuilder(
       column: $table.checkoutReminderEnabled, builder: (column) => column);
 
+  GeneratedColumn<String> get autoCheckinPopupText => $composableBuilder(
+      column: $table.autoCheckinPopupText, builder: (column) => column);
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
@@ -9992,6 +10055,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<bool> geofenceEnabled = const Value.absent(),
             Value<bool> checkinReminderEnabled = const Value.absent(),
             Value<bool> checkoutReminderEnabled = const Value.absent(),
+            Value<String?> autoCheckinPopupText = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
               AttendanceRulesCompanion(
@@ -10008,6 +10072,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             geofenceEnabled: geofenceEnabled,
             checkinReminderEnabled: checkinReminderEnabled,
             checkoutReminderEnabled: checkoutReminderEnabled,
+            autoCheckinPopupText: autoCheckinPopupText,
             updatedAt: updatedAt,
           ),
           createCompanionCallback: ({
@@ -10024,6 +10089,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<bool> geofenceEnabled = const Value.absent(),
             Value<bool> checkinReminderEnabled = const Value.absent(),
             Value<bool> checkoutReminderEnabled = const Value.absent(),
+            Value<String?> autoCheckinPopupText = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
               AttendanceRulesCompanion.insert(
@@ -10040,6 +10106,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             geofenceEnabled: geofenceEnabled,
             checkinReminderEnabled: checkinReminderEnabled,
             checkoutReminderEnabled: checkoutReminderEnabled,
+            autoCheckinPopupText: autoCheckinPopupText,
             updatedAt: updatedAt,
           ),
           withReferenceMapper: (p0) => p0

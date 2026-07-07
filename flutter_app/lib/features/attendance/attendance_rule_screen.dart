@@ -36,6 +36,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   final _lateController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
+  final _autoCheckinPopupTextController = TextEditingController();
 
   bool _geofenceEnabled = false;
   bool _showBackupRecords = false;
@@ -73,6 +74,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _lateController.dispose();
     _latController.dispose();
     _lngController.dispose();
+    _autoCheckinPopupTextController.dispose();
     super.dispose();
   }
 
@@ -83,6 +85,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _lateController.text = '${rule.lateGraceMinutes}';
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
+    _autoCheckinPopupTextController.text = rule.autoCheckinPopupText ?? '';
     _geofenceEnabled = rule.geofenceEnabled;
     _weekendType = rule.weekendType;
 
@@ -124,6 +127,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         geofenceEnabled: Value(_geofenceEnabled),
         checkinReminderEnabled: const Value(true),
         checkoutReminderEnabled: const Value(false),
+        autoCheckinPopupText:
+            Value(_normalizedPopupText(_autoCheckinPopupTextController.text)),
       ),
     );
     try {
@@ -158,6 +163,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         geofenceEnabled: Value(_geofenceEnabled),
         checkinReminderEnabled: const Value(true),
         checkoutReminderEnabled: const Value(false),
+        autoCheckinPopupText:
+            Value(_normalizedPopupText(_autoCheckinPopupTextController.text)),
       ),
     );
 
@@ -177,6 +184,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('围栏设置已保存')),
     );
+  }
+
+  String? _normalizedPopupText(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   Future<void> _useCurrentLocation() async {
@@ -456,6 +468,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
                 : '今日：${_todayGeofenceState!.wasInside ? '范围内' : '范围外'} · 已触发${_todayGeofenceState!.triggeredCount}次 · 打开APP后系统通知反馈',
           ),
           const SizedBox(height: 10),
+          _rowField(
+            '自动签到弹出内容',
+            _autoCheckinPopupTextController,
+            key: const Key('autoCheckinPopupTextField'),
+          ),
           Row(
             children: [
               Expanded(
@@ -765,11 +782,13 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   Widget _rowField(
     String label,
     TextEditingController controller, {
+    Key? key,
     TextInputType? keyboardType,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextField(
+        key: key,
         controller: controller,
         keyboardType: keyboardType,
         decoration: InputDecoration(

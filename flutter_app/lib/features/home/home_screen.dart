@@ -397,6 +397,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       if (decision?.triggered != true) return;
       DebugEventLog.add('GEOFENCE_AUTO', 'foreground auto check-in notified');
+      final popupText = decision?.popupText?.trim();
+      if (popupText == null || popupText.isEmpty) return;
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('自动签到提醒'),
+          content: Text(popupText),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
     } catch (_) {
       // Keep home resilient when location/notification fails on some devices.
     }

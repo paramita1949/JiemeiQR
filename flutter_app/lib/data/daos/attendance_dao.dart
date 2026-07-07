@@ -202,7 +202,16 @@ class AttendanceDao {
       return const GeofenceDecision(triggered: false, reason: '上班提醒未启用');
     }
     await _saveAutomaticGeofenceCheckIn(ts, rule: rule);
-    return const GeofenceDecision(triggered: true, reason: '进入围栏，已自动上班签到');
+    return GeofenceDecision(
+      triggered: true,
+      reason: '进入围栏，已自动上班签到',
+      popupText: _normalizedPopupText(rule.autoCheckinPopupText),
+    );
+  }
+
+  String? _normalizedPopupText(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   Future<void> _saveAutomaticGeofenceCheckIn(
@@ -495,6 +504,7 @@ class AttendanceDao {
                   geofenceEnabled: Value(row.geofenceEnabled),
                   checkinReminderEnabled: Value(row.checkinReminderEnabled),
                   checkoutReminderEnabled: Value(row.checkoutReminderEnabled),
+                  autoCheckinPopupText: Value(row.autoCheckinPopupText),
                   updatedAt: Value(row.updatedAt),
                 ),
               );
@@ -518,6 +528,7 @@ class AttendanceDao {
                     geofenceEnabled: Value(row.geofenceEnabled),
                     checkinReminderEnabled: Value(row.checkinReminderEnabled),
                     checkoutReminderEnabled: Value(row.checkoutReminderEnabled),
+                    autoCheckinPopupText: Value(row.autoCheckinPopupText),
                     updatedAt: Value(row.updatedAt),
                   ),
                 );
@@ -894,10 +905,12 @@ class GeofenceDecision {
   const GeofenceDecision({
     required this.triggered,
     required this.reason,
+    this.popupText,
   });
 
   final bool triggered;
   final String reason;
+  final String? popupText;
 }
 
 class AttendanceBackupSnapshot {

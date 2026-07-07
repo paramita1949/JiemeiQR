@@ -22,6 +22,7 @@ class AttendanceRules extends Table {
       boolean().withDefault(const Constant(true))();
   BoolColumn get checkoutReminderEnabled =>
       boolean().withDefault(const Constant(false))();
+  TextColumn get autoCheckinPopupText => text().nullable()();
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

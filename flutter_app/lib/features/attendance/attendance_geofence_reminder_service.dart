@@ -62,7 +62,7 @@ class AttendanceGeofenceReminderService {
     DebugEventLog.add('GEOFENCE_AUTO', 'decision=${decision.reason}');
     if (!decision.triggered) return decision;
 
-    await showAutoCheckinNotification();
+    await showAutoCheckinNotification(body: decision.popupText);
     return decision;
   }
 
@@ -82,7 +82,7 @@ class AttendanceGeofenceReminderService {
     return null;
   }
 
-  static Future<void> showAutoCheckinNotification() async {
+  static Future<void> showAutoCheckinNotification({String? body}) async {
     await _initNotification();
     const android = AndroidNotificationDetails(
       'attendance_checkin_channel',
@@ -97,9 +97,14 @@ class AttendanceGeofenceReminderService {
     await _notifications.show(
       20260504,
       '已自动上班签到',
-      '已在公司范围内完成上班签到',
+      _notificationBody(body),
       details,
     );
+  }
+
+  static String _notificationBody(String? body) {
+    final trimmed = body?.trim();
+    return trimmed == null || trimmed.isEmpty ? '已在公司范围内完成上班签到' : trimmed;
   }
 
   static Future<void> _initNotification() async {
