@@ -41,6 +41,7 @@ class DeliveryPlanOcrRow {
     this.location = '',
     required this.actualBatch,
     required this.dateBatch,
+    this.boxesPerBoard = 0,
     required this.stockTotalBoxes,
     required this.deliveryPlanAvailableBoxes,
   });
@@ -50,6 +51,7 @@ class DeliveryPlanOcrRow {
   final String location;
   final String actualBatch;
   final String dateBatch;
+  final int boxesPerBoard;
   final int stockTotalBoxes;
   final int deliveryPlanAvailableBoxes;
 
@@ -73,6 +75,7 @@ class DeliveryPlanOcrRow {
       location: _mergeLocations(location, other.location),
       actualBatch: actualBatch.isNotEmpty ? actualBatch : other.actualBatch,
       dateBatch: dateBatch.isNotEmpty ? dateBatch : other.dateBatch,
+      boxesPerBoard: boxesPerBoard > 0 ? boxesPerBoard : other.boxesPerBoard,
       stockTotalBoxes: stockTotalBoxes + other.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
           deliveryPlanAvailableBoxes + other.deliveryPlanAvailableBoxes,
@@ -85,6 +88,7 @@ class DeliveryPlanOcrRow {
     String? location,
     String? actualBatch,
     String? dateBatch,
+    int? boxesPerBoard,
     int? stockTotalBoxes,
     int? deliveryPlanAvailableBoxes,
   }) {
@@ -94,6 +98,7 @@ class DeliveryPlanOcrRow {
       location: location ?? this.location,
       actualBatch: actualBatch ?? this.actualBatch,
       dateBatch: dateBatch ?? this.dateBatch,
+      boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
           deliveryPlanAvailableBoxes ?? this.deliveryPlanAvailableBoxes,
@@ -116,6 +121,9 @@ class DeliveryPlanOcrRow {
             json['expiryDate'] ??
             json['shelfLifeExpiryDate'] ??
             json['货架寿命到期日'],
+      ),
+      boxesPerBoard: _intValue(
+        json['boxesPerBoard'] ?? json['每板箱数'],
       ),
       stockTotalBoxes: _intValue(
         json['stockTotalBoxes'] ??

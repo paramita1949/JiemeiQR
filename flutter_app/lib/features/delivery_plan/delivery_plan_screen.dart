@@ -9,6 +9,7 @@ import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.d
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
 
 typedef DeliveryPlanImagePicker = Future<File?> Function(ImageSource source);
@@ -751,10 +752,19 @@ class _DeliveryPlanReviewScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            for (final row in rows) ...[
-              _DeliveryPlanOcrRowCard(row: row),
-              const SizedBox(height: 8),
-            ],
+            _DeliveryPlanLineList(
+              lines: [
+                for (final row in rows)
+                  _DeliveryPlanDisplayLine(
+                    productCode: row.productCode,
+                    actualBatch: row.actualBatch,
+                    dateBatch: row.dateBatch,
+                    location: row.location,
+                    needBoxes: row.needBoxes,
+                    boxesPerBoard: row.boxesPerBoard,
+                  ),
+              ],
+            ),
             if (draft.warnings.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
@@ -773,32 +783,122 @@ class _DeliveryPlanReviewScreen extends StatelessWidget {
   }
 }
 
-class _DeliveryPlanOcrRowCard extends StatelessWidget {
-  const _DeliveryPlanOcrRowCard({required this.row});
+class _DeliveryPlanDisplayLine {
+  const _DeliveryPlanDisplayLine({
+    required this.productCode,
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.location,
+    required this.needBoxes,
+    required this.boxesPerBoard,
+  });
 
-  final DeliveryPlanOcrRow row;
+  final String productCode;
+  final String actualBatch;
+  final String dateBatch;
+  final String location;
+  final int needBoxes;
+  final int boxesPerBoard;
+}
+
+class _DeliveryPlanLineList extends StatelessWidget {
+  const _DeliveryPlanLineList({required this.lines});
+
+  final List<_DeliveryPlanDisplayLine> lines;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Text(
-        _deliveryPlanLineText(
-          productCode: row.productCode,
-          actualBatch: row.actualBatch,
-          dateBatch: row.dateBatch,
-          location: row.location,
-          needBoxes: row.needBoxes,
-        ),
-        style: const TextStyle(
-          color: AppTheme.textPrimary,
-          fontSize: 13,
-          fontWeight: FontWeight.w900,
-        ),
+      child: Column(
+        children: [
+          for (var index = 0; index < lines.length; index += 1) ...[
+            _DeliveryPlanLineRow(line: lines[index]),
+            if (index != lines.length - 1)
+              const Divider(height: 1, indent: 12, endIndent: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryPlanLineRow extends StatelessWidget {
+  const _DeliveryPlanLineRow({required this.line});
+
+  final _DeliveryPlanDisplayLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    const danger = Color(0xFFDC2626);
+    final titleParts = [
+      line.productCode.trim(),
+      line.actualBatch.trim(),
+    ].where((part) => part.isNotEmpty).join(' · ');
+    final location = line.location.trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  titleParts.isEmpty ? '未识别产品批号' : titleParts,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (line.dateBatch.trim().isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Text(
+                  line.dateBatch.trim(),
+                  style: const TextStyle(
+                    color: danger,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            location.isEmpty ? '库位 --' : '库位 $location',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            _needBoxesText(
+              boxes: line.needBoxes,
+              boxesPerBoard: line.boxesPerBoard,
+            ),
+            style: const TextStyle(
+              color: danger,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -881,10 +981,19 @@ class _DeliveryPlanDetailScreenState extends State<_DeliveryPlanDetailScreen> {
                 else ...[
                   _DeliveryPlanTotalCard(detail: detail),
                   const SizedBox(height: 10),
-                  for (final item in detail.items) ...[
-                    _DeliveryPlanItemCard(item: item),
-                    const SizedBox(height: 8),
-                  ],
+                  _DeliveryPlanLineList(
+                    lines: [
+                      for (final item in detail.items)
+                        _DeliveryPlanDisplayLine(
+                          productCode: item.productCode,
+                          actualBatch: item.actualBatch,
+                          dateBatch: item.dateBatch,
+                          location: item.location,
+                          needBoxes: item.needBoxes,
+                          boxesPerBoard: item.boxesPerBoard,
+                        ),
+                    ],
+                  ),
                 ],
               ],
             );
@@ -920,52 +1029,18 @@ class _DeliveryPlanTotalCard extends StatelessWidget {
   }
 }
 
-class _DeliveryPlanItemCard extends StatelessWidget {
-  const _DeliveryPlanItemCard({required this.item});
-
-  final DeliveryPlanItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        _deliveryPlanLineText(
-          productCode: item.productCode,
-          actualBatch: item.actualBatch,
-          dateBatch: item.dateBatch,
-          location: item.location,
-          needBoxes: item.needBoxes,
-        ),
-        style: const TextStyle(
-          color: AppTheme.textPrimary,
-          fontSize: 13,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-String _deliveryPlanLineText({
-  required String productCode,
-  required String actualBatch,
-  required String dateBatch,
-  required String location,
-  required int needBoxes,
+String _needBoxesText({
+  required int boxes,
+  required int boxesPerBoard,
 }) {
-  final parts = [
-    productCode.trim(),
-    actualBatch.trim(),
-    dateBatch.trim(),
-    if (location.trim().isNotEmpty) '库位 ${location.trim()}',
-    '预备 ${_formatInt(needBoxes)}箱',
-  ].where((part) => part.isNotEmpty);
-  return parts.join(' · ');
+  final base = '预备 ${_formatInt(boxes)}箱';
+  if (boxesPerBoard <= 0) {
+    return base;
+  }
+  return '$base · ${BoardCalculator.format(
+    boxes: boxes,
+    boxesPerBoard: boxesPerBoard,
+  )}';
 }
 
 String _formatRecordTime(DateTime time) {

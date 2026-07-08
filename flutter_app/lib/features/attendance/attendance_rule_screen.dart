@@ -469,7 +469,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           ),
           const SizedBox(height: 10),
           _rowField(
-            '自动签到弹出内容',
+            '自动签到通知内容',
             _autoCheckinPopupTextController,
             key: const Key('autoCheckinPopupTextField'),
           ),

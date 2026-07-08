@@ -63,6 +63,7 @@ class DeliveryPlanDao {
       rows.add(
         row.copyWith(
           location: baseInfo.location,
+          boxesPerBoard: baseInfo.boxesPerBoard,
           stockTotalBoxes: baseInfo.appAvailableBoxes,
         ),
       );
@@ -96,13 +97,22 @@ class DeliveryPlanDao {
     if (record == null) {
       return null;
     }
-    final items = await (_database.select(_database.deliveryPlanItems)
+    final rawItems = await (_database.select(_database.deliveryPlanItems)
           ..where((table) => table.recordId.equals(recordId))
           ..orderBy([
             (table) => OrderingTerm.asc(table.rowIndex),
             (table) => OrderingTerm.asc(table.id),
           ]))
         .get();
+    final items = <DeliveryPlanRecordLine>[];
+    for (final item in rawItems) {
+      items.add(
+        DeliveryPlanRecordLine(
+          item: item,
+          boxesPerBoard: await _boxesPerBoardForItem(item),
+        ),
+      );
+    }
     return DeliveryPlanRecordDetail(
       record: record,
       items: items,
@@ -149,6 +159,7 @@ class DeliveryPlanDao {
         b.id AS batch_id,
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
+        b.boxes_per_board AS boxes_per_board,
         COALESCE(b.location, '') AS location,
         b.initial_boxes AS initial_boxes,
         b.frozen_boxes AS frozen_boxes,
@@ -215,8 +226,13 @@ class DeliveryPlanDao {
   _DeliveryPlanBaseInfo _baseInfoFromRows(List<QueryRow> rows) {
     final locations = <String>[];
     var appAvailableBoxes = 0;
+    int? resultBoxesPerBoard;
     for (final row in rows) {
       final data = row.data;
+      final boxesPerBoard = _intData(data['boxes_per_board']);
+      if (boxesPerBoard > 0) {
+        resultBoxesPerBoard ??= boxesPerBoard;
+      }
       final location = data['location']?.toString().trim() ?? '';
       if (location.isNotEmpty && !locations.contains(location)) {
         locations.add(location);
@@ -232,18 +248,91 @@ class DeliveryPlanDao {
     }
     return _DeliveryPlanBaseInfo(
       location: locations.join('、'),
+      boxesPerBoard: resultBoxesPerBoard ?? 0,
       appAvailableBoxes: appAvailableBoxes,
     );
+  }
+
+  Future<int> _boxesPerBoardForItem(DeliveryPlanItem item) async {
+    final productCode = _keyPart(item.productCode);
+    if (productCode.isEmpty) {
+      return 0;
+    }
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        b.actual_batch AS actual_batch,
+        b.date_batch AS date_batch,
+        b.boxes_per_board AS boxes_per_board
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      WHERE p.code = ?
+      ''',
+      variables: [Variable.withString(productCode)],
+      readsFrom: {
+        _database.products,
+        _database.batches,
+      },
+    ).get();
+    if (rows.isEmpty) {
+      return 0;
+    }
+    final actualKey = _keyPart(item.actualBatch);
+    final dateKey = _dateKeyPart(item.dateBatch);
+    int firstPositive(List<QueryRow> candidates) {
+      for (final candidate in candidates) {
+        final value = _intData(candidate.data['boxes_per_board']);
+        if (value > 0) {
+          return value;
+        }
+      }
+      return 0;
+    }
+
+    final exact = rows.where((candidate) {
+      final data = candidate.data;
+      return actualKey.isNotEmpty &&
+          dateKey.isNotEmpty &&
+          _keyPart(data['actual_batch']?.toString() ?? '') == actualKey &&
+          _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
+    }).toList(growable: false);
+    final exactValue = firstPositive(exact);
+    if (exactValue > 0) {
+      return exactValue;
+    }
+
+    final actualMatches = rows.where((candidate) {
+      final data = candidate.data;
+      return actualKey.isNotEmpty &&
+          _keyPart(data['actual_batch']?.toString() ?? '') == actualKey;
+    }).toList(growable: false);
+    final actualValue = firstPositive(actualMatches);
+    if (actualValue > 0) {
+      return actualValue;
+    }
+
+    final dateMatches = rows.where((candidate) {
+      final data = candidate.data;
+      return dateKey.isNotEmpty &&
+          _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
+    }).toList(growable: false);
+    final dateValue = firstPositive(dateMatches);
+    if (dateValue > 0) {
+      return dateValue;
+    }
+    return firstPositive(rows);
   }
 }
 
 class _DeliveryPlanBaseInfo {
   const _DeliveryPlanBaseInfo({
     this.location = '',
+    this.boxesPerBoard = 0,
     this.appAvailableBoxes = 0,
   });
 
   final String location;
+  final int boxesPerBoard;
   final int appAvailableBoxes;
 }
 
@@ -269,10 +358,33 @@ class DeliveryPlanRecordDetail {
   });
 
   final DeliveryPlanRecord record;
-  final List<DeliveryPlanItem> items;
+  final List<DeliveryPlanRecordLine> items;
   final List<String> warnings;
 
   int get totalNeedBoxes => record.totalNeedBoxes;
+}
+
+class DeliveryPlanRecordLine {
+  const DeliveryPlanRecordLine({
+    required this.item,
+    required this.boxesPerBoard,
+  });
+
+  final DeliveryPlanItem item;
+  final int boxesPerBoard;
+
+  int get id => item.id;
+  int get recordId => item.recordId;
+  int get rowIndex => item.rowIndex;
+  String get productCode => item.productCode;
+  String get productName => item.productName;
+  String get location => item.location;
+  String get actualBatch => item.actualBatch;
+  String get dateBatch => item.dateBatch;
+  int get stockTotalBoxes => item.stockTotalBoxes;
+  int get deliveryPlanAvailableBoxes => item.deliveryPlanAvailableBoxes;
+  int get needBoxes => item.needBoxes;
+  DateTime get createdAt => item.createdAt;
 }
 
 class EmptyDeliveryPlanException implements Exception {
