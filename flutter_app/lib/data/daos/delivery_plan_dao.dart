@@ -76,6 +76,10 @@ class DeliveryPlanDao {
           location: baseInfo.location,
           boxesPerBoard: baseInfo.boxesPerBoard,
           stockTotalBoxes: baseInfo.appAvailableBoxes,
+          deliveryPlanAvailableBoxes: _normalizedPlanAvailableBoxes(
+            row.deliveryPlanAvailableBoxes,
+            baseInfo,
+          ),
         ),
       );
     }
@@ -172,6 +176,7 @@ class DeliveryPlanDao {
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
         b.boxes_per_board AS boxes_per_board,
+        p.pieces_per_box AS pieces_per_box,
         COALESCE(b.location, '') AS location,
         b.initial_boxes AS initial_boxes,
         b.frozen_boxes AS frozen_boxes,
@@ -265,6 +270,7 @@ class DeliveryPlanDao {
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
         b.boxes_per_board AS boxes_per_board,
+        p.pieces_per_box AS pieces_per_box,
         COALESCE(b.location, '') AS location,
         b.initial_boxes AS initial_boxes,
         b.frozen_boxes AS frozen_boxes,
@@ -319,6 +325,7 @@ class DeliveryPlanDao {
     final locations = <String>[];
     var appAvailableBoxes = 0;
     int? resultBoxesPerBoard;
+    int? resultPiecesPerBox;
     var productCode = '';
     var productName = '';
     var actualBatch = '';
@@ -341,6 +348,10 @@ class DeliveryPlanDao {
       if (boxesPerBoard > 0) {
         resultBoxesPerBoard ??= boxesPerBoard;
       }
+      final piecesPerBox = _intData(data['pieces_per_box']);
+      if (piecesPerBox > 0) {
+        resultPiecesPerBox ??= piecesPerBox;
+      }
       final location = data['location']?.toString().trim() ?? '';
       if (location.isNotEmpty && !locations.contains(location)) {
         locations.add(location);
@@ -361,6 +372,7 @@ class DeliveryPlanDao {
       dateBatch: dateBatch,
       location: locations.join('、'),
       boxesPerBoard: resultBoxesPerBoard ?? 0,
+      piecesPerBox: resultPiecesPerBox ?? 0,
       appAvailableBoxes: appAvailableBoxes,
     );
   }
@@ -444,6 +456,7 @@ class _DeliveryPlanBaseInfo {
     this.dateBatch = '',
     this.location = '',
     this.boxesPerBoard = 0,
+    this.piecesPerBox = 0,
     this.appAvailableBoxes = 0,
   });
 
@@ -453,7 +466,34 @@ class _DeliveryPlanBaseInfo {
   final String dateBatch;
   final String location;
   final int boxesPerBoard;
+  final int piecesPerBox;
   final int appAvailableBoxes;
+}
+
+int _normalizedPlanAvailableBoxes(
+  int deliveryPlanAvailableBoxes,
+  _DeliveryPlanBaseInfo baseInfo,
+) {
+  final piecesPerBox = baseInfo.piecesPerBox;
+  if (deliveryPlanAvailableBoxes <= 0 || piecesPerBox <= 1) {
+    return deliveryPlanAvailableBoxes;
+  }
+  if (baseInfo.appAvailableBoxes <= 0 ||
+      deliveryPlanAvailableBoxes <= baseInfo.appAvailableBoxes) {
+    return deliveryPlanAvailableBoxes;
+  }
+  if (deliveryPlanAvailableBoxes % piecesPerBox != 0) {
+    return deliveryPlanAvailableBoxes;
+  }
+  final possibleBoxes = deliveryPlanAvailableBoxes ~/ piecesPerBox;
+  if (possibleBoxes <= 0) {
+    return deliveryPlanAvailableBoxes;
+  }
+  if (baseInfo.appAvailableBoxes > 0 &&
+      possibleBoxes > baseInfo.appAvailableBoxes) {
+    return deliveryPlanAvailableBoxes;
+  }
+  return possibleBoxes;
 }
 
 bool _hasSingleProduct(List<QueryRow> rows) {

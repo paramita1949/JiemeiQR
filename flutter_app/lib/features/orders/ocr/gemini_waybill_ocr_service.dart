@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_diagnostics.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -54,7 +55,7 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
     ).replace(queryParameters: {'key': effectiveApiKey});
     final responseText =
         await _httpPost(uri, _requestBody(bytes, promptPreset));
-    return _parseResponse(responseText);
+    return _parseResponse(responseText, merchantHistoryNames);
   }
 
   Map<String, Object?> _requestBody(List<int> imageBytes, String promptPreset) {
@@ -85,7 +86,10 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
     };
   }
 
-  WaybillOcrDraft _parseResponse(String responseText) {
+  WaybillOcrDraft _parseResponse(
+    String responseText,
+    Iterable<String> merchantHistoryNames,
+  ) {
     final decoded = jsonDecode(responseText);
     if (decoded is! Map<String, Object?>) {
       throw const GeminiWaybillOcrException('Gemini 返回格式无效');
@@ -119,7 +123,10 @@ class GeminiWaybillOcrService implements WaybillPhotoOcrService {
     if (payload is! Map<String, Object?>) {
       throw const GeminiWaybillOcrException('OCR JSON 格式无效');
     }
-    final draft = WaybillOcrDraft.fromJson(payload);
+    final draft = applyMerchantHistoryMatch(
+      WaybillOcrDraft.fromJson(payload),
+      merchantHistoryNames,
+    );
     logOcrMerchantDiagnosis(provider: 'gemini', draft: draft);
     return draft;
   }
@@ -167,7 +174,7 @@ const _ocrPromptGeneral = '''
 - merchantName: 从rawMerchantName提取收货方业务短称；不要用承运方、售达方、托运方、发货方、发货仓、收货地址、收货方联系人、底部收货人推断商家；读不到则空字符串
 - rows: 按“产品码+批号+截止日期”分组聚合后的 productCode、productName、actualBatch、dateBatch、boxes
 - totalBoxes: 表格底部“页小计/总计”行中“箱数”列的整数；读不到则0
-waybillNo 只保留数字字符；业务值一般是7位纯数字；如果图片显示前导0，去掉前导0后应为7位并返回去零后的7位；如果去掉前导0后不是7位、含字母/符号或读不清，不要猜测，返回空字符串，并在warnings写“运单号疑似识别错误”。
+waybillNo 只保留数字字符；业务值一般是7位纯数字。请先逐字符读取右上区域“运单号/通单号”后的候选号码；如果有空格、横线、冒号等分隔符，去掉分隔符后返回数字。不要因为位数异常就直接清空：如果候选号码清晰可见但不是7位，仍然返回该候选号码，并在warnings写“运单号疑似识别异常，请复核”；如果候选中有看不清的字符，返回能确定的数字部分，并在warnings写“运单号有模糊字符，请复核”。只有当右上区域完全看不清、被裁切或找不到运单号字段时，waybillNo 才返回空字符串。不要从产品码、客户编码、电话号码、日期、金额、箱数中猜测运单号。
 箱数只读取表格中的箱数/数量列，不要根据金额或重量换算。
 同一产品码+批号+截止日期出现多行时，把箱数累加成一行；不同实际批号或不同截止日期必须分开输出。
 返回前必须计算 rows 中 boxes 的合计，并与 totalBoxes 对比；如果 totalBoxes>0 且不一致，在warnings写“明细箱数合计X箱，与图片总计Y箱不一致”。
@@ -193,7 +200,7 @@ const _ocrPromptWaybillTemplateV2 = '''
 - dateBatch <- 截止日期
 - boxes <- 箱数（不要读零数、重量、体积、价税）
 规则：
-- waybillNo 只保留数字字符；业务值一般是7位纯数字；如果图片显示前导0，去掉前导0后应为7位并返回去零后的7位；如果去掉前导0后不是7位、含字母/符号或读不清，不要猜测，返回空字符串，并在warnings写“运单号疑似识别错误”
+- waybillNo 只保留数字字符；业务值一般是7位纯数字。请先逐字符读取右上区域“运单号”后的候选号码；如果有空格、横线、冒号等分隔符，去掉分隔符后返回数字。不要因为位数异常就直接清空：如果候选号码清晰可见但不是7位，仍然返回该候选号码，并在warnings写“运单号疑似识别异常，请复核”；如果候选中有看不清的字符，返回能确定的数字部分，并在warnings写“运单号有模糊字符，请复核”。只有当右上区域完全看不清、被裁切或找不到运单号字段时，waybillNo 才返回空字符串。不要从产品码、客户编码、电话号码、日期、金额、箱数中猜测运单号
 - productCode 仅保留数字字符；读不清则空字符串
 - actualBatch 优先识别英数串，注意 O/0、I/1；不确定则空字符串
 - 同一产品码+批号+截止日期出现多行时，把箱数累加成一行；不同实际批号或不同截止日期必须分开输出，不要合并

@@ -41,6 +41,7 @@ class DeliveryPlanOcrRow {
     this.location = '',
     required this.actualBatch,
     required this.dateBatch,
+    this.deliveryPlanBoxes,
     this.boxesPerBoard = 0,
     required this.stockTotalBoxes,
     required this.deliveryPlanAvailableBoxes,
@@ -51,6 +52,7 @@ class DeliveryPlanOcrRow {
   final String location;
   final String actualBatch;
   final String dateBatch;
+  final int? deliveryPlanBoxes;
   final int boxesPerBoard;
   final int stockTotalBoxes;
   final int deliveryPlanAvailableBoxes;
@@ -75,6 +77,10 @@ class DeliveryPlanOcrRow {
       location: _mergeLocations(location, other.location),
       actualBatch: actualBatch.isNotEmpty ? actualBatch : other.actualBatch,
       dateBatch: dateBatch.isNotEmpty ? dateBatch : other.dateBatch,
+      deliveryPlanBoxes: _mergeNullableSum(
+        deliveryPlanBoxes,
+        other.deliveryPlanBoxes,
+      ),
       boxesPerBoard: boxesPerBoard > 0 ? boxesPerBoard : other.boxesPerBoard,
       stockTotalBoxes: stockTotalBoxes + other.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
@@ -88,6 +94,7 @@ class DeliveryPlanOcrRow {
     String? location,
     String? actualBatch,
     String? dateBatch,
+    int? deliveryPlanBoxes,
     int? boxesPerBoard,
     int? stockTotalBoxes,
     int? deliveryPlanAvailableBoxes,
@@ -98,6 +105,7 @@ class DeliveryPlanOcrRow {
       location: location ?? this.location,
       actualBatch: actualBatch ?? this.actualBatch,
       dateBatch: dateBatch ?? this.dateBatch,
+      deliveryPlanBoxes: deliveryPlanBoxes ?? this.deliveryPlanBoxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
       stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
@@ -122,6 +130,14 @@ class DeliveryPlanOcrRow {
             json['shelfLifeExpiryDate'] ??
             json['货架寿命到期日'],
       ),
+      deliveryPlanBoxes: _optionalIntValue(
+        json['deliveryPlanBoxes'] ??
+            json['deliveryPlanQuantityBoxes'] ??
+            json['deliveryPlanQtyBoxes'] ??
+            json['deliveryPlan'] ??
+            json['交货计划'] ??
+            json['Σ交货计划'],
+      ),
       boxesPerBoard: _intValue(
         json['boxesPerBoard'] ?? json['每板箱数'],
       ),
@@ -144,6 +160,9 @@ class DeliveryPlanOcrRow {
 List<DeliveryPlanOcrRow> _aggregateRows(List<DeliveryPlanOcrRow> rows) {
   final byKey = <String, DeliveryPlanOcrRow>{};
   for (final row in rows) {
+    if (row.deliveryPlanBoxes != null && row.deliveryPlanBoxes! <= 0) {
+      continue;
+    }
     final key = [
       _keyPart(row.productCode),
       _keyPart(row.actualBatch),
@@ -183,6 +202,23 @@ int _intValue(Object? value) {
   }
   final text = _stringValue(value).replaceAll(RegExp(r'[^0-9]'), '');
   return int.tryParse(text) ?? 0;
+}
+
+int? _optionalIntValue(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return _intValue(value);
+}
+
+int? _mergeNullableSum(int? current, int? other) {
+  if (current == null) {
+    return other;
+  }
+  if (other == null) {
+    return current;
+  }
+  return current + other;
 }
 
 String _mergeLocations(String current, String other) {

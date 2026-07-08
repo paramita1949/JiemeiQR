@@ -189,8 +189,6 @@ class PaddleOcrWaybillOcrService implements WaybillPhotoOcrService {
       }
       final progressMessage = _paddlePollProgressMessage(
         state: state,
-        attempt: attemptNumber,
-        maxAttempts: _maxPollAttempts,
         progress: progress,
       );
       _reportPaddleProgress(onProgress, progressMessage);
@@ -303,15 +301,15 @@ String _paddleExtractProgress(Map<String, Object?> data) {
 
 String _paddlePollProgressMessage({
   required String state,
-  required int attempt,
-  required int maxAttempts,
   required String progress,
 }) {
   if (state == 'pending') {
-    return '飞桨OCR排队中，第 $attempt/$maxAttempts 次查询';
+    return '飞桨OCR排队中...';
   }
-  final progressText = progress.isEmpty ? '' : '，进度 $progress';
-  return '飞桨OCR识别中，第 $attempt/$maxAttempts 次查询$progressText';
+  if (progress.isEmpty) {
+    return '飞桨OCR识别中...';
+  }
+  return '飞桨OCR识别中，已处理 $progress';
 }
 
 class PaddleOcrWaybillOcrException implements Exception {

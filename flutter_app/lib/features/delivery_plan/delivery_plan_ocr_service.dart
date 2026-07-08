@@ -1113,12 +1113,14 @@ const _deliveryPlanPrompt = '''
 - productName: 物料名称
 - actualBatch: 批次/实际批号，优先读取英数串
 - dateBatch: 货架寿命到期日/截止日期/日期批号
+- deliveryPlanBoxes: 第1步筛选列“交货计划/Σ交货计划”的箱数；这一列为0的行不要返回
 - stockTotalBoxes: 兼容旧字段，固定填0；不要从截图提取在库总库存、在库总箱数或非限制库存
 - deliveryPlanAvailableBoxes: 第1步保留行中“减交货计划可用量箱数”列的整数；表头前有Σ、排序符号或空格也按这一列读取
 - warnings: 读不清或列缺失时，用中文简短说明
 
 只把“减交货计划可用量箱数”提取到 deliveryPlanAvailableBoxes。
 不要把“交货计划”“Σ 交货计划”“交货计划件数”“交货计划可用用量”当作 deliveryPlanAvailableBoxes；它们只用于判断是否需要返回该行。
+如果同时存在“减交货计划可用量箱数”和“减交货计划可用量”，deliveryPlanAvailableBoxes 必须取“箱数”列，不要取件数/可用量列。例如 3,902 箱不要写成 156,080。
 不要把库位描述、库位、包装规格、Σ在库总库存、Σ冻结库存、Σ非限制库存、Σ在库总箱数、批次状态、产品组描述、非限制箱数提取为业务字段。
 不要根据件数、包装规格、金额、重量推算箱数。
 本地程序会计算：可能备货箱数 = APP可用箱数 - 减交货计划可用量箱数；APP可用箱数来自本地库存明细，不由AI识别或推算。
@@ -1144,6 +1146,7 @@ const _deliveryPlanResponseSchema = {
           'productName': {'type': 'string'},
           'actualBatch': {'type': 'string'},
           'dateBatch': {'type': 'string'},
+          'deliveryPlanBoxes': {'type': 'integer'},
           'stockTotalBoxes': {'type': 'integer'},
           'deliveryPlanAvailableBoxes': {'type': 'integer'},
         },
@@ -1152,6 +1155,7 @@ const _deliveryPlanResponseSchema = {
           'productName',
           'actualBatch',
           'dateBatch',
+          'deliveryPlanBoxes',
           'stockTotalBoxes',
           'deliveryPlanAvailableBoxes',
         ],

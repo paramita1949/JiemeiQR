@@ -183,16 +183,18 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
                         key: const Key('merchantNameField'),
                         controller: _merchantController,
                         validator: _required,
-                        decoration: _inputDecoration('输入商家'),
-                      ),
-                      if (state != null && state.merchants.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _MerchantHistoryPicker(
-                          key: const Key('merchantHistoryDropdown'),
-                          names: state.merchants,
-                          onSelect: (name) => _merchantController.text = name,
+                        decoration: _inputDecoration('输入商家').copyWith(
+                          suffixIcon:
+                              state != null && state.merchants.isNotEmpty
+                                  ? _MerchantHistoryPicker(
+                                      key: const Key('merchantHistoryDropdown'),
+                                      names: state.merchants,
+                                      onSelect: (name) =>
+                                          _merchantController.text = name,
+                                    )
+                                  : null,
                         ),
-                      ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1360,8 +1362,10 @@ class _MerchantHistoryPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () async {
+    return IconButton(
+      tooltip: '选择历史商家',
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      onPressed: () async {
         final selected = await showModalBottomSheet<String>(
           context: context,
           isScrollControlled: true,
@@ -1372,20 +1376,6 @@ class _MerchantHistoryPicker extends StatelessWidget {
           onSelect(selected);
         }
       },
-      borderRadius: BorderRadius.circular(14),
-      child: const InputDecorator(
-        decoration: InputDecoration(
-          labelText: '历史商家',
-          suffixIcon: Icon(Icons.keyboard_arrow_down_rounded),
-        ),
-        child: Text(
-          '点击选择或搜索',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1438,6 +1428,7 @@ class _MerchantHistorySheetState extends State<_MerchantHistorySheet> {
           ),
           const SizedBox(height: 10),
           TextField(
+            key: const Key('merchantHistorySearchField'),
             controller: _searchController,
             onChanged: (value) => setState(() => _keyword = value),
             decoration: const InputDecoration(
