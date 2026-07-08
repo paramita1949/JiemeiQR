@@ -195,6 +195,7 @@ class ModelScopeDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
       throw const DeliveryPlanOcrException('缺少魔搭 API KEY');
     }
     final bytes = await image.readAsBytes();
+    final mimeType = _imageMimeType(bytes);
     final body = {
       'model': effectiveModel,
       'messages': [
@@ -208,7 +209,7 @@ class ModelScopeDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
             {
               'type': 'image_url',
               'image_url': {
-                'url': 'data:image/jpeg;base64,${base64Encode(bytes)}',
+                'url': 'data:$mimeType;base64,${base64Encode(bytes)}',
               },
             },
           ],
@@ -393,6 +394,7 @@ class DeliveryPlanOcrException implements Exception {
 }
 
 Map<String, Object?> _geminiRequestBody(List<int> imageBytes) {
+  final mimeType = _imageMimeType(imageBytes);
   return {
     'contents': [
       {
@@ -401,7 +403,7 @@ Map<String, Object?> _geminiRequestBody(List<int> imageBytes) {
           {'text': _deliveryPlanPrompt},
           {
             'inlineData': {
-              'mimeType': 'image/jpeg',
+              'mimeType': mimeType,
               'data': base64Encode(imageBytes),
             },
           },
@@ -413,6 +415,45 @@ Map<String, Object?> _geminiRequestBody(List<int> imageBytes) {
       'responseSchema': _deliveryPlanResponseSchema,
     },
   };
+}
+
+String _imageMimeType(List<int> bytes) {
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47 &&
+      bytes[4] == 0x0D &&
+      bytes[5] == 0x0A &&
+      bytes[6] == 0x1A &&
+      bytes[7] == 0x0A) {
+    return 'image/png';
+  }
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47) {
+    return 'image/png';
+  }
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xFF &&
+      bytes[1] == 0xD8 &&
+      bytes[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x45 &&
+      bytes[10] == 0x42 &&
+      bytes[11] == 0x50) {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
 }
 
 DeliveryPlanOcrDraft _parseGeminiResponse(String responseText) {
@@ -1052,11 +1093,20 @@ const _deliveryPlanPrompt = '''
 请识别这张“交货计划/库存计划”截图中的表格，返回JSON。
 如果图片方向旋转，请先按文字方向阅读。
 
-先按下面两步处理表格，不要把所有物料都返回：
+快速精准识别策略：只看关键列，不做整表理解。
+关键列从左到右通常是：物料号、批次、货架寿命到期日、Σ交货计划、减交货计划可用量箱数。
+
+先按下面两步逐行处理表格，不要把所有物料都返回：
 1. 先定位“交货计划”列（也可能显示为“Σ 交货计划”，表头前后可能有Σ、排序符号或空格）。
    只保留这一列有正数数量的明细行；如果该列为空、0、读不到或只是底部合计行，整行不要返回。
    不要用“交货计划件数”“交货计划可用用量”“减交货计划可用量箱数”替代这个筛选列。
 2. 对第1步保留的行，再提取“减交货计划可用量箱数”，用于和本地库存明细比较。
+
+逐行对齐规则：
+- 每一条返回行必须来自同一横向表格行，物料号、批次、日期、Σ交货计划、减交货计划可用量箱数不能跨行拼接。
+- 不要按物料号合并；同一物料号如果有不同批次或不同日期，必须按原表逐行分别返回。
+- 同一物料号的其他行“Σ交货计划”为0，不代表这个物料号所有行都为0；只丢弃该具体行，不能丢弃同物料其他正数行。
+- 特别检查截图下半部分和相邻重复物料号附近的漏行：例如截图中如果出现“72068 / FEODOEZ / 2029.11.14 / Σ交货计划 6,000 / 减交货计划可用量箱数 3,902”，必须返回这一行；只有图片中真实出现时才返回，不要凭空生成。
 
 返回字段：
 - productCode: 物料号，只保留数字字符

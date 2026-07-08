@@ -62,6 +62,17 @@ class DeliveryPlanDao {
       final baseInfo = await _baseInfoForRow(row);
       rows.add(
         row.copyWith(
+          productCode: baseInfo.productCode.isNotEmpty
+              ? baseInfo.productCode
+              : row.productCode,
+          productName: baseInfo.productName.isNotEmpty
+              ? baseInfo.productName
+              : row.productName,
+          actualBatch: row.actualBatch.isNotEmpty
+              ? row.actualBatch
+              : baseInfo.actualBatch,
+          dateBatch:
+              row.dateBatch.isNotEmpty ? row.dateBatch : baseInfo.dateBatch,
           location: baseInfo.location,
           boxesPerBoard: baseInfo.boxesPerBoard,
           stockTotalBoxes: baseInfo.appAvailableBoxes,
@@ -150,12 +161,13 @@ class DeliveryPlanDao {
     DeliveryPlanOcrRow row,
   ) async {
     final productCode = _keyPart(row.productCode);
-    if (productCode.isEmpty) {
-      return const _DeliveryPlanBaseInfo();
-    }
-    final candidates = await _database.customSelect(
-      '''
+    final candidates = productCode.isEmpty
+        ? const <QueryRow>[]
+        : await _database.customSelect(
+            '''
       SELECT
+        p.code AS product_code,
+        p.name AS product_name,
         b.id AS batch_id,
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
@@ -183,18 +195,28 @@ class DeliveryPlanDao {
       INNER JOIN products p ON p.id = b.product_id
       WHERE p.code = ?
       ''',
-      variables: [Variable.withString(productCode)],
-      readsFrom: {
-        _database.products,
-        _database.batches,
-        _database.stockMovements,
-        _database.orderItems,
-        _database.orders,
-      },
-    ).get();
-    if (candidates.isEmpty) {
-      return const _DeliveryPlanBaseInfo();
+            variables: [Variable.withString(productCode)],
+            readsFrom: {
+              _database.products,
+              _database.batches,
+              _database.stockMovements,
+              _database.orderItems,
+              _database.orders,
+            },
+          ).get();
+    if (candidates.isNotEmpty) {
+      final baseInfo = _bestBaseInfoForRow(row, candidates);
+      if (baseInfo != null) {
+        return baseInfo;
+      }
     }
+    return _baseInfoByBatchHints(row);
+  }
+
+  _DeliveryPlanBaseInfo? _bestBaseInfoForRow(
+    DeliveryPlanOcrRow row,
+    List<QueryRow> candidates,
+  ) {
     final actualKey = _keyPart(row.actualBatch);
     final dateKey = _dateKeyPart(row.dateBatch);
     final exact = candidates.where((candidate) {
@@ -220,15 +242,101 @@ class DeliveryPlanDao {
       return dateKey.isNotEmpty &&
           _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
     }).toList(growable: false);
-    return _baseInfoFromRows(dateMatches);
+    if (dateMatches.isNotEmpty) {
+      return _baseInfoFromRows(dateMatches);
+    }
+    return null;
+  }
+
+  Future<_DeliveryPlanBaseInfo> _baseInfoByBatchHints(
+    DeliveryPlanOcrRow row,
+  ) async {
+    final actualKey = _keyPart(row.actualBatch);
+    final dateKey = _dateKeyPart(row.dateBatch);
+    if (actualKey.isEmpty) {
+      return const _DeliveryPlanBaseInfo();
+    }
+    final rows = await _database.customSelect(
+      '''
+      SELECT
+        p.code AS product_code,
+        p.name AS product_name,
+        b.id AS batch_id,
+        b.actual_batch AS actual_batch,
+        b.date_batch AS date_batch,
+        b.boxes_per_board AS boxes_per_board,
+        COALESCE(b.location, '') AS location,
+        b.initial_boxes AS initial_boxes,
+        b.frozen_boxes AS frozen_boxes,
+        COALESCE((
+          SELECT SUM(CASE
+            WHEN sm.type IN (${StockMovementType.initial.index}, ${StockMovementType.inAdjust.index})
+              THEN sm.boxes
+            ELSE -sm.boxes
+          END)
+          FROM stock_movements sm
+          WHERE sm.batch_id = b.id
+        ), 0) AS delta_boxes,
+        COALESCE((
+          SELECT SUM(oi.boxes)
+          FROM order_items oi
+          INNER JOIN orders o ON o.id = oi.order_id
+          WHERE oi.batch_id = b.id
+            AND o.status != ${OrderStatus.done.index}
+        ), 0) AS reserved_boxes
+      FROM batches b
+      INNER JOIN products p ON p.id = b.product_id
+      ''',
+      readsFrom: {
+        _database.products,
+        _database.batches,
+        _database.stockMovements,
+        _database.orderItems,
+        _database.orders,
+      },
+    ).get();
+    final actualAndDateMatches = rows.where((candidate) {
+      final data = candidate.data;
+      return _keyPart(data['actual_batch']?.toString() ?? '') == actualKey &&
+          dateKey.isNotEmpty &&
+          _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
+    }).toList(growable: false);
+    if (_hasSingleProduct(actualAndDateMatches)) {
+      return _baseInfoFromRows(actualAndDateMatches);
+    }
+
+    final actualMatches = rows.where((candidate) {
+      final data = candidate.data;
+      return _keyPart(data['actual_batch']?.toString() ?? '') == actualKey;
+    }).toList(growable: false);
+    if (_hasSingleProduct(actualMatches)) {
+      return _baseInfoFromRows(actualMatches);
+    }
+    return const _DeliveryPlanBaseInfo();
   }
 
   _DeliveryPlanBaseInfo _baseInfoFromRows(List<QueryRow> rows) {
     final locations = <String>[];
     var appAvailableBoxes = 0;
     int? resultBoxesPerBoard;
+    var productCode = '';
+    var productName = '';
+    var actualBatch = '';
+    var dateBatch = '';
     for (final row in rows) {
       final data = row.data;
+      productCode = productCode.isNotEmpty
+          ? productCode
+          : data['product_code']?.toString().trim() ?? '';
+      productName = productName.isNotEmpty
+          ? productName
+          : data['product_name']?.toString().trim() ?? '';
+      actualBatch = actualBatch.isNotEmpty
+          ? actualBatch
+          : data['actual_batch']?.toString().trim() ?? '';
+      dateBatch = dateBatch.isNotEmpty
+          ? dateBatch
+          : data['date_batch']?.toString().trim() ?? '';
       final boxesPerBoard = _intData(data['boxes_per_board']);
       if (boxesPerBoard > 0) {
         resultBoxesPerBoard ??= boxesPerBoard;
@@ -247,6 +355,10 @@ class DeliveryPlanDao {
       }
     }
     return _DeliveryPlanBaseInfo(
+      productCode: productCode,
+      productName: productName,
+      actualBatch: actualBatch,
+      dateBatch: dateBatch,
       location: locations.join('、'),
       boxesPerBoard: resultBoxesPerBoard ?? 0,
       appAvailableBoxes: appAvailableBoxes,
@@ -326,14 +438,33 @@ class DeliveryPlanDao {
 
 class _DeliveryPlanBaseInfo {
   const _DeliveryPlanBaseInfo({
+    this.productCode = '',
+    this.productName = '',
+    this.actualBatch = '',
+    this.dateBatch = '',
     this.location = '',
     this.boxesPerBoard = 0,
     this.appAvailableBoxes = 0,
   });
 
+  final String productCode;
+  final String productName;
+  final String actualBatch;
+  final String dateBatch;
   final String location;
   final int boxesPerBoard;
   final int appAvailableBoxes;
+}
+
+bool _hasSingleProduct(List<QueryRow> rows) {
+  final productCodes = <String>{};
+  for (final row in rows) {
+    final productCode = _keyPart(row.data['product_code']?.toString() ?? '');
+    if (productCode.isNotEmpty) {
+      productCodes.add(productCode);
+    }
+  }
+  return productCodes.length == 1;
 }
 
 class DeliveryPlanRecordSummary {

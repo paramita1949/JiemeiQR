@@ -841,41 +841,54 @@ class _DeliveryPlanLineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const danger = Color(0xFFDC2626);
-    final titleParts = [
-      line.productCode.trim(),
-      line.actualBatch.trim(),
-    ].where((part) => part.isNotEmpty).join(' · ');
     final location = line.location.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  titleParts.isEmpty ? '未识别产品批号' : titleParts,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _DeliveryPlanInlineField(
+                  label: '编号',
+                  value: line.productCode.trim().isEmpty
+                      ? '--'
+                      : line.productCode.trim(),
                 ),
-              ),
-              if (line.dateBatch.trim().isNotEmpty) ...[
-                const SizedBox(width: 10),
-                Text(
-                  line.dateBatch.trim(),
-                  style: const TextStyle(
-                    color: danger,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                const SizedBox(width: 12),
+                _DeliveryPlanInlineField(
+                  label: '批号',
+                  value: line.actualBatch.trim().isEmpty
+                      ? '--'
+                      : line.actualBatch.trim(),
+                ),
+                const SizedBox(width: 12),
+                _DeliveryPlanInlineField(
+                  label: '日期',
+                  value: line.dateBatch.trim().isEmpty
+                      ? '--'
+                      : line.dateBatch.trim(),
+                  valueColor: danger,
+                ),
+                const SizedBox(width: 12),
+                _DeliveryPlanInlineField(
+                  label: '预备箱数',
+                  value: '${_formatInt(line.needBoxes)}箱',
+                  valueColor: danger,
+                ),
+                const SizedBox(width: 12),
+                _DeliveryPlanInlineField(
+                  label: '板数',
+                  value: _boardText(
+                    boxes: line.needBoxes,
+                    boxesPerBoard: line.boxesPerBoard,
                   ),
+                  valueColor: danger,
                 ),
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 7),
           Text(
@@ -886,20 +899,48 @@ class _DeliveryPlanLineRow extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 7),
-          Text(
-            _needBoxesText(
-              boxes: line.needBoxes,
-              boxesPerBoard: line.boxesPerBoard,
-            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryPlanInlineField extends StatelessWidget {
+  const _DeliveryPlanInlineField({
+    required this.label,
+    required this.value,
+    this.valueColor = AppTheme.textPrimary,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$label ',
             style: const TextStyle(
-              color: danger,
-              fontSize: 14,
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(
+            text: value,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
           ),
         ],
       ),
+      maxLines: 1,
+      overflow: TextOverflow.visible,
     );
   }
 }
@@ -1029,18 +1070,17 @@ class _DeliveryPlanTotalCard extends StatelessWidget {
   }
 }
 
-String _needBoxesText({
+String _boardText({
   required int boxes,
   required int boxesPerBoard,
 }) {
-  final base = '预备 ${_formatInt(boxes)}箱';
   if (boxesPerBoard <= 0) {
-    return base;
+    return '--';
   }
-  return '$base · ${BoardCalculator.format(
+  return BoardCalculator.format(
     boxes: boxes,
     boxesPerBoard: boxesPerBoard,
-  )}';
+  );
 }
 
 String _formatRecordTime(DateTime time) {
