@@ -12,12 +12,14 @@ class WaybillOcrReviewScreen extends StatefulWidget {
     super.key,
     required this.orderDao,
     required this.matched,
+    this.merchantHistoryNames = const <String>[],
     this.initialOrderDate,
     this.initialProgressText,
   });
 
   final OrderDao orderDao;
   final MatchedWaybillOcrDraft matched;
+  final List<String> merchantHistoryNames;
   final DateTime? initialOrderDate;
   final String? initialProgressText;
 
@@ -162,7 +164,10 @@ class _WaybillOcrReviewScreenState extends State<WaybillOcrReviewScreen> {
             _InfoCard(
               children: [
                 _InfoRow(label: '运单号', value: draft.waybillNo),
-                _EditableMerchantRow(controller: _merchantController),
+                _EditableMerchantRow(
+                  controller: _merchantController,
+                  historyNames: widget.merchantHistoryNames,
+                ),
                 if (_merchantMatchText(draft).isNotEmpty)
                   _InfoRow(label: '商家匹配', value: _merchantMatchText(draft)),
                 _InfoRow(
@@ -505,9 +510,13 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _EditableMerchantRow extends StatelessWidget {
-  const _EditableMerchantRow({required this.controller});
+  const _EditableMerchantRow({
+    required this.controller,
+    required this.historyNames,
+  });
 
   final TextEditingController controller;
+  final List<String> historyNames;
 
   @override
   Widget build(BuildContext context) {
@@ -525,13 +534,149 @@ class _EditableMerchantRow extends StatelessWidget {
           ),
           Expanded(
             child: TextField(
+              key: const Key('ocrMerchantNameField'),
               controller: controller,
               decoration: const InputDecoration(
                 isDense: true,
-                hintText: '可直接修改收货方',
+                hintText: '可直接修改或选择历史商家',
                 border: UnderlineInputBorder(),
+              ).copyWith(
+                suffixIcon: historyNames.isEmpty
+                    ? null
+                    : _OcrMerchantHistoryPicker(
+                        key: const Key('ocrMerchantHistoryDropdown'),
+                        names: historyNames,
+                        onSelect: (name) => controller.text = name,
+                      ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OcrMerchantHistoryPicker extends StatelessWidget {
+  const _OcrMerchantHistoryPicker({
+    super.key,
+    required this.names,
+    required this.onSelect,
+  });
+
+  final List<String> names;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: '选择历史商家',
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      onPressed: () async {
+        final selected = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _OcrMerchantHistorySheet(names: names),
+        );
+        if (selected != null && selected.trim().isNotEmpty) {
+          onSelect(selected);
+        }
+      },
+    );
+  }
+}
+
+class _OcrMerchantHistorySheet extends StatefulWidget {
+  const _OcrMerchantHistorySheet({required this.names});
+
+  final List<String> names;
+
+  @override
+  State<_OcrMerchantHistorySheet> createState() =>
+      _OcrMerchantHistorySheetState();
+}
+
+class _OcrMerchantHistorySheetState extends State<_OcrMerchantHistorySheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _keyword = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyword = _keyword.trim();
+    final filtered = keyword.isEmpty
+        ? widget.names
+        : widget.names
+            .where((name) => name.toLowerCase().contains(keyword.toLowerCase()))
+            .toList(growable: false);
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const Key('ocrMerchantHistorySearchField'),
+            controller: _searchController,
+            onChanged: (value) => setState(() => _keyword = value),
+            decoration: const InputDecoration(
+              hintText: '搜索历史商家',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Text(
+                      '未找到匹配商家',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final name = filtered[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 8),
+                        title: Text(
+                          name,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () => Navigator.of(context).pop(name),
+                      );
+                    },
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  ),
           ),
         ],
       ),

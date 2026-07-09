@@ -894,6 +894,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
         builder: (_) => WaybillOcrReviewScreen(
           orderDao: _orderDao,
           matched: matched,
+          merchantHistoryNames: _merchantHistoryNames,
           initialOrderDate: _orderDate,
           initialProgressText: progressText,
         ),
