@@ -536,11 +536,17 @@ class _EditableMerchantRow extends StatelessWidget {
             child: TextField(
               key: const Key('ocrMerchantNameField'),
               controller: controller,
+              textAlignVertical: TextAlignVertical.center,
               decoration: const InputDecoration(
                 isDense: true,
+                contentPadding: EdgeInsets.only(top: 11, bottom: 11),
                 hintText: '可直接修改或选择历史商家',
                 border: UnderlineInputBorder(),
               ).copyWith(
+                suffixIconConstraints: const BoxConstraints.tightFor(
+                  width: 44,
+                  height: 44,
+                ),
                 suffixIcon: historyNames.isEmpty
                     ? null
                     : _OcrMerchantHistoryPicker(
@@ -571,6 +577,9 @@ class _OcrMerchantHistoryPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: '选择历史商家',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+      visualDensity: VisualDensity.compact,
       icon: const Icon(Icons.keyboard_arrow_down_rounded),
       onPressed: () async {
         final selected = await showModalBottomSheet<String>(
