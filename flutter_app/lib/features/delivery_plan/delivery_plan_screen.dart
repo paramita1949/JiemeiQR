@@ -809,7 +809,7 @@ class _DeliveryPlanLineList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -819,7 +819,7 @@ class _DeliveryPlanLineList extends StatelessWidget {
         children: [
           for (var index = 0; index < lines.length; index += 1) ...[
             _DeliveryPlanLineRow(line: lines[index]),
-            if (index != lines.length - 1) const SizedBox(height: 6),
+            if (index != lines.length - 1) const SizedBox(height: 12),
           ],
         ],
       ),
@@ -837,7 +837,7 @@ class _DeliveryPlanLineRow extends StatelessWidget {
     const danger = Color(0xFFDC2626);
     final location = line.location.trim();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -845,8 +845,9 @@ class _DeliveryPlanLineRow extends StatelessWidget {
             text: TextSpan(
               style: const TextStyle(
                 color: AppTheme.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                height: 1.32,
+                fontWeight: FontWeight.w800,
               ),
               children: [
                 TextSpan(text: _displayValue(line.productCode)),
@@ -871,13 +872,14 @@ class _DeliveryPlanLineRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             location.isEmpty ? '库位 --' : '库位 $location',
             style: const TextStyle(
               color: AppTheme.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              height: 1.28,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
