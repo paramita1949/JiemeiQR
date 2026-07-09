@@ -594,6 +594,8 @@ _PaddleDeliveryPlanExtractedResult _extractPaddleDeliveryPlanResult(
       continue;
     }
     final result = _mapValue(decoded, 'result');
+    final cellRows = <DeliveryPlanOcrRow>[];
+    final tableRows = <DeliveryPlanOcrRow>[];
     final ocrResults = result['ocrResults'];
     if (ocrResults is List) {
       for (final item in ocrResults) {
@@ -603,11 +605,12 @@ _PaddleDeliveryPlanExtractedResult _extractPaddleDeliveryPlanResult(
         final prunedResult = _mapValue(item, 'prunedResult');
         final recTexts = prunedResult['rec_texts'];
         if (recTexts is List) {
-          lines.addAll(
-            recTexts
-                .map((text) => text?.toString().trim() ?? '')
-                .where((text) => text.isNotEmpty),
-          );
+          final cellTexts = recTexts
+              .map((text) => text?.toString().trim() ?? '')
+              .where((text) => text.isNotEmpty)
+              .toList(growable: false);
+          lines.addAll(cellTexts);
+          cellRows.addAll(_parseDeliveryPlanRowsFromCellTexts(cellTexts));
         }
       }
     }
@@ -626,9 +629,10 @@ _PaddleDeliveryPlanExtractedResult _extractPaddleDeliveryPlanResult(
           continue;
         }
         lines.add(tableText);
-        rows.addAll(_parseDeliveryPlanRowsFromTables(tableText));
+        tableRows.addAll(_parseDeliveryPlanRowsFromTables(tableText));
       }
     }
+    rows.addAll(tableRows.isNotEmpty ? tableRows : cellRows);
   }
   return _PaddleDeliveryPlanExtractedResult(lines: lines, rows: rows);
 }
@@ -638,6 +642,76 @@ List<DeliveryPlanOcrRow> _parseDeliveryPlanRowsFromTables(String text) {
     ..._parseDeliveryPlanRowsFromMarkdownTable(text),
     ..._parseDeliveryPlanRowsFromHtmlTable(text),
   ];
+}
+
+List<DeliveryPlanOcrRow> _parseDeliveryPlanRowsFromCellTexts(
+  List<String> cells,
+) {
+  final cleanedCells = cells
+      .map(_cleanOcrCellText)
+      .where((cell) => cell.isNotEmpty)
+      .toList(growable: false);
+  if (cleanedCells.length < 6) {
+    return const <DeliveryPlanOcrRow>[];
+  }
+
+  for (var headerStart = 0; headerStart < cleanedCells.length; headerStart++) {
+    if (!_isDeliveryPlanHeaderCell(cleanedCells[headerStart])) {
+      continue;
+    }
+    final dataStart = _findDeliveryPlanCellTableDataStart(
+      cleanedCells,
+      headerStart,
+    );
+    if (dataStart == null) {
+      continue;
+    }
+    final headers = cleanedCells.sublist(headerStart, dataStart);
+    if (!_hasDeliveryPlanCellTableHeaders(headers)) {
+      continue;
+    }
+    final rowWidth = headers.length;
+    final rows = <DeliveryPlanOcrRow>[];
+    for (var rowStart = dataStart;
+        rowStart + rowWidth <= cleanedCells.length;
+        rowStart += rowWidth) {
+      final rowCells = cleanedCells.sublist(rowStart, rowStart + rowWidth);
+      final row = _deliveryPlanRowFromMappedCells(headers, rowCells);
+      if (row != null) {
+        rows.add(row);
+      }
+    }
+    if (rows.isNotEmpty) {
+      return rows;
+    }
+  }
+  return const <DeliveryPlanOcrRow>[];
+}
+
+int? _findDeliveryPlanCellTableDataStart(
+  List<String> cells,
+  int headerStart,
+) {
+  for (var index = headerStart + 4; index < cells.length; index++) {
+    final headers = cells.sublist(headerStart, index);
+    if (!_hasDeliveryPlanCellTableHeaders(headers)) {
+      continue;
+    }
+    if (_isDeliveryPlanProductCode(_digitsOnly(cells[index]))) {
+      return index;
+    }
+  }
+  return null;
+}
+
+bool _hasDeliveryPlanCellTableHeaders(List<String> headers) {
+  final normalizedHeaders = headers.map(_normalizeDeliveryPlanHeader).toList();
+  return normalizedHeaders.any(
+        (header) => header.contains('物料号') || header.contains('产品码'),
+      ) &&
+      normalizedHeaders.any(_isActualBatchHeader) &&
+      normalizedHeaders.any(_isDeliveryPlanDateHeader) &&
+      normalizedHeaders.any(_isDeliveryPlanAvailableBoxesHeader);
 }
 
 List<DeliveryPlanOcrRow> _parseDeliveryPlanRowsFromMarkdownTable(String text) {
@@ -735,9 +809,13 @@ bool _isMarkdownSeparatorRow(List<String> cells) {
 bool _isDeliveryPlanHeaderCell(String value) {
   final header = _normalizeDeliveryPlanHeader(value);
   return header.contains('物料号') ||
+      header.contains('产品码') ||
       header.contains('物料名称') ||
+      header.contains('产品名称') ||
       header.contains('批次') ||
-      header.contains('货架寿命到期日') ||
+      header.contains('批号') ||
+      _isDeliveryPlanDateHeader(header) ||
+      _isDeliveryPlanBoxesHeader(header) ||
       header.contains('减交货计划可用量箱数') ||
       header.contains('在库总箱数');
 }
@@ -770,24 +848,23 @@ DeliveryPlanOcrRow? _deliveryPlanRowFromMappedCells(
     cellWhere(_isActualBatchHeader),
   );
   final dateBatch = _normalizeDeliveryPlanDate(
-    cellWhere(
-      (header) =>
-          header.contains('货架寿命到期日') ||
-          header.contains('截止日期') ||
-          header.contains('日期批号'),
-    ),
+    cellWhere(_isDeliveryPlanDateHeader),
+  );
+  final hasDeliveryPlanBoxesColumn =
+      headers.map(_normalizeDeliveryPlanHeader).any(_isDeliveryPlanBoxesHeader);
+  final deliveryPlanBoxes = _intFromDeliveryPlanCell(
+    cellWhere(_isDeliveryPlanBoxesHeader),
   );
   final stockTotalBoxes = _intFromDeliveryPlanCell(
     cellWhere((header) => header.contains('在库总箱数')),
   );
   final deliveryPlanAvailableBoxes = _intFromDeliveryPlanCell(
-    cellWhere(
-      (header) =>
-          header.contains('减交货计划可用量箱数') ||
-          (header.contains('交货计划可用量箱数') && !header.contains('零数')),
-    ),
+    cellWhere(_isDeliveryPlanAvailableBoxesHeader),
   );
 
+  if (hasDeliveryPlanBoxesColumn && deliveryPlanBoxes <= 0) {
+    return null;
+  }
   if (!_isDeliveryPlanProductCode(productCode) ||
       actualBatch.isEmpty ||
       (stockTotalBoxes <= 0 && deliveryPlanAvailableBoxes <= 0)) {
@@ -798,6 +875,7 @@ DeliveryPlanOcrRow? _deliveryPlanRowFromMappedCells(
     productName: productName,
     actualBatch: actualBatch,
     dateBatch: dateBatch,
+    deliveryPlanBoxes: hasDeliveryPlanBoxesColumn ? deliveryPlanBoxes : null,
     stockTotalBoxes: stockTotalBoxes,
     deliveryPlanAvailableBoxes: deliveryPlanAvailableBoxes,
   );
@@ -810,6 +888,24 @@ bool _isActualBatchHeader(String header) {
       (header.contains('批次') && !header.contains('状态'));
 }
 
+bool _isDeliveryPlanDateHeader(String header) {
+  return header.contains('货架寿命到期日') ||
+      header.contains('截止日期') ||
+      header.contains('日期批号');
+}
+
+bool _isDeliveryPlanBoxesHeader(String header) {
+  return header.contains('交货计划') &&
+      !header.contains('减') &&
+      !header.contains('可用') &&
+      !header.contains('件数');
+}
+
+bool _isDeliveryPlanAvailableBoxesHeader(String header) {
+  return header.contains('减交货计划可用量箱数') ||
+      (header.contains('交货计划可用量箱数') && !header.contains('零数'));
+}
+
 String _normalizeDeliveryPlanHeader(String value) {
   return value
       .replaceAll(RegExp(r'[\s　]+'), '')
@@ -817,6 +913,15 @@ String _normalizeDeliveryPlanHeader(String value) {
       .replaceAll('∑', '')
       .replaceAll('：', ':')
       .trim();
+}
+
+String _cleanOcrCellText(String value) {
+  return _decodeHtmlEntities(
+    value
+        .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim(),
+  );
 }
 
 String _digitsOnly(String value) => value.replaceAll(RegExp(r'[^0-9]'), '');
@@ -882,10 +987,12 @@ String _paddlePollProgressMessage({
   required String progress,
 }) {
   if (state == 'pending') {
-    return '飞桨OCR排队中，第 $attempt/$maxAttempts 次查询';
+    return '飞桨OCR排队中...';
   }
-  final progressText = progress.isEmpty ? '' : '，进度 $progress';
-  return '飞桨OCR识别交货计划中，第 $attempt/$maxAttempts 次查询$progressText';
+  if (progress.isEmpty) {
+    return '飞桨OCR识别交货计划中...';
+  }
+  return '飞桨OCR识别交货计划中，已处理 $progress';
 }
 
 const _paddleConnectTimeout = Duration(seconds: 15);

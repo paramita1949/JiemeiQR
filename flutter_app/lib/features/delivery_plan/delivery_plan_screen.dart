@@ -847,48 +847,50 @@ class _DeliveryPlanLineRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _DeliveryPlanInlineField(
-                  label: '编号',
-                  value: line.productCode.trim().isEmpty
-                      ? '--'
-                      : line.productCode.trim(),
+          Wrap(
+            spacing: 14,
+            runSpacing: 8,
+            children: [
+              _DeliveryPlanInlineField(
+                label: '编号',
+                value: line.productCode.trim().isEmpty
+                    ? '--'
+                    : line.productCode.trim(),
+              ),
+              _DeliveryPlanInlineField(
+                label: '批号',
+                value: line.actualBatch.trim().isEmpty
+                    ? '--'
+                    : line.actualBatch.trim(),
+              ),
+              _DeliveryPlanInlineField(
+                label: '日期',
+                value: line.dateBatch.trim().isEmpty
+                    ? '--'
+                    : line.dateBatch.trim(),
+                valueColor: danger,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 14,
+            runSpacing: 8,
+            children: [
+              _DeliveryPlanInlineField(
+                label: '箱数',
+                value: '${_formatInt(line.needBoxes)}箱',
+                valueColor: danger,
+              ),
+              _DeliveryPlanInlineField(
+                label: '板数',
+                value: _boardText(
+                  boxes: line.needBoxes,
+                  boxesPerBoard: line.boxesPerBoard,
                 ),
-                const SizedBox(width: 12),
-                _DeliveryPlanInlineField(
-                  label: '批号',
-                  value: line.actualBatch.trim().isEmpty
-                      ? '--'
-                      : line.actualBatch.trim(),
-                ),
-                const SizedBox(width: 12),
-                _DeliveryPlanInlineField(
-                  label: '日期',
-                  value: line.dateBatch.trim().isEmpty
-                      ? '--'
-                      : line.dateBatch.trim(),
-                  valueColor: danger,
-                ),
-                const SizedBox(width: 12),
-                _DeliveryPlanInlineField(
-                  label: '预备箱数',
-                  value: '${_formatInt(line.needBoxes)}箱',
-                  valueColor: danger,
-                ),
-                const SizedBox(width: 12),
-                _DeliveryPlanInlineField(
-                  label: '板数',
-                  value: _boardText(
-                    boxes: line.needBoxes,
-                    boxesPerBoard: line.boxesPerBoard,
-                  ),
-                  valueColor: danger,
-                ),
-              ],
-            ),
+                valueColor: danger,
+              ),
+            ],
           ),
           const SizedBox(height: 7),
           Text(
