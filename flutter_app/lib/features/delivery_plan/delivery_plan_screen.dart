@@ -809,23 +809,17 @@ class _DeliveryPlanLineList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A0F172A),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var index = 0; index < lines.length; index += 1) ...[
             _DeliveryPlanLineRow(line: lines[index]),
-            if (index != lines.length - 1)
-              const Divider(height: 1, indent: 12, endIndent: 12),
+            if (index != lines.length - 1) const SizedBox(height: 6),
           ],
         ],
       ),
@@ -843,56 +837,41 @@ class _DeliveryPlanLineRow extends StatelessWidget {
     const danger = Color(0xFFDC2626);
     final location = line.location.trim();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 14,
-            runSpacing: 8,
-            children: [
-              _DeliveryPlanInlineField(
-                label: '编号',
-                value: line.productCode.trim().isEmpty
-                    ? '--'
-                    : line.productCode.trim(),
+          RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
-              _DeliveryPlanInlineField(
-                label: '批号',
-                value: line.actualBatch.trim().isEmpty
-                    ? '--'
-                    : line.actualBatch.trim(),
-              ),
-              _DeliveryPlanInlineField(
-                label: '日期',
-                value: line.dateBatch.trim().isEmpty
-                    ? '--'
-                    : line.dateBatch.trim(),
-                valueColor: danger,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 14,
-            runSpacing: 8,
-            children: [
-              _DeliveryPlanInlineField(
-                label: '箱数',
-                value: '${_formatInt(line.needBoxes)}箱',
-                valueColor: danger,
-              ),
-              _DeliveryPlanInlineField(
-                label: '板数',
-                value: _boardText(
-                  boxes: line.needBoxes,
-                  boxesPerBoard: line.boxesPerBoard,
+              children: [
+                TextSpan(text: _displayValue(line.productCode)),
+                const TextSpan(text: ' · '),
+                TextSpan(text: _displayValue(line.actualBatch)),
+                const TextSpan(text: ' · '),
+                TextSpan(
+                  text: _displayValue(line.dateBatch),
+                  style: const TextStyle(color: danger),
                 ),
-                valueColor: danger,
-              ),
-            ],
+                TextSpan(
+                  text: ' · ${_formatInt(line.needBoxes)}箱 · ',
+                  style: const TextStyle(color: danger),
+                ),
+                TextSpan(
+                  text: _boardText(
+                    boxes: line.needBoxes,
+                    boxesPerBoard: line.boxesPerBoard,
+                  ),
+                  style: const TextStyle(color: danger),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 4),
           Text(
             location.isEmpty ? '库位 --' : '库位 $location',
             style: const TextStyle(
@@ -903,46 +882,6 @@ class _DeliveryPlanLineRow extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _DeliveryPlanInlineField extends StatelessWidget {
-  const _DeliveryPlanInlineField({
-    required this.label,
-    required this.value,
-    this.valueColor = AppTheme.textPrimary,
-  });
-
-  final String label;
-  final String value;
-  final Color valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '$label ',
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          TextSpan(
-            text: value,
-            style: TextStyle(
-              color: valueColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.visible,
     );
   }
 }
@@ -1083,6 +1022,11 @@ String _boardText({
     boxes: boxes,
     boxesPerBoard: boxesPerBoard,
   );
+}
+
+String _displayValue(String value) {
+  final text = value.trim();
+  return text.isEmpty ? '--' : text;
 }
 
 String _formatRecordTime(DateTime time) {
