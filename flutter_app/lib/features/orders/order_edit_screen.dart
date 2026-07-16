@@ -17,6 +17,8 @@ import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_review_screen.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
+import 'package:qrscan_flutter/shared/camera/ai_document_image_picker.dart';
+import 'package:qrscan_flutter/shared/camera/ai_ocr_image_preparer.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 import 'package:qrscan_flutter/shared/widgets/delete_confirm_dialog.dart';
@@ -28,11 +30,13 @@ class OrderEditScreen extends StatefulWidget {
     this.database,
     this.ocrService,
     this.imagePicker,
+    this.imagePreparer = const AiOcrImagePreparer(),
   });
 
   final AppDatabase? database;
   final WaybillPhotoOcrService? ocrService;
   final ImagePicker? imagePicker;
+  final AiOcrImagePreparer imagePreparer;
 
   @override
   State<OrderEditScreen> createState() => _OrderEditScreenState();
@@ -50,6 +54,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
   final FileAiConfigStore _aiConfigStore = const FileAiConfigStore();
   WaybillPhotoOcrService? _ocrService;
   ImagePicker? _imagePicker;
+  late final AiOcrImagePreparer _imagePreparer;
   late final bool _ownsDatabase;
   late Future<_OrderEditState> _stateFuture;
   bool _ocrInProgress = false;
@@ -100,6 +105,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _orderDao = OrderDao(_database);
     _ocrService = widget.ocrService ?? const ConfiguredWaybillOcrService();
     _imagePicker = widget.imagePicker ?? ImagePicker();
+    _imagePreparer = widget.imagePreparer;
     _boxesController.addListener(() => setState(() {}));
     _waybillNoController.addListener(_onOrderHeaderChanged);
     _merchantController.addListener(_onOrderHeaderChanged);
@@ -725,11 +731,10 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       _aiConfig = nextConfig;
     });
     _ocrService = const ConfiguredWaybillOcrService();
-    final picked = await _effectiveImagePicker.pickImage(
-      source: plan.source,
-      imageQuality: 85,
-      maxWidth: 1600,
-      maxHeight: 2048,
+    final picked = await pickAiDocumentImage(
+      context,
+      plan.source,
+      imagePicker: _effectiveImagePicker,
     );
     if (picked == null) {
       DebugEventLog.add('AI_OCR', 'image not selected');
@@ -741,7 +746,7 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _setOcrProgress(
       '上传至${_ocrProviderLabel(nextConfig)}：${_ocrModelLabel(nextConfig)} · ${_ocrPromptPresetLabel(nextConfig)}策略',
     );
-    await _runWaybillOcr(File(picked.path));
+    await _runWaybillOcr(picked);
   }
 
   Future<void> _runWaybillOcr(File image) async {
@@ -751,15 +756,21 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     _setOcrInProgress(true);
     try {
       _setOcrProgress('正在上传图片至${_ocrProviderLabel(_aiConfig)}，等待识别...');
+      final prepared = await _imagePreparer.prepare(image);
       final recognizeStopwatch = Stopwatch()..start();
-      final draft = await _effectiveOcrService.recognize(
-        image,
-        merchantHistoryNames: _merchantHistoryNames,
-        onProgress: (message) {
-          DebugEventLog.add('AI_OCR', 'progress $message');
-          _setOcrProgress(message);
-        },
-      );
+      final WaybillOcrDraft draft;
+      try {
+        draft = await _effectiveOcrService.recognize(
+          prepared.file,
+          merchantHistoryNames: _merchantHistoryNames,
+          onProgress: (message) {
+            DebugEventLog.add('AI_OCR', 'progress $message');
+            _setOcrProgress(message);
+          },
+        );
+      } finally {
+        await prepared.dispose();
+      }
       recognizeStopwatch.stop();
       DebugEventLog.add(
         'AI_OCR_TIMING',
@@ -799,6 +810,16 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
       if (mounted) {
         setState(() => _ocrProgressText = null);
       }
+    } on AiOcrImagePreparationException catch (error) {
+      DebugEventLog.add('AI_OCR', 'image_prepare_failed ${error.message}');
+      if (!mounted) {
+        return;
+      }
+      _setOcrProgress(error.message, state: _OcrProgressState.error);
+      _setOcrInProgress(false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
     } on GeminiWaybillOcrException catch (error) {
       DebugEventLog.add('AI_OCR', 'gemini_failed ${error.message}');
       if (!mounted) {

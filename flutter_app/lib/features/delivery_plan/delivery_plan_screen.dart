@@ -8,6 +8,8 @@ import 'package:qrscan_flutter/data/daos/delivery_plan_dao.dart';
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.dart';
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/shared/camera/ai_document_image_picker.dart';
+import 'package:qrscan_flutter/shared/camera/ai_ocr_image_preparer.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/board_calculator.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -21,12 +23,14 @@ class DeliveryPlanScreen extends StatefulWidget {
     this.ocrService,
     this.imagePicker,
     this.aiConfigStore = const FileAiConfigStore(),
+    this.imagePreparer = const AiOcrImagePreparer(),
   });
 
   final AppDatabase? database;
   final DeliveryPlanPhotoOcrService? ocrService;
   final DeliveryPlanImagePicker? imagePicker;
   final FileAiConfigStore aiConfigStore;
+  final AiOcrImagePreparer imagePreparer;
 
   @override
   State<DeliveryPlanScreen> createState() => _DeliveryPlanScreenState();
@@ -39,6 +43,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
   late final DeliveryPlanPhotoOcrService _ocrService;
   late final DeliveryPlanImagePicker _imagePicker;
   late final FileAiConfigStore _aiConfigStore;
+  late final AiOcrImagePreparer _imagePreparer;
   late Future<List<DeliveryPlanRecordSummary>> _recordsFuture;
   bool _ocrInProgress = false;
   String? _ocrProgressText;
@@ -50,9 +55,11 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
     _database = widget.database ?? AppDatabase();
     _dao = DeliveryPlanDao(_database);
     _aiConfigStore = widget.aiConfigStore;
+    _imagePreparer = widget.imagePreparer;
     _ocrService = widget.ocrService ??
         ConfiguredDeliveryPlanOcrService(configStore: _aiConfigStore);
-    _imagePicker = widget.imagePicker ?? _pickImageWithSystemPicker;
+    _imagePicker =
+        widget.imagePicker ?? (source) => pickAiDocumentImage(context, source);
     _recordsFuture = _dao.recordSummaries();
   }
 
@@ -117,14 +124,20 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
       _ocrProgressText = '正在识别交货计划截图...';
     });
     try {
-      final draft = await _ocrService.recognize(
-        image,
-        onProgress: (message) {
-          if (mounted) {
-            setState(() => _ocrProgressText = message);
-          }
-        },
-      );
+      final prepared = await _imagePreparer.prepare(image);
+      final DeliveryPlanOcrDraft draft;
+      try {
+        draft = await _ocrService.recognize(
+          prepared.file,
+          onProgress: (message) {
+            if (mounted) {
+              setState(() => _ocrProgressText = message);
+            }
+          },
+        );
+      } finally {
+        await prepared.dispose();
+      }
       if (!mounted) {
         return;
       }
@@ -154,6 +167,17 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
       if (created == true && mounted) {
         _refresh();
       }
+    } on AiOcrImagePreparationException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _ocrInProgress = false;
+        _ocrProgressText = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
     } on DeliveryPlanOcrException catch (error) {
       if (!mounted) {
         return;
@@ -261,19 +285,6 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
       ),
     );
   }
-}
-
-Future<File?> _pickImageWithSystemPicker(ImageSource source) async {
-  final picked = await ImagePicker().pickImage(
-    source: source,
-    imageQuality: 85,
-    maxWidth: 1800,
-    maxHeight: 2400,
-  );
-  if (picked == null) {
-    return null;
-  }
-  return File(picked.path);
 }
 
 class _DeliveryPlanCapturePlan {
