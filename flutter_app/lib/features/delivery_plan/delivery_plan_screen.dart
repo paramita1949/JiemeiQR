@@ -58,8 +58,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
     _imagePreparer = widget.imagePreparer;
     _ocrService = widget.ocrService ??
         ConfiguredDeliveryPlanOcrService(configStore: _aiConfigStore);
-    _imagePicker =
-        widget.imagePicker ?? (source) => pickAiDocumentImage(context, source);
+    _imagePicker = widget.imagePicker ?? pickAiDocumentImage;
     _recordsFuture = _dao.recordSummaries();
   }
 

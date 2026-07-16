@@ -732,7 +732,6 @@ class _OrderEditScreenState extends State<OrderEditScreen> {
     });
     _ocrService = const ConfiguredWaybillOcrService();
     final picked = await pickAiDocumentImage(
-      context,
       plan.source,
       imagePicker: _effectiveImagePicker,
     );
