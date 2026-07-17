@@ -6,6 +6,7 @@ import 'package:qrscan_flutter/features/orders/ocr/merchant_name_matcher.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_diagnostics.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
+import 'package:qrscan_flutter/shared/camera/ai_ocr_image_preparer.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef ModelScopeHttpPost = Future<String> Function(
@@ -53,15 +54,22 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     String? model,
     FileAiConfigStore? configStore,
     ModelScopeHttpPost? httpPost,
+    AiOcrImagePreparer? imagePreparer,
   })  : apiKey = apiKey ?? const String.fromEnvironment('MODELSCOPE_TOKEN'),
         model = model ?? const String.fromEnvironment('MODELSCOPE_MODEL'),
         _configStore = configStore ?? const FileAiConfigStore(),
-        _httpPost = httpPost ?? _defaultHttpPost;
+        _httpPost = httpPost ?? _defaultHttpPost,
+        _imagePreparer = imagePreparer ??
+            const AiOcrImagePreparer(
+              maxLongEdge: 2048,
+              targetLongEdges: [2048, 1792, 1536],
+            );
 
   final String apiKey;
   final String model;
   final FileAiConfigStore _configStore;
   final ModelScopeHttpPost _httpPost;
+  final AiOcrImagePreparer _imagePreparer;
   static ModelScopeRateLimitInfo? _lastRateLimitInfo;
   static const _completionUrl =
       'https://api-inference.modelscope.cn/v1/chat/completions';
@@ -93,6 +101,27 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
       throw const ModelScopeWaybillOcrException('缺少魔搭 API KEY');
     }
 
+    final prepared = await _imagePreparer.prepare(image);
+    try {
+      return await _recognizePrepared(
+        prepared.file,
+        normalizedApiKey: normalizedApiKey,
+        modelAttempts: modelAttempts,
+        promptPreset: promptPreset,
+        merchantHistoryNames: merchantHistoryNames,
+      );
+    } finally {
+      await prepared.dispose();
+    }
+  }
+
+  Future<WaybillOcrDraft> _recognizePrepared(
+    File image, {
+    required String normalizedApiKey,
+    required List<String> modelAttempts,
+    required String promptPreset,
+    required Iterable<String> merchantHistoryNames,
+  }) async {
     final bytes = await image.readAsBytes();
     final base64Image = base64Encode(bytes);
     final uri = Uri.parse(_completionUrl);
