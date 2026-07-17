@@ -638,6 +638,7 @@ class InventoryDetailRow {
     return value < 0 ? 0 : value;
   }
 
+  int get totalPieces => currentBoxes * product.piecesPerBox;
   int get pieces => availableBoxes * product.piecesPerBox;
   bool get isZeroStock => availableBoxes == 0;
 }
