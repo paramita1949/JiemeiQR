@@ -1226,7 +1226,7 @@ class _InventoryRowCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MetricChip(
-                text: '总库存 ${_formatNumber(row.totalPieces)}件',
+                text: '总数 ${row.totalPieces}',
                 textColor: const Color(0xFF1D4ED8),
                 backgroundColor: const Color(0xFFEFF6FF),
               ),
