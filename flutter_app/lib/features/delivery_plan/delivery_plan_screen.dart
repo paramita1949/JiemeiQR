@@ -874,8 +874,7 @@ class _DeliveryPlanLineRow extends StatelessWidget {
                   style: const TextStyle(color: danger),
                 ),
                 TextSpan(
-                  text:
-                      ' · ${_formatInt(line.needBoxes)}箱，${line.piecesPerBox > 0 ? line.needPieces : '--'} · ',
+                  text: ' · ${_formatInt(line.needBoxes)}箱 · ',
                   style: const TextStyle(color: danger),
                 ),
                 TextSpan(
@@ -884,6 +883,12 @@ class _DeliveryPlanLineRow extends StatelessWidget {
                     boxesPerBoard: line.boxesPerBoard,
                   ),
                   style: const TextStyle(color: danger),
+                ),
+                const TextSpan(text: ' '),
+                TextSpan(
+                  text:
+                      line.piecesPerBox > 0 ? line.needPieces.toString() : '--',
+                  style: const TextStyle(color: Color(0xFF2563EB)),
                 ),
               ],
             ),
