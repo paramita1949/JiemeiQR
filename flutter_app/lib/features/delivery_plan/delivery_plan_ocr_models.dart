@@ -43,6 +43,7 @@ class DeliveryPlanOcrRow {
     required this.dateBatch,
     this.deliveryPlanBoxes,
     this.boxesPerBoard = 0,
+    this.piecesPerBox = 0,
     required this.stockTotalBoxes,
     required this.deliveryPlanAvailableBoxes,
   });
@@ -54,6 +55,7 @@ class DeliveryPlanOcrRow {
   final String dateBatch;
   final int? deliveryPlanBoxes;
   final int boxesPerBoard;
+  final int piecesPerBox;
   final int stockTotalBoxes;
   final int deliveryPlanAvailableBoxes;
 
@@ -82,6 +84,7 @@ class DeliveryPlanOcrRow {
         other.deliveryPlanBoxes,
       ),
       boxesPerBoard: boxesPerBoard > 0 ? boxesPerBoard : other.boxesPerBoard,
+      piecesPerBox: piecesPerBox > 0 ? piecesPerBox : other.piecesPerBox,
       stockTotalBoxes: stockTotalBoxes + other.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
           deliveryPlanAvailableBoxes + other.deliveryPlanAvailableBoxes,
@@ -96,6 +99,7 @@ class DeliveryPlanOcrRow {
     String? dateBatch,
     int? deliveryPlanBoxes,
     int? boxesPerBoard,
+    int? piecesPerBox,
     int? stockTotalBoxes,
     int? deliveryPlanAvailableBoxes,
   }) {
@@ -107,6 +111,7 @@ class DeliveryPlanOcrRow {
       dateBatch: dateBatch ?? this.dateBatch,
       deliveryPlanBoxes: deliveryPlanBoxes ?? this.deliveryPlanBoxes,
       boxesPerBoard: boxesPerBoard ?? this.boxesPerBoard,
+      piecesPerBox: piecesPerBox ?? this.piecesPerBox,
       stockTotalBoxes: stockTotalBoxes ?? this.stockTotalBoxes,
       deliveryPlanAvailableBoxes:
           deliveryPlanAvailableBoxes ?? this.deliveryPlanAvailableBoxes,
@@ -140,6 +145,9 @@ class DeliveryPlanOcrRow {
       ),
       boxesPerBoard: _intValue(
         json['boxesPerBoard'] ?? json['每板箱数'],
+      ),
+      piecesPerBox: _intValue(
+        json['piecesPerBox'] ?? json['每箱件数'] ?? json['每箱瓶数'],
       ),
       stockTotalBoxes: _intValue(
         json['stockTotalBoxes'] ??

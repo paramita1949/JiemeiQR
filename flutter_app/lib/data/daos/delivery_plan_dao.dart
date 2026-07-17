@@ -75,6 +75,7 @@ class DeliveryPlanDao {
               row.dateBatch.isNotEmpty ? row.dateBatch : baseInfo.dateBatch,
           location: baseInfo.location,
           boxesPerBoard: baseInfo.boxesPerBoard,
+          piecesPerBox: baseInfo.piecesPerBox,
           stockTotalBoxes: baseInfo.appAvailableBoxes,
           deliveryPlanAvailableBoxes: _normalizedPlanAvailableBoxes(
             row.deliveryPlanAvailableBoxes,
@@ -121,10 +122,12 @@ class DeliveryPlanDao {
         .get();
     final items = <DeliveryPlanRecordLine>[];
     for (final item in rawItems) {
+      final packaging = await _packagingForItem(item);
       items.add(
         DeliveryPlanRecordLine(
           item: item,
-          boxesPerBoard: await _boxesPerBoardForItem(item),
+          boxesPerBoard: packaging.boxesPerBoard,
+          piecesPerBox: packaging.piecesPerBox,
         ),
       );
     }
@@ -377,17 +380,20 @@ class DeliveryPlanDao {
     );
   }
 
-  Future<int> _boxesPerBoardForItem(DeliveryPlanItem item) async {
+  Future<_DeliveryPlanPackaging> _packagingForItem(
+    DeliveryPlanItem item,
+  ) async {
     final productCode = _keyPart(item.productCode);
     if (productCode.isEmpty) {
-      return 0;
+      return const _DeliveryPlanPackaging();
     }
     final rows = await _database.customSelect(
       '''
       SELECT
         b.actual_batch AS actual_batch,
         b.date_batch AS date_batch,
-        b.boxes_per_board AS boxes_per_board
+        b.boxes_per_board AS boxes_per_board,
+        p.pieces_per_box AS pieces_per_box
       FROM batches b
       INNER JOIN products p ON p.id = b.product_id
       WHERE p.code = ?
@@ -399,18 +405,22 @@ class DeliveryPlanDao {
       },
     ).get();
     if (rows.isEmpty) {
-      return 0;
+      return const _DeliveryPlanPackaging();
     }
     final actualKey = _keyPart(item.actualBatch);
     final dateKey = _dateKeyPart(item.dateBatch);
-    int firstPositive(List<QueryRow> candidates) {
+    _DeliveryPlanPackaging firstPositive(List<QueryRow> candidates) {
       for (final candidate in candidates) {
-        final value = _intData(candidate.data['boxes_per_board']);
-        if (value > 0) {
-          return value;
+        final boxesPerBoard = _intData(candidate.data['boxes_per_board']);
+        final piecesPerBox = _intData(candidate.data['pieces_per_box']);
+        if (boxesPerBoard > 0 || piecesPerBox > 0) {
+          return _DeliveryPlanPackaging(
+            boxesPerBoard: boxesPerBoard,
+            piecesPerBox: piecesPerBox,
+          );
         }
       }
-      return 0;
+      return const _DeliveryPlanPackaging();
     }
 
     final exact = rows.where((candidate) {
@@ -421,7 +431,7 @@ class DeliveryPlanDao {
           _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
     }).toList(growable: false);
     final exactValue = firstPositive(exact);
-    if (exactValue > 0) {
+    if (exactValue.hasValue) {
       return exactValue;
     }
 
@@ -431,7 +441,7 @@ class DeliveryPlanDao {
           _keyPart(data['actual_batch']?.toString() ?? '') == actualKey;
     }).toList(growable: false);
     final actualValue = firstPositive(actualMatches);
-    if (actualValue > 0) {
+    if (actualValue.hasValue) {
       return actualValue;
     }
 
@@ -441,7 +451,7 @@ class DeliveryPlanDao {
           _dateKeyPart(data['date_batch']?.toString() ?? '') == dateKey;
     }).toList(growable: false);
     final dateValue = firstPositive(dateMatches);
-    if (dateValue > 0) {
+    if (dateValue.hasValue) {
       return dateValue;
     }
     return firstPositive(rows);
@@ -468,6 +478,18 @@ class _DeliveryPlanBaseInfo {
   final int boxesPerBoard;
   final int piecesPerBox;
   final int appAvailableBoxes;
+}
+
+class _DeliveryPlanPackaging {
+  const _DeliveryPlanPackaging({
+    this.boxesPerBoard = 0,
+    this.piecesPerBox = 0,
+  });
+
+  final int boxesPerBoard;
+  final int piecesPerBox;
+
+  bool get hasValue => boxesPerBoard > 0 || piecesPerBox > 0;
 }
 
 int _normalizedPlanAvailableBoxes(
@@ -539,10 +561,12 @@ class DeliveryPlanRecordLine {
   const DeliveryPlanRecordLine({
     required this.item,
     required this.boxesPerBoard,
+    required this.piecesPerBox,
   });
 
   final DeliveryPlanItem item;
   final int boxesPerBoard;
+  final int piecesPerBox;
 
   int get id => item.id;
   int get recordId => item.recordId;

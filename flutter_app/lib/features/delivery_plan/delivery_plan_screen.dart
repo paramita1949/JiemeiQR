@@ -772,6 +772,7 @@ class _DeliveryPlanReviewScreen extends StatelessWidget {
                     location: row.location,
                     needBoxes: row.needBoxes,
                     boxesPerBoard: row.boxesPerBoard,
+                    piecesPerBox: row.piecesPerBox,
                   ),
               ],
             ),
@@ -801,6 +802,7 @@ class _DeliveryPlanDisplayLine {
     required this.location,
     required this.needBoxes,
     required this.boxesPerBoard,
+    required this.piecesPerBox,
   });
 
   final String productCode;
@@ -809,6 +811,9 @@ class _DeliveryPlanDisplayLine {
   final String location;
   final int needBoxes;
   final int boxesPerBoard;
+  final int piecesPerBox;
+
+  int get needPieces => needBoxes * piecesPerBox;
 }
 
 class _DeliveryPlanLineList extends StatelessWidget {
@@ -869,7 +874,8 @@ class _DeliveryPlanLineRow extends StatelessWidget {
                   style: const TextStyle(color: danger),
                 ),
                 TextSpan(
-                  text: ' · ${_formatInt(line.needBoxes)}箱 · ',
+                  text:
+                      ' · ${_formatInt(line.needBoxes)}箱，${line.piecesPerBox > 0 ? line.needPieces : '--'} · ',
                   style: const TextStyle(color: danger),
                 ),
                 TextSpan(
@@ -985,6 +991,7 @@ class _DeliveryPlanDetailScreenState extends State<_DeliveryPlanDetailScreen> {
                           location: item.location,
                           needBoxes: item.needBoxes,
                           boxesPerBoard: item.boxesPerBoard,
+                          piecesPerBox: item.piecesPerBox,
                         ),
                     ],
                   ),
