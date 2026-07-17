@@ -884,7 +884,10 @@ class _DeliveryPlanLineRow extends StatelessWidget {
                   ),
                   style: const TextStyle(color: danger),
                 ),
-                const TextSpan(text: ' '),
+                const WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: SizedBox(width: 12),
+                ),
                 TextSpan(
                   text:
                       line.piecesPerBox > 0 ? line.needPieces.toString() : '--',
