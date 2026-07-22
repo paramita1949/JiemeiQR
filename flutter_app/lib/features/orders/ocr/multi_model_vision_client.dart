@@ -32,7 +32,7 @@ class MultiModelVisionClient {
   }) async {
     final normalizedToken = _normalizeToken(token);
     if (normalizedToken.isEmpty) {
-      throw const MultiModelVisionException('缺少模型中心 Token');
+      throw const MultiModelVisionException('缺少抱抱脸 Token');
     }
     final normalizedModel = model.trim();
     if (normalizedModel.isEmpty) {

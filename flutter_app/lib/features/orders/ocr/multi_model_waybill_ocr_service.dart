@@ -35,7 +35,7 @@ class MultiModelWaybillOcrService implements WaybillPhotoOcrService {
   }) async {
     final config = await _configStore.load();
     if (config.multiModelToken.trim().isEmpty) {
-      throw const MultiModelWaybillOcrException('缺少模型中心 Token');
+      throw const MultiModelWaybillOcrException('缺少抱抱脸 Token');
     }
     onProgress?.call('正在上传运单照片...');
     final prepared = await _imagePreparer.prepare(image);

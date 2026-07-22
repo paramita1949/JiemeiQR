@@ -1988,7 +1988,7 @@ String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
 String _ocrProviderLabel(AiOcrConfig config) {
   if (config.usesMultiModelOcr) {
-    return '模型中心';
+    return '抱抱脸';
   }
   if (config.usesPaddleOcr) {
     return '飞桨OCR';

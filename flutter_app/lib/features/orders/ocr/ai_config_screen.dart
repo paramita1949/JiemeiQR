@@ -411,7 +411,7 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return _multiModelTokenController.text.trim().isNotEmpty &&
               _multiModelModelController.text.trim().isNotEmpty
           ? null
-          : '请填写模型中心 Token 和模型标识';
+          : '请填写抱抱脸 Token 和模型标识';
     }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
@@ -554,7 +554,7 @@ _ProviderMeta _providerMeta(String provider) {
   if (provider == AiOcrConfig.multiModelProvider) {
     return const _ProviderMeta(
       provider: AiOcrConfig.multiModelProvider,
-      name: '模型中心',
+      name: '抱抱脸',
       formHint: '填写访问 Token 和支持图片输入的完整模型标识。',
       icon: Icons.hub_outlined,
       color: Color(0xFFF59E0B),
@@ -959,7 +959,7 @@ class _MultiModelFields extends StatelessWidget {
         _ConfigField(
           key: const Key('multiModelTokenField'),
           controller: tokenController,
-          label: '模型中心 Token',
+          label: '抱抱脸 Token',
           icon: Icons.key_outlined,
           obscureText: true,
         ),
@@ -977,7 +977,7 @@ class _MultiModelFields extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         _ModelPresetEditor(
-          providerName: '模型中心',
+          providerName: '抱抱脸',
           selectedModel: modelController.text.trim(),
           presets: presets,
           onApplyPreset: onApplyPreset,
