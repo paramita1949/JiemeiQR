@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/gemini_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_service.dart';
+import 'package:qrscan_flutter/features/orders/ocr/multi_model_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/paddle_ocr_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
@@ -19,12 +20,15 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     OcrServiceFactory? geminiServiceFactory,
     OcrServiceFactory? modelScopeServiceFactory,
     OcrServiceFactory? paddleOcrServiceFactory,
+    OcrServiceFactory? multiModelServiceFactory,
   })  : _geminiServiceFactory =
             geminiServiceFactory ?? _defaultGeminiServiceFactory,
         _modelScopeServiceFactory =
             modelScopeServiceFactory ?? _defaultModelScopeServiceFactory,
         _paddleOcrServiceFactory =
-            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory;
+            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory,
+        _multiModelServiceFactory =
+            multiModelServiceFactory ?? _defaultMultiModelServiceFactory;
 
   static WaybillPhotoOcrService _defaultGeminiServiceFactory(
     FileAiConfigStore configStore,
@@ -47,10 +51,18 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     return PaddleOcrWaybillOcrService(configStore: configStore);
   }
 
+  static WaybillPhotoOcrService _defaultMultiModelServiceFactory(
+    FileAiConfigStore configStore,
+    AiOcrConfig config,
+  ) {
+    return MultiModelWaybillOcrService(configStore: configStore);
+  }
+
   final FileAiConfigStore configStore;
   final OcrServiceFactory _geminiServiceFactory;
   final OcrServiceFactory _modelScopeServiceFactory;
   final OcrServiceFactory _paddleOcrServiceFactory;
+  final OcrServiceFactory _multiModelServiceFactory;
 
   @override
   Future<WaybillOcrDraft> recognize(
@@ -63,12 +75,16 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
         ? 'paddleocr'
         : config.usesModelScopeOcr
             ? 'modelscope'
-            : 'gemini';
+            : config.usesMultiModelOcr
+                ? 'multi_model'
+                : 'gemini';
     final model = config.usesPaddleOcr
         ? config.paddleOcrModel
         : config.usesModelScopeOcr
             ? config.modelscopeModel
-            : config.geminiModel;
+            : config.usesMultiModelOcr
+                ? config.multiModelModel
+                : config.geminiModel;
     DebugEventLog.add(
       'AI_OCR',
       'route provider=$provider model=$model promptPreset=${config.ocrPromptPreset}',
@@ -82,6 +98,13 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     }
     if (config.usesModelScopeOcr) {
       return _modelScopeServiceFactory(configStore, config).recognize(
+        image,
+        merchantHistoryNames: merchantHistoryNames,
+        onProgress: onProgress,
+      );
+    }
+    if (config.usesMultiModelOcr) {
+      return _multiModelServiceFactory(configStore, config).recognize(
         image,
         merchantHistoryNames: merchantHistoryNames,
         onProgress: onProgress,

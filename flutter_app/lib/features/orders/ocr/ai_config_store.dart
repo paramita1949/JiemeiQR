@@ -23,10 +23,13 @@ class AiOcrConfig {
     this.paddleOcrModel = defaultPaddleOcrModel,
     this.openRouterApiKey = '',
     this.openRouterModel = defaultOpenRouterModel,
+    this.multiModelToken = '',
+    this.multiModelModel = defaultMultiModelModel,
     this.geminiModelPresets = defaultGeminiModelPresets,
     this.modelScopeModelPresets = defaultModelScopeModelPresets,
     this.paddleOcrModelPresets = defaultPaddleOcrModelPresets,
     this.openRouterModelPresets = defaultOpenRouterModelPresets,
+    this.multiModelModelPresets = defaultMultiModelModelPresets,
     this.ocrPromptPreset = defaultOcrPromptPreset,
   });
 
@@ -38,11 +41,13 @@ class AiOcrConfig {
   static const modelscopeProvider = 'modelscope';
   static const paddleOcrProvider = 'paddleocr';
   static const openRouterProvider = 'openrouter';
+  static const multiModelProvider = 'multi_model';
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
   static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
   static const defaultPaddleOcrModel = 'PaddleOCR-VL-1.6';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
+  static const defaultMultiModelModel = 'moonshotai/Kimi-K2.7-Code:novita';
   static const ocrPromptPresetGeneral = 'general';
   static const ocrPromptPresetWaybillTemplateV2 = 'waybill_template_v2';
   static const defaultOcrPromptPreset = ocrPromptPresetWaybillTemplateV2;
@@ -60,6 +65,7 @@ class AiOcrConfig {
     'minimax/minimax-m2.5:free',
     'openai/gpt-oss-120b:free',
   ];
+  static const defaultMultiModelModelPresets = [defaultMultiModelModel];
 
   final String provider;
   final String geminiApiKey;
@@ -78,10 +84,13 @@ class AiOcrConfig {
   final String paddleOcrModel;
   final String openRouterApiKey;
   final String openRouterModel;
+  final String multiModelToken;
+  final String multiModelModel;
   final List<String> geminiModelPresets;
   final List<String> modelScopeModelPresets;
   final List<String> paddleOcrModelPresets;
   final List<String> openRouterModelPresets;
+  final List<String> multiModelModelPresets;
   final String ocrPromptPreset;
 
   bool get hasGeminiKey => geminiApiKey.trim().isNotEmpty;
@@ -91,6 +100,7 @@ class AiOcrConfig {
   bool get usesModelScopeOcr => provider == modelscopeProvider;
   bool get usesPaddleOcr => provider == paddleOcrProvider;
   bool get usesOpenRouterOcr => provider == openRouterProvider;
+  bool get usesMultiModelOcr => provider == multiModelProvider;
   bool get hasTencentCredential =>
       tencentSecretId.trim().isNotEmpty && tencentSecretKey.trim().isNotEmpty;
   bool get hasAliyunCredential =>
@@ -101,6 +111,7 @@ class AiOcrConfig {
   bool get hasModelScopeCredential => modelscopeToken.trim().isNotEmpty;
   bool get hasPaddleOcrCredential => paddleOcrToken.trim().isNotEmpty;
   bool get hasOpenRouterCredential => openRouterApiKey.trim().isNotEmpty;
+  bool get hasMultiModelCredential => multiModelToken.trim().isNotEmpty;
 
   Map<String, Object?> toJson() => {
         'provider': provider,
@@ -120,10 +131,13 @@ class AiOcrConfig {
         'paddleOcrModel': paddleOcrModel,
         'openRouterApiKey': openRouterApiKey,
         'openRouterModel': openRouterModel,
+        'multiModelToken': multiModelToken,
+        'multiModelModel': multiModelModel,
         'geminiModelPresets': geminiModelPresets,
         'modelScopeModelPresets': modelScopeModelPresets,
         'paddleOcrModelPresets': paddleOcrModelPresets,
         'openRouterModelPresets': openRouterModelPresets,
+        'multiModelModelPresets': multiModelModelPresets,
         'ocrPromptPreset': ocrPromptPreset,
       };
 
@@ -134,6 +148,7 @@ class AiOcrConfig {
       baiduProvider => baiduProvider,
       modelscopeProvider => modelscopeProvider,
       paddleOcrProvider => paddleOcrProvider,
+      multiModelProvider => multiModelProvider,
       _ => defaultProvider,
     };
     return AiOcrConfig(
@@ -170,6 +185,11 @@ class AiOcrConfig {
           json['openRouterModel']?.toString().trim().isNotEmpty == true
               ? json['openRouterModel'].toString().trim()
               : defaultOpenRouterModel,
+      multiModelToken: json['multiModelToken']?.toString() ?? '',
+      multiModelModel:
+          json['multiModelModel']?.toString().trim().isNotEmpty == true
+              ? json['multiModelModel'].toString().trim()
+              : defaultMultiModelModel,
       geminiModelPresets: _decodePresetList(
         json['geminiModelPresets'],
         fallback: defaultGeminiModelPresets,
@@ -191,6 +211,11 @@ class AiOcrConfig {
       openRouterModelPresets: _decodePresetList(
         json['openRouterModelPresets'],
         fallback: defaultOpenRouterModelPresets,
+      ),
+      multiModelModelPresets: _decodePresetList(
+        json['multiModelModelPresets'],
+        fallback: defaultMultiModelModelPresets,
+        ensureIncludes: defaultMultiModelModelPresets,
       ),
       ocrPromptPreset:
           json['ocrPromptPreset']?.toString() == ocrPromptPresetGeneral
@@ -217,10 +242,13 @@ class AiOcrConfig {
     String? paddleOcrModel,
     String? openRouterApiKey,
     String? openRouterModel,
+    String? multiModelToken,
+    String? multiModelModel,
     List<String>? geminiModelPresets,
     List<String>? modelScopeModelPresets,
     List<String>? paddleOcrModelPresets,
     List<String>? openRouterModelPresets,
+    List<String>? multiModelModelPresets,
     String? ocrPromptPreset,
   }) {
     return AiOcrConfig(
@@ -242,6 +270,8 @@ class AiOcrConfig {
       paddleOcrModel: paddleOcrModel ?? this.paddleOcrModel,
       openRouterApiKey: openRouterApiKey ?? this.openRouterApiKey,
       openRouterModel: openRouterModel ?? this.openRouterModel,
+      multiModelToken: multiModelToken ?? this.multiModelToken,
+      multiModelModel: multiModelModel ?? this.multiModelModel,
       geminiModelPresets: geminiModelPresets ?? this.geminiModelPresets,
       modelScopeModelPresets:
           modelScopeModelPresets ?? this.modelScopeModelPresets,
@@ -249,6 +279,8 @@ class AiOcrConfig {
           paddleOcrModelPresets ?? this.paddleOcrModelPresets,
       openRouterModelPresets:
           openRouterModelPresets ?? this.openRouterModelPresets,
+      multiModelModelPresets:
+          multiModelModelPresets ?? this.multiModelModelPresets,
       ocrPromptPreset: ocrPromptPreset ?? this.ocrPromptPreset,
     );
   }
@@ -284,10 +316,13 @@ class FileAiConfigStore {
         paddleOcrModel: AiOcrConfig.defaultPaddleOcrModel,
         openRouterApiKey: '',
         openRouterModel: AiOcrConfig.defaultOpenRouterModel,
+        multiModelToken: '',
+        multiModelModel: AiOcrConfig.defaultMultiModelModel,
         geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
         modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
         paddleOcrModelPresets: AiOcrConfig.defaultPaddleOcrModelPresets,
         openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+        multiModelModelPresets: AiOcrConfig.defaultMultiModelModelPresets,
         ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
       );
     }
@@ -317,10 +352,13 @@ class FileAiConfigStore {
       paddleOcrModel: AiOcrConfig.defaultPaddleOcrModel,
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
+      multiModelToken: '',
+      multiModelModel: AiOcrConfig.defaultMultiModelModel,
       geminiModelPresets: AiOcrConfig.defaultGeminiModelPresets,
       modelScopeModelPresets: AiOcrConfig.defaultModelScopeModelPresets,
       paddleOcrModelPresets: AiOcrConfig.defaultPaddleOcrModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
+      multiModelModelPresets: AiOcrConfig.defaultMultiModelModelPresets,
       ocrPromptPreset: AiOcrConfig.defaultOcrPromptPreset,
     );
   }

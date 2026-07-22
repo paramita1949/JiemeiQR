@@ -1987,6 +1987,9 @@ InputDecoration _inputDecoration(String label) {
 String _formatDate(DateTime date) => '${date.year}.${date.month}.${date.day}';
 
 String _ocrProviderLabel(AiOcrConfig config) {
+  if (config.usesMultiModelOcr) {
+    return '模型中心';
+  }
   if (config.usesPaddleOcr) {
     return '飞桨OCR';
   }
@@ -1996,9 +1999,11 @@ String _ocrProviderLabel(AiOcrConfig config) {
 String _ocrModelLabel(AiOcrConfig config) {
   final model = config.usesPaddleOcr
       ? config.paddleOcrModel
-      : config.usesModelScopeOcr
-          ? config.modelscopeModel
-          : config.geminiModel;
+      : config.usesMultiModelOcr
+          ? config.multiModelModel
+          : config.usesModelScopeOcr
+              ? config.modelscopeModel
+              : config.geminiModel;
   final text = model.trim();
   if (text.isEmpty) {
     return '未选择模型';

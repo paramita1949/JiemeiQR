@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/multi_model_vision_client.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef DeliveryPlanOcrProgressCallback = void Function(String message);
@@ -51,12 +52,15 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
     DeliveryPlanOcrServiceFactory? geminiServiceFactory,
     DeliveryPlanOcrServiceFactory? modelScopeServiceFactory,
     DeliveryPlanOcrServiceFactory? paddleOcrServiceFactory,
+    DeliveryPlanOcrServiceFactory? multiModelServiceFactory,
   })  : _geminiServiceFactory =
             geminiServiceFactory ?? _defaultGeminiServiceFactory,
         _modelScopeServiceFactory =
             modelScopeServiceFactory ?? _defaultModelScopeServiceFactory,
         _paddleOcrServiceFactory =
-            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory;
+            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory,
+        _multiModelServiceFactory =
+            multiModelServiceFactory ?? _defaultMultiModelServiceFactory;
 
   static DeliveryPlanPhotoOcrService _defaultGeminiServiceFactory(
     FileAiConfigStore configStore,
@@ -76,10 +80,17 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
     return PaddleDeliveryPlanOcrService(configStore: configStore);
   }
 
+  static DeliveryPlanPhotoOcrService _defaultMultiModelServiceFactory(
+    FileAiConfigStore configStore,
+  ) {
+    return MultiModelDeliveryPlanOcrService(configStore: configStore);
+  }
+
   final FileAiConfigStore configStore;
   final DeliveryPlanOcrServiceFactory _geminiServiceFactory;
   final DeliveryPlanOcrServiceFactory _modelScopeServiceFactory;
   final DeliveryPlanOcrServiceFactory _paddleOcrServiceFactory;
+  final DeliveryPlanOcrServiceFactory _multiModelServiceFactory;
 
   @override
   Future<DeliveryPlanOcrDraft> recognize(
@@ -99,6 +110,10 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
       return _modelScopeServiceFactory(configStore)
           .recognize(image, onProgress: onProgress);
     }
+    if (config.usesMultiModelOcr) {
+      return _multiModelServiceFactory(configStore)
+          .recognize(image, onProgress: onProgress);
+    }
     try {
       return await _geminiServiceFactory(configStore)
           .recognize(image, onProgress: onProgress);
@@ -108,6 +123,47 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
       }
       return _modelScopeServiceFactory(configStore)
           .recognize(image, onProgress: onProgress);
+    }
+  }
+}
+
+class MultiModelDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
+  MultiModelDeliveryPlanOcrService({
+    FileAiConfigStore? configStore,
+    MultiModelVisionClient? client,
+  })  : _configStore = configStore ?? const FileAiConfigStore(),
+        _client = client ?? MultiModelVisionClient();
+
+  final FileAiConfigStore _configStore;
+  final MultiModelVisionClient _client;
+
+  @override
+  Future<DeliveryPlanOcrDraft> recognize(
+    File image, {
+    DeliveryPlanOcrProgressCallback? onProgress,
+  }) async {
+    final config = await _configStore.load();
+    if (config.multiModelToken.trim().isEmpty) {
+      throw const DeliveryPlanOcrException('缺少模型中心 Token');
+    }
+    onProgress?.call('正在上传交货计划截图...');
+    try {
+      final content = await _client.completeVision(
+        token: config.multiModelToken,
+        model: config.multiModelModel,
+        prompt: _deliveryPlanPrompt,
+        imageBytes: await image.readAsBytes(),
+      );
+      onProgress?.call('正在整理交货计划识别结果...');
+      final decoded = jsonDecode(content);
+      if (decoded is! Map) {
+        throw const DeliveryPlanOcrException('交货计划 OCR JSON 格式无效');
+      }
+      return DeliveryPlanOcrDraft.fromJson(decoded.cast<String, Object?>());
+    } on MultiModelVisionException catch (error) {
+      throw DeliveryPlanOcrException(error.message);
+    } on FormatException {
+      throw const DeliveryPlanOcrException('交货计划 OCR JSON 格式无效');
     }
   }
 }
