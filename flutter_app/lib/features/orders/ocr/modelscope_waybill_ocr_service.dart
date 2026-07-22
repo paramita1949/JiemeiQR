@@ -371,8 +371,6 @@ String _promptByPreset(String preset) {
   return _ocrPromptWaybillTemplateV2;
 }
 
-String waybillOcrPromptForPreset(String preset) => _promptByPreset(preset);
-
 const _ocrPromptGeneral = '''
 你只做OCR和模板字段抽取，不要推理，不要补全，不要判断业务含义。
 请从这张发货单照片中读取看得见的文字和表格单元格，返回JSON。

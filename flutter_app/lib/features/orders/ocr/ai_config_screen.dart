@@ -25,12 +25,9 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _modelscopeModelController = TextEditingController();
   final _paddleOcrTokenController = TextEditingController();
   final _paddleOcrModelController = TextEditingController();
-  final _multiModelTokenController = TextEditingController();
-  final _multiModelModelController = TextEditingController();
   List<String> _geminiModelPresets = [];
   List<String> _modelScopeModelPresets = [];
   List<String> _paddleOcrModelPresets = [];
-  List<String> _multiModelModelPresets = [];
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -48,8 +45,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController,
       _paddleOcrTokenController,
       _paddleOcrModelController,
-      _multiModelTokenController,
-      _multiModelModelController,
     ]) {
       controller.addListener(_scheduleAutoSave);
     }
@@ -68,8 +63,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     _modelscopeModelController.dispose();
     _paddleOcrTokenController.dispose();
     _paddleOcrModelController.dispose();
-    _multiModelTokenController.dispose();
-    _multiModelModelController.dispose();
     super.dispose();
   }
 
@@ -86,17 +79,13 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController.text = config.modelscopeModel;
       _paddleOcrTokenController.text = config.paddleOcrToken;
       _paddleOcrModelController.text = config.paddleOcrModel;
-      _multiModelTokenController.text = config.multiModelToken;
-      _multiModelModelController.text = config.multiModelModel;
       _geminiModelPresets = [...config.geminiModelPresets];
       _modelScopeModelPresets = [...config.modelScopeModelPresets];
       _paddleOcrModelPresets = [...config.paddleOcrModelPresets];
-      _multiModelModelPresets = [...config.multiModelModelPresets];
       _ocrPromptPreset = config.ocrPromptPreset;
       if (_provider != AiOcrConfig.defaultProvider &&
           _provider != AiOcrConfig.modelscopeProvider &&
-          _provider != AiOcrConfig.paddleOcrProvider &&
-          _provider != AiOcrConfig.multiModelProvider) {
+          _provider != AiOcrConfig.paddleOcrProvider) {
         _provider = AiOcrConfig.defaultProvider;
       }
       _autoSaveReady = true;
@@ -157,70 +146,44 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   _SectionShell(
                     title: '默认使用',
                     subtitle: '',
-                    child: LayoutBuilder(
+                    child: Row(
                       key: const Key('providerHorizontalList'),
-                      builder: (context, constraints) {
-                        final width = (constraints.maxWidth - 8) / 2;
-                        return Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            SizedBox(
-                              width: width,
-                              child: _ProviderCard(
-                                key: const Key('providerCard-gemini'),
-                                meta:
-                                    _providerMeta(AiOcrConfig.defaultProvider),
-                                selected:
-                                    _provider == AiOcrConfig.defaultProvider,
-                                onTap: () => _selectProvider(
-                                  AiOcrConfig.defaultProvider,
-                                ),
-                              ),
+                      children: [
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-gemini'),
+                            meta: _providerMeta(AiOcrConfig.defaultProvider),
+                            selected: _provider == AiOcrConfig.defaultProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.defaultProvider,
                             ),
-                            SizedBox(
-                              width: width,
-                              child: _ProviderCard(
-                                key: const Key('providerCard-modelscope'),
-                                meta: _providerMeta(
-                                    AiOcrConfig.modelscopeProvider),
-                                selected:
-                                    _provider == AiOcrConfig.modelscopeProvider,
-                                onTap: () => _selectProvider(
-                                  AiOcrConfig.modelscopeProvider,
-                                ),
-                              ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-modelscope'),
+                            meta: _providerMeta(AiOcrConfig.modelscopeProvider),
+                            selected:
+                                _provider == AiOcrConfig.modelscopeProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.modelscopeProvider,
                             ),
-                            SizedBox(
-                              width: width,
-                              child: _ProviderCard(
-                                key: const Key('providerCard-paddleocr'),
-                                meta: _providerMeta(
-                                    AiOcrConfig.paddleOcrProvider),
-                                selected:
-                                    _provider == AiOcrConfig.paddleOcrProvider,
-                                onTap: () => _selectProvider(
-                                  AiOcrConfig.paddleOcrProvider,
-                                ),
-                              ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-paddleocr'),
+                            meta: _providerMeta(AiOcrConfig.paddleOcrProvider),
+                            selected:
+                                _provider == AiOcrConfig.paddleOcrProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.paddleOcrProvider,
                             ),
-                            SizedBox(
-                              width: width,
-                              child: _ProviderCard(
-                                key: const Key('providerCard-multi-model'),
-                                meta: _providerMeta(
-                                  AiOcrConfig.multiModelProvider,
-                                ),
-                                selected:
-                                    _provider == AiOcrConfig.multiModelProvider,
-                                onTap: () => _selectProvider(
-                                  AiOcrConfig.multiModelProvider,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -284,10 +247,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return _paddleOcrTokenController.text.trim().isNotEmpty &&
           _paddleOcrModelController.text.trim().isNotEmpty;
     }
-    if (_provider == AiOcrConfig.multiModelProvider) {
-      return _multiModelTokenController.text.trim().isNotEmpty &&
-          _multiModelModelController.text.trim().isNotEmpty;
-    }
     return _apiKeyController.text.trim().isNotEmpty &&
         _modelController.text.trim().isNotEmpty;
   }
@@ -321,22 +280,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
             _addModelPreset(AiOcrConfig.paddleOcrProvider, model),
         onRemovePreset: (model) => _deleteModelPreset(
           AiOcrConfig.paddleOcrProvider,
-          model,
-        ),
-      );
-    }
-    if (_provider == AiOcrConfig.multiModelProvider) {
-      return _MultiModelFields(
-        key: const ValueKey('multiModelFields'),
-        tokenController: _multiModelTokenController,
-        modelController: _multiModelModelController,
-        presets: _multiModelModelPresets,
-        onApplyPreset: (model) =>
-            _applyModelPreset(_multiModelModelController, model),
-        onAddPreset: (model) =>
-            _addModelPreset(AiOcrConfig.multiModelProvider, model),
-        onRemovePreset: (model) => _deleteModelPreset(
-          AiOcrConfig.multiModelProvider,
           model,
         ),
       );
@@ -407,12 +350,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
           ? null
           : '请填写飞桨OCR Token 和模型';
     }
-    if (_provider == AiOcrConfig.multiModelProvider) {
-      return _multiModelTokenController.text.trim().isNotEmpty &&
-              _multiModelModelController.text.trim().isNotEmpty
-          ? null
-          : '请填写抱抱脸 Token 和模型标识';
-    }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
         ? null
@@ -438,13 +375,10 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       paddleOcrModel: _paddleOcrModelController.text.trim(),
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
-      multiModelToken: _multiModelTokenController.text.trim(),
-      multiModelModel: _multiModelModelController.text.trim(),
       geminiModelPresets: _geminiModelPresets,
       modelScopeModelPresets: _modelScopeModelPresets,
       paddleOcrModelPresets: _paddleOcrModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
-      multiModelModelPresets: _multiModelModelPresets,
       ocrPromptPreset: _ocrPromptPreset,
     );
   }
@@ -498,9 +432,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     if (provider == AiOcrConfig.paddleOcrProvider) {
       return _paddleOcrModelPresets;
     }
-    if (provider == AiOcrConfig.multiModelProvider) {
-      return _multiModelModelPresets;
-    }
     return _geminiModelPresets;
   }
 
@@ -510,9 +441,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     }
     if (provider == AiOcrConfig.paddleOcrProvider) {
       return _paddleOcrModelController;
-    }
-    if (provider == AiOcrConfig.multiModelProvider) {
-      return _multiModelModelController;
     }
     return _modelController;
   }
@@ -549,15 +477,6 @@ _ProviderMeta _providerMeta(String provider) {
       formHint: '填写飞桨OCR Token 和模型，模型可自定义新增或删除。',
       icon: Icons.document_scanner_outlined,
       color: Color(0xFF0891B2),
-    );
-  }
-  if (provider == AiOcrConfig.multiModelProvider) {
-    return const _ProviderMeta(
-      provider: AiOcrConfig.multiModelProvider,
-      name: '抱抱脸',
-      formHint: '填写访问 Token 和支持图片输入的完整模型标识。',
-      icon: Icons.hub_outlined,
-      color: Color(0xFFF59E0B),
     );
   }
   return const _ProviderMeta(
@@ -923,61 +842,6 @@ class _PaddleOcrFields extends StatelessWidget {
         const SizedBox(height: 8),
         _ModelPresetEditor(
           providerName: '飞桨OCR',
-          selectedModel: modelController.text.trim(),
-          presets: presets,
-          onApplyPreset: onApplyPreset,
-          onAddPreset: onAddPreset,
-          onRemovePreset: onRemovePreset,
-        ),
-      ],
-    );
-  }
-}
-
-class _MultiModelFields extends StatelessWidget {
-  const _MultiModelFields({
-    super.key,
-    required this.tokenController,
-    required this.modelController,
-    required this.presets,
-    required this.onApplyPreset,
-    required this.onAddPreset,
-    required this.onRemovePreset,
-  });
-
-  final TextEditingController tokenController;
-  final TextEditingController modelController;
-  final List<String> presets;
-  final ValueChanged<String> onApplyPreset;
-  final ValueChanged<String> onAddPreset;
-  final ValueChanged<String> onRemovePreset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ConfigField(
-          key: const Key('multiModelTokenField'),
-          controller: tokenController,
-          label: '抱抱脸 Token',
-          icon: Icons.key_outlined,
-          obscureText: true,
-        ),
-        const SizedBox(height: 8),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '请选择支持图片输入的模型。',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        _ModelPresetEditor(
-          providerName: '抱抱脸',
           selectedModel: modelController.text.trim(),
           presets: presets,
           onApplyPreset: onApplyPreset,
