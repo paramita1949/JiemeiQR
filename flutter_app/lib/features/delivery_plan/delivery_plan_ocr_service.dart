@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
+import 'package:qrscan_flutter/features/orders/ocr/paddle_ocr_request_options.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef DeliveryPlanOcrProgressCallback = void Function(String message);
@@ -259,9 +260,7 @@ class PaddleDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
 
   static const _jobUrl = 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
   static const _optionalPayload = {
-    'useDocOrientationClassify': false,
-    'useDocUnwarping': false,
-    'useTextlineOrientation': false,
+    ...paddleOcrDocumentOptionalPayload,
     'prompt': _deliveryPlanPrompt,
   };
 

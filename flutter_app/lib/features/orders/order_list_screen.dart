@@ -2353,7 +2353,7 @@ class _RestockWaybillSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '运单 ${sortedLines.length} 单 · 箱数 $totalBoxes 箱（按箱数降序）',
+                  '运单 ${sortedLines.length} 单 · 箱数 $totalBoxes 箱',
                   style: const TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 12,
