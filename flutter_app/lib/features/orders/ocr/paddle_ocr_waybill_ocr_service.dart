@@ -543,15 +543,20 @@ _PaddleMerchantResolution _resolvePaddleMerchantName({
 
   final shortened = _shortenPaddleMerchantName(rawName);
   final candidate = shortened.isEmpty ? rawName : shortened;
-  final historyFromShortened = resolveMerchantNameFromHistory(
-    recognizedName: candidate,
-    historyNames: historyNames,
+  final matchedDraft = applyMerchantHistoryMatch(
+    WaybillOcrDraft(
+      waybillNo: '',
+      merchantName: candidate,
+      rawMerchantName: rawName,
+      orderDateText: '',
+      rows: const [],
+    ),
+    historyNames,
   );
   return _PaddleMerchantResolution(
-    name: historyFromShortened,
+    name: matchedDraft.merchantName,
     rawName: rawName,
-    matchedHistoryMerchant:
-        historyFromShortened == candidate ? '' : historyFromShortened,
+    matchedHistoryMerchant: matchedDraft.matchedHistoryMerchant,
   );
 }
 

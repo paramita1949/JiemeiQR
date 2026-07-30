@@ -2491,27 +2491,14 @@ class _RestockRemainText extends StatelessWidget {
     );
     final lowThresholdBoxes = aggregate.boxesPerBoard * 10;
     final isLow = aggregate.availableAfterReserveBoxes < lowThresholdBoxes;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          '预占余量 $reservedRemainText',
-          style: TextStyle(
-            color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          '实际余量 $actualRemainText',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
+    return Text(
+      '实际余量 $actualRemainText · 预占余量 $reservedRemainText',
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }

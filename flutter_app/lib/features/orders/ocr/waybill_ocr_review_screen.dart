@@ -1032,9 +1032,7 @@ String _dateText(DateTime? date, String fallback) {
 String _merchantMatchText(WaybillOcrDraft draft) {
   final matched = draft.matchedHistoryMerchant.trim();
   final raw = draft.rawMerchantName.trim();
-  final confidence = draft.merchantConfidence.trim();
-  final reason = draft.merchantMatchReason.trim();
-  if (matched.isEmpty && raw.isEmpty && reason.isEmpty) {
+  if (matched.isEmpty && raw.isEmpty) {
     return '';
   }
   final parts = <String>[];
@@ -1043,12 +1041,6 @@ String _merchantMatchText(WaybillOcrDraft draft) {
   }
   if (raw.isNotEmpty && raw != draft.merchantName.trim()) {
     parts.add('原文：$raw');
-  }
-  if (confidence.isNotEmpty) {
-    parts.add('置信：$confidence');
-  }
-  if (reason.isNotEmpty) {
-    parts.add(reason);
   }
   return parts.join(' / ');
 }

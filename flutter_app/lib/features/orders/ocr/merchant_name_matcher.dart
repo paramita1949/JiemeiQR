@@ -67,29 +67,46 @@ WaybillOcrDraft applyMerchantHistoryMatch(
   WaybillOcrDraft draft,
   Iterable<String> historyNames,
 ) {
-  if (historyNames.isEmpty) {
-    return draft;
-  }
   final rawName = draft.rawMerchantName.trim();
   final recognizedNames = <String>[
     if (rawName.isNotEmpty) rawName,
     if (draft.merchantName.trim().isNotEmpty) draft.merchantName.trim(),
   ];
-  for (final recognizedName in recognizedNames) {
-    final matched = resolveMerchantNameFromHistory(
-      recognizedName: recognizedName,
-      historyNames: historyNames,
-    );
-    if (matched.trim().isEmpty || matched == recognizedName) {
-      continue;
+  if (historyNames.isNotEmpty) {
+    for (final recognizedName in recognizedNames) {
+      final matched = resolveMerchantNameFromHistory(
+        recognizedName: recognizedName,
+        historyNames: historyNames,
+      );
+      if (matched.trim().isEmpty || matched == recognizedName) {
+        continue;
+      }
+      return WaybillOcrDraft(
+        waybillNo: draft.waybillNo,
+        merchantName: matched,
+        rawMerchantName: rawName.isEmpty ? recognizedName : rawName,
+        matchedHistoryMerchant: matched,
+        merchantConfidence: 'high',
+        merchantMatchReason: '历史商家简称匹配',
+        orderDateText: draft.orderDateText,
+        rows: draft.rows,
+        totalBoxes: draft.totalBoxes,
+        warnings: draft.warnings,
+      );
     }
+  }
+  final correctedName = _correctMerchantNameFromRaw(
+    rawName: rawName,
+    recognizedName: draft.merchantName.trim(),
+  );
+  if (correctedName.isNotEmpty && correctedName != draft.merchantName.trim()) {
     return WaybillOcrDraft(
       waybillNo: draft.waybillNo,
-      merchantName: matched,
-      rawMerchantName: rawName.isEmpty ? recognizedName : rawName,
-      matchedHistoryMerchant: matched,
-      merchantConfidence: 'high',
-      merchantMatchReason: '历史商家简称匹配',
+      merchantName: correctedName,
+      rawMerchantName: rawName,
+      matchedHistoryMerchant: draft.matchedHistoryMerchant,
+      merchantConfidence: draft.merchantConfidence,
+      merchantMatchReason: draft.merchantMatchReason,
       orderDateText: draft.orderDateText,
       rows: draft.rows,
       totalBoxes: draft.totalBoxes,
@@ -97,6 +114,89 @@ WaybillOcrDraft applyMerchantHistoryMatch(
     );
   }
   return draft;
+}
+
+String _correctMerchantNameFromRaw({
+  required String rawName,
+  required String recognizedName,
+}) {
+  if (rawName.isEmpty || recognizedName.isEmpty) {
+    return recognizedName;
+  }
+  final rawCore = _stripAdministrativePrefix(_stripCompanyShell(rawName));
+  final recognizedCore =
+      _stripAdministrativePrefix(_stripCompanyShell(recognizedName));
+  if (rawCore.isEmpty ||
+      recognizedCore.isEmpty ||
+      rawCore.length < recognizedCore.length) {
+    return recognizedName;
+  }
+  if (rawCore == recognizedCore) {
+    if (_hasCompanyShell(rawName)) {
+      return recognizedName;
+    }
+    return _dropGenericSuffixForLongCore(rawCore) ?? recognizedName;
+  }
+  for (final suffix in _genericMerchantSuffixes) {
+    if (!rawCore.endsWith(suffix) ||
+        !recognizedCore.endsWith(suffix) ||
+        rawCore.length <= suffix.length ||
+        recognizedCore.length <= suffix.length) {
+      continue;
+    }
+    final rawPrefix = rawCore.substring(0, rawCore.length - suffix.length);
+    final recognizedPrefix =
+        recognizedCore.substring(0, recognizedCore.length - suffix.length);
+    if (rawPrefix.length > recognizedPrefix.length &&
+        rawPrefix.startsWith(recognizedPrefix)) {
+      return rawPrefix;
+    }
+  }
+  return recognizedName;
+}
+
+String? _dropGenericSuffixForLongCore(String value) {
+  for (final suffix in _genericMerchantSuffixes) {
+    if (!value.endsWith(suffix) || value.length <= suffix.length) {
+      continue;
+    }
+    final prefix = value.substring(0, value.length - suffix.length);
+    if (prefix.length >= 4) {
+      return prefix;
+    }
+  }
+  return null;
+}
+
+bool _hasCompanyShell(String value) {
+  final text = _compactMerchantName(value);
+  return _companyShellSuffixes.any(
+    (suffix) => text.endsWith(suffix) && text.length > suffix.length,
+  );
+}
+
+String _stripCompanyShell(String value) {
+  var text = _compactMerchantName(value);
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (final suffix in _companyShellSuffixes) {
+      if (text.endsWith(suffix) && text.length > suffix.length) {
+        text = text.substring(0, text.length - suffix.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return text;
+}
+
+String _compactMerchantName(String value) {
+  return value
+      .toUpperCase()
+      .replaceAll(RegExp(r'[（(][^）)]*[）)]'), '')
+      .replaceFirst(RegExp(r'二级.*$'), '')
+      .replaceAll(RegExp(r'[\s　【】\[\]<>《》,，.。:：;；\-_/\\]'), '');
 }
 
 String _normalizeMerchantName(String value) {
@@ -231,6 +331,18 @@ const _administrativePrefixes = [
   '义乌',
   '永康',
   '龙游',
+];
+
+const _genericMerchantSuffixes = [
+  '商贸',
+  '贸易',
+];
+
+const _companyShellSuffixes = [
+  '有限责任公司',
+  '股份有限公司',
+  '有限公司',
+  '公司',
 ];
 
 class _MerchantMatch {
