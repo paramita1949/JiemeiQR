@@ -2497,65 +2497,58 @@ class _RestockRemainText extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
     const actualStyle = TextStyle(
-      color: AppTheme.textSecondary,
+      color: Color(0xFF2563EB),
       fontSize: 11,
       fontWeight: FontWeight.w700,
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _RestockRemainLine(
-          label: '实际余量',
-          value: actualRemainText,
-          style: actualStyle,
-        ),
-        const SizedBox(height: 2),
-        _RestockRemainLine(
-          label: '预占余量',
-          value: reservedRemainText,
-          style: reservedStyle,
-        ),
-      ],
+    return IntrinsicWidth(
+      child: Table(
+        columnWidths: const {
+          0: FixedColumnWidth(46),
+          1: FixedColumnWidth(4),
+          2: IntrinsicColumnWidth(),
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          _restockRemainLine(
+            label: '实际余量',
+            value: actualRemainText,
+            style: actualStyle,
+          ),
+          _restockRemainLine(
+            label: '预占余量',
+            value: reservedRemainText,
+            style: reservedStyle,
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _RestockRemainLine extends StatelessWidget {
-  const _RestockRemainLine({
-    required this.label,
-    required this.value,
-    required this.style,
-  });
-
-  final String label;
-  final String value;
-  final TextStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 46,
-          child: Text(
-            label,
-            textAlign: TextAlign.left,
-            style: style,
-          ),
-        ),
-        const SizedBox(width: 4),
-        SizedBox(
-          width: 52,
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: style,
-          ),
-        ),
-      ],
-    );
-  }
+TableRow _restockRemainLine({
+  required String label,
+  required String value,
+  required TextStyle style,
+}) {
+  return TableRow(
+    children: [
+      Text(
+        label,
+        textAlign: TextAlign.left,
+        style: style,
+      ),
+      const SizedBox(width: 4, height: 15),
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.visible,
+        softWrap: false,
+        textAlign: TextAlign.right,
+        style: style,
+      ),
+    ],
+  );
 }
 
 _StatusMeta _restockLineStatusMeta(OrderRestockWaybillLine line) {
