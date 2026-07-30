@@ -2481,19 +2481,37 @@ class _RestockRemainText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remainText = BoardCalculator.format(
+    final reservedRemainText = BoardCalculator.format(
       boxes: aggregate.availableAfterReserveBoxes,
+      boxesPerBoard: aggregate.boxesPerBoard,
+    );
+    final actualRemainText = BoardCalculator.format(
+      boxes: aggregate.actualInventoryBoxes,
       boxesPerBoard: aggregate.boxesPerBoard,
     );
     final lowThresholdBoxes = aggregate.boxesPerBoard * 10;
     final isLow = aggregate.availableAfterReserveBoxes < lowThresholdBoxes;
-    return Text(
-      '余量 $remainText',
-      style: TextStyle(
-        color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          '预占余量 $reservedRemainText',
+          style: TextStyle(
+            color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '实际余量 $actualRemainText',
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -944,6 +944,7 @@ class OrderDao {
         )
         .get();
     final variants = await _batchCodesByProductDate();
+    final stockDao = StockDao(_database);
     final result = <OrderRestockAggregate>[];
     for (final row in rows) {
       final productCode = row.data['product_code'] as String? ?? '';
@@ -954,6 +955,8 @@ class OrderDao {
       }
       final availableAfterReserveBoxes =
           batchId > 0 ? await _availableBoxesForBatch(batchId) : 0;
+      final actualInventoryBoxes =
+          batchId > 0 ? await stockDao.currentBoxesForBatch(batchId) : 0;
       result.add(
         OrderRestockAggregate(
           batchId: batchId,
@@ -966,6 +969,7 @@ class OrderDao {
           batchCodeVariants:
               variants['$productCode|$dateBatch'] ?? const <String>[],
           availableAfterReserveBoxes: availableAfterReserveBoxes,
+          actualInventoryBoxes: actualInventoryBoxes,
         ),
       );
     }
@@ -1688,6 +1692,7 @@ class OrderRestockAggregate {
     required this.boxesPerBoard,
     required this.batchCodeVariants,
     required this.availableAfterReserveBoxes,
+    required this.actualInventoryBoxes,
   });
 
   final int batchId;
@@ -1699,6 +1704,7 @@ class OrderRestockAggregate {
   final int boxesPerBoard;
   final List<String> batchCodeVariants;
   final int availableAfterReserveBoxes;
+  final int actualInventoryBoxes;
 }
 
 class OrderRestockWaybillLine {

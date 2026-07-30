@@ -228,12 +228,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         orderId: widget.orderId,
         target: status,
       );
-      if (status == OrderStatus.picked) {
-        await _orderDao.setOrderItemsPickedByOrder(
-          orderId: widget.orderId,
-          isPicked: true,
-        );
-      }
     } on InsufficientStockException {
       if (!mounted) {
         return;

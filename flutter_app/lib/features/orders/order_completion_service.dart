@@ -36,6 +36,10 @@ class OrderCompletionService {
       }
 
       await orderDao.setStatus(orderId, target);
+      await orderDao.setOrderItemsPickedByOrder(
+        orderId: orderId,
+        isPicked: target == OrderStatus.picked,
+      );
     });
   }
 

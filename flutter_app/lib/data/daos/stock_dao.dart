@@ -125,7 +125,7 @@ class StockDao {
     final rows = await _database.customSelect(
       '''
       SELECT
-        COALESCE(SUM(MAX(b.initial_boxes + COALESCE(m.delta_boxes, 0) - b.frozen_boxes - COALESCE(p.pending_boxes, 0), 0) * pr.pieces_per_box), 0) AS total_pieces
+        COALESCE(SUM(MAX(b.initial_boxes + COALESCE(m.delta_boxes, 0) - COALESCE(p.pending_boxes, 0), 0) * pr.pieces_per_box), 0) AS total_pieces
       FROM batches b
       INNER JOIN products pr ON pr.id = b.product_id
       LEFT JOIN (
