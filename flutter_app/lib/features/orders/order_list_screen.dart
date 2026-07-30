@@ -2491,24 +2491,66 @@ class _RestockRemainText extends StatelessWidget {
     );
     final lowThresholdBoxes = aggregate.boxesPerBoard * 10;
     final isLow = aggregate.availableAfterReserveBoxes < lowThresholdBoxes;
+    final reservedStyle = TextStyle(
+      color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+    );
+    const actualStyle = TextStyle(
+      color: AppTheme.textSecondary,
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(
-          '实际余量 $actualRemainText',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
+        _RestockRemainLine(
+          label: '实际余量',
+          value: actualRemainText,
+          style: actualStyle,
         ),
         const SizedBox(height: 2),
-        Text(
-          '预占余量 $reservedRemainText',
-          style: TextStyle(
-            color: isLow ? const Color(0xFFC2410C) : const Color(0xFF166534),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
+        _RestockRemainLine(
+          label: '预占余量',
+          value: reservedRemainText,
+          style: reservedStyle,
+        ),
+      ],
+    );
+  }
+}
+
+class _RestockRemainLine extends StatelessWidget {
+  const _RestockRemainLine({
+    required this.label,
+    required this.value,
+    required this.style,
+  });
+
+  final String label;
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 46,
+          child: Text(
+            label,
+            textAlign: TextAlign.left,
+            style: style,
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 52,
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: style,
           ),
         ),
       ],
