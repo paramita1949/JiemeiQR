@@ -383,6 +383,23 @@ class OrderDao {
     return _availableBoxesForBatch(batchId);
   }
 
+  Future<int> _pickedUnfinishedBoxesForBatch(int batchId) async {
+    final pickedRow = await _database.customSelect(
+      '''
+      SELECT COALESCE(SUM(oi.boxes), 0) AS picked_boxes
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE oi.batch_id = ? AND oi.is_picked = 1 AND o.status != ?
+      ''',
+      variables: [
+        Variable.withInt(batchId),
+        Variable.withInt(OrderStatus.done.index),
+      ],
+      readsFrom: {_database.orderItems, _database.orders},
+    ).getSingleOrNull();
+    return (pickedRow?.data['picked_boxes'] as int?) ?? 0;
+  }
+
   Future<int> _availableBoxesForBatchExcludingItem({
     required int batchId,
     required int excludeItemId,
@@ -955,8 +972,13 @@ class OrderDao {
       }
       final availableAfterReserveBoxes =
           batchId > 0 ? await _availableBoxesForBatch(batchId) : 0;
-      final actualInventoryBoxes =
+      final currentBoxes =
           batchId > 0 ? await stockDao.currentBoxesForBatch(batchId) : 0;
+      final pickedUnfinishedBoxes =
+          batchId > 0 ? await _pickedUnfinishedBoxesForBatch(batchId) : 0;
+      final actualInventoryBoxes = currentBoxes > pickedUnfinishedBoxes
+          ? currentBoxes - pickedUnfinishedBoxes
+          : 0;
       result.add(
         OrderRestockAggregate(
           batchId: batchId,
