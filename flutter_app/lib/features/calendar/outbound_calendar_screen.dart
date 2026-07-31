@@ -48,6 +48,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   bool _searchLoading = false;
   bool _searchShowingHistoricalRows = false;
   int _searchVersion = 0;
+  _OutboundBatchSearchFilter? _activeBatchSearchFilter;
   List<_OutboundSearchSuggestion> _searchSuggestions =
       const <_OutboundSearchSuggestion>[];
   List<_OutboundSearchRow> _searchRows = const <_OutboundSearchRow>[];
@@ -175,6 +176,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
                     _OutboundSearchResultCard(
                       rows: _searchRows,
                       showingHistoricalRows: _searchShowingHistoricalRows,
+                      onRowTap: _onSearchResultRowTap,
                     ),
                   ] else ...[
                     _OrderSummaryCard(
@@ -415,6 +417,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     setState(() {
       _searchType = type;
       _rememberedSearchType = type;
+      _activeBatchSearchFilter = null;
     });
     unawaited(
       _searchPreferenceStore.saveOutboundSearchType(
@@ -439,14 +442,39 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
   }
 
   void _onSearchChanged(String _) {
+    _activeBatchSearchFilter = null;
     _refreshSearch();
   }
 
   Future<void> _onSuggestionTap(_OutboundSearchSuggestion suggestion) async {
-    _searchController.text = suggestion.value;
+    final searchType = suggestion.searchType ?? _searchType;
+    final searchValue = suggestion.searchValue ?? suggestion.value;
+    _searchController.text = searchValue;
     _searchController.selection = TextSelection.collapsed(
       offset: _searchController.text.length,
     );
+    setState(() {
+      _searchType = searchType;
+      _rememberedSearchType = searchType;
+      _activeBatchSearchFilter = null;
+    });
+    await _refreshSearch();
+  }
+
+  Future<void> _onSearchResultRowTap(_OutboundSearchRow row) async {
+    _searchController.text = row.actualBatch;
+    _searchController.selection = TextSelection.collapsed(
+      offset: _searchController.text.length,
+    );
+    setState(() {
+      _searchType = _OutboundSearchType.batch;
+      _rememberedSearchType = _OutboundSearchType.batch;
+      _activeBatchSearchFilter = _OutboundBatchSearchFilter(
+        productCode: row.productCode,
+        actualBatch: row.actualBatch,
+        dateBatch: row.dateBatch,
+      );
+    });
     await _refreshSearch();
   }
 
@@ -457,6 +485,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _searchSuggestions = const <_OutboundSearchSuggestion>[];
       _searchRows = const <_OutboundSearchRow>[];
       _searchShowingHistoricalRows = false;
+      _activeBatchSearchFilter = null;
     });
   }
 
@@ -469,6 +498,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         _searchSuggestions = const <_OutboundSearchSuggestion>[];
         _searchRows = const <_OutboundSearchRow>[];
         _searchShowingHistoricalRows = false;
+        _activeBatchSearchFilter = null;
       });
       return;
     }
@@ -480,10 +510,14 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     );
     final resultRange =
         _searchType == _OutboundSearchType.waybill ? null : _range;
+    final exactBatchFilter = _searchType == _OutboundSearchType.batch
+        ? _activeBatchSearchFilter
+        : null;
     var rows = await _querySearchRows(
       keyword: keyword,
       type: _searchType,
       range: resultRange,
+      exactBatchFilter: exactBatchFilter,
     );
     var showingHistoricalRows = false;
     if (rows.isEmpty &&
@@ -493,6 +527,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
         keyword: keyword,
         type: _searchType,
         range: null,
+        exactBatchFilter: exactBatchFilter,
       );
       if (historicalRows.isNotEmpty) {
         rows = historicalRows;
@@ -556,7 +591,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       _OutboundSearchType.merchant =>
         'o.merchant_name AS value, MAX(o.waybill_no) AS subtitle, MAX(sm.movement_date) AS sort_date',
       _OutboundSearchType.product =>
-        "p.code AS value, b.actual_batch || ' · ' || b.date_batch AS subtitle, MAX(sm.movement_date) AS sort_date",
+        "b.actual_batch AS value, p.code || ' · ' || b.date_batch AS subtitle, MAX(sm.movement_date) AS sort_date",
       _OutboundSearchType.batch =>
         "b.actual_batch AS value, p.code || ' · ' || b.date_batch AS subtitle, MAX(sm.movement_date) AS sort_date",
     };
@@ -599,6 +634,10 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
           return _OutboundSearchSuggestion(
             value: value,
             subtitle: subtitle,
+            searchType: type == _OutboundSearchType.product
+                ? _OutboundSearchType.batch
+                : type,
+            searchValue: value,
           );
         })
         .where((row) => row.value.isNotEmpty)
@@ -609,6 +648,7 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
     required String keyword,
     required _OutboundSearchType type,
     required DateTimeRange? range,
+    required _OutboundBatchSearchFilter? exactBatchFilter,
   }) async {
     final where = <String>[
       'sm.type = ${StockMovementType.orderOut.index}',
@@ -644,6 +684,14 @@ class _OutboundCalendarScreenState extends State<OutboundCalendarScreen> {
       where.add('sm.movement_date BETWEEN ? AND ?');
       vars.add(Variable.withDateTime(start));
       vars.add(Variable.withDateTime(end));
+    }
+    if (exactBatchFilter != null) {
+      where.add('p.code = ?');
+      vars.add(Variable.withString(exactBatchFilter.productCode));
+      where.add('b.actual_batch = ?');
+      vars.add(Variable.withString(exactBatchFilter.actualBatch));
+      where.add('b.date_batch = ?');
+      vars.add(Variable.withString(exactBatchFilter.dateBatch));
     }
     final rows = await _database
         .customSelect(
@@ -1221,10 +1269,14 @@ class _OutboundSearchSuggestion {
   const _OutboundSearchSuggestion({
     required this.value,
     required this.subtitle,
+    this.searchType,
+    this.searchValue,
   });
 
   final String value;
   final String subtitle;
+  final _OutboundSearchType? searchType;
+  final String? searchValue;
 }
 
 class _OutboundSearchRow {
@@ -1247,6 +1299,101 @@ class _OutboundSearchRow {
   final String dateBatch;
   final int boxes;
   final DateTime movementDate;
+}
+
+class _OutboundBatchSearchFilter {
+  const _OutboundBatchSearchFilter({
+    required this.productCode,
+    required this.actualBatch,
+    required this.dateBatch,
+  });
+
+  final String productCode;
+  final String actualBatch;
+  final String dateBatch;
+}
+
+class _OutboundSearchProductGroup {
+  const _OutboundSearchProductGroup({
+    required this.productCode,
+    required this.totalBoxes,
+    required this.batchGroups,
+  });
+
+  final String productCode;
+  final int totalBoxes;
+  final List<_OutboundSearchBatchGroup> batchGroups;
+
+  static List<_OutboundSearchProductGroup> fromRows(
+    List<_OutboundSearchRow> rows,
+  ) {
+    final rowsByProduct = <String, List<_OutboundSearchRow>>{};
+    for (final row in rows) {
+      rowsByProduct.putIfAbsent(row.productCode, () => []).add(row);
+    }
+    final groups = rowsByProduct.entries.map((entry) {
+      final batchGroups = _OutboundSearchBatchGroup.fromRows(entry.value);
+      return _OutboundSearchProductGroup(
+        productCode: entry.key,
+        totalBoxes: entry.value.fold<int>(0, (sum, row) => sum + row.boxes),
+        batchGroups: batchGroups,
+      );
+    }).toList();
+    groups.sort((a, b) => a.productCode.compareTo(b.productCode));
+    return groups;
+  }
+}
+
+class _OutboundSearchBatchGroup {
+  const _OutboundSearchBatchGroup({
+    required this.actualBatch,
+    required this.dateBatch,
+    required this.totalBoxes,
+    required this.rows,
+  });
+
+  final String actualBatch;
+  final String dateBatch;
+  final int totalBoxes;
+  final List<_OutboundSearchRow> rows;
+
+  static List<_OutboundSearchBatchGroup> fromRows(
+    List<_OutboundSearchRow> rows,
+  ) {
+    final rowsByBatch = <String, List<_OutboundSearchRow>>{};
+    for (final row in rows) {
+      final key = '${row.actualBatch}|${row.dateBatch}';
+      rowsByBatch.putIfAbsent(key, () => []).add(row);
+    }
+    final groups = rowsByBatch.values.map((batchRows) {
+      batchRows.sort((a, b) {
+        final dateCmp = b.movementDate.compareTo(a.movementDate);
+        if (dateCmp != 0) {
+          return dateCmp;
+        }
+        return a.waybillNo.compareTo(b.waybillNo);
+      });
+      final first = batchRows.first;
+      return _OutboundSearchBatchGroup(
+        actualBatch: first.actualBatch,
+        dateBatch: first.dateBatch,
+        totalBoxes: batchRows.fold<int>(0, (sum, row) => sum + row.boxes),
+        rows: batchRows,
+      );
+    }).toList();
+    groups.sort((a, b) {
+      final boxesCmp = b.totalBoxes.compareTo(a.totalBoxes);
+      if (boxesCmp != 0) {
+        return boxesCmp;
+      }
+      final dateCmp = a.dateBatch.compareTo(b.dateBatch);
+      if (dateCmp != 0) {
+        return dateCmp;
+      }
+      return a.actualBatch.compareTo(b.actualBatch);
+    });
+    return groups;
+  }
 }
 
 class _OutboundSearchPanel extends StatelessWidget {
@@ -1293,6 +1440,7 @@ class _OutboundSearchPanel extends StatelessWidget {
               _typeChip(label: '商家', type: _OutboundSearchType.merchant),
               _typeChip(label: '运单', type: _OutboundSearchType.waybill),
               _typeChip(label: '产品', type: _OutboundSearchType.product),
+              _typeChip(label: '批号', type: _OutboundSearchType.batch),
             ],
           ),
           const SizedBox(height: 8),
@@ -1406,10 +1554,12 @@ class _OutboundSearchResultCard extends StatelessWidget {
   const _OutboundSearchResultCard({
     required this.rows,
     required this.showingHistoricalRows,
+    required this.onRowTap,
   });
 
   final List<_OutboundSearchRow> rows;
   final bool showingHistoricalRows;
+  final ValueChanged<_OutboundSearchRow> onRowTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1420,6 +1570,7 @@ class _OutboundSearchResultCard extends StatelessWidget {
         .toSet()
         .length;
     final totalBoxes = rows.fold<int>(0, (sum, row) => sum + row.boxes);
+    final productGroups = _OutboundSearchProductGroup.fromRows(rows);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1462,47 +1613,96 @@ class _OutboundSearchResultCard extends StatelessWidget {
             const Text('当前条件无已出库记录',
                 style: TextStyle(color: AppTheme.textSecondary))
           else
-            ...rows.map((row) {
-              return Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '运单 ${row.waybillNo} · ${row.merchantName}',
+            ...productGroups.map(_buildProductGroup),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductGroup(_OutboundSearchProductGroup group) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '产品 ${group.productCode} · 合计 ${group.totalBoxes}箱 · ${group.batchGroups.length}个批号',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...group.batchGroups.map(_buildBatchGroup),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchGroup(_OutboundSearchBatchGroup group) {
+    final firstRow = group.rows.first;
+    return Container(
+      margin: const EdgeInsets.only(top: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => onRowTap(firstRow),
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${group.actualBatch} · ${group.dateBatch} · ${group.totalBoxes}箱',
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${row.productCode} · ${row.actualBatch} · ${row.dateBatch} · ${row.boxes}箱',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  Text(
+                    '${group.rows.length}单',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '出库时间 ${_formatDate(row.movementDate)}',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ...group.rows.map(_buildOrderRow),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderRow(_OutboundSearchRow row) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        '运单 ${row.waybillNo} · ${row.merchantName} · ${row.boxes}箱 · ${_formatDate(row.movementDate)}',
+        style: const TextStyle(
+          color: AppTheme.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
