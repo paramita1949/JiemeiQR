@@ -614,6 +614,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       return;
     }
     await _reloadDetail(preserveScroll: true);
+    final shouldAutoSetPending = !isPicked &&
+        latest.order.status == OrderStatus.picked &&
+        latest.lines.any((item) => !item.item.isPicked);
+    if (shouldAutoSetPending) {
+      await _setStatus(OrderStatus.pending);
+      return;
+    }
     final shouldAutoSetPicked = isPicked &&
         latest.order.status == OrderStatus.pending &&
         latest.lines.isNotEmpty &&
