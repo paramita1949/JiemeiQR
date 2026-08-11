@@ -48,6 +48,7 @@ class AiOcrConfig {
   static const defaultPaddleOcrModel = 'PaddleOCR-VL-1.6';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
   static const defaultZhipuModel = 'glm-4.6v-flash';
+  static const zhipuThinkingModel = 'glm-4.1v-thinking-flash';
   static const ocrPromptPresetGeneral = 'general';
   static const ocrPromptPresetWaybillTemplateV2 = 'waybill_template_v2';
   static const defaultOcrPromptPreset = ocrPromptPresetWaybillTemplateV2;
@@ -68,6 +69,7 @@ class AiOcrConfig {
   static const defaultZhipuModelPresets = [
     defaultZhipuModel,
     'glm-4v-flash',
+    zhipuThinkingModel,
   ];
 
   final String provider;

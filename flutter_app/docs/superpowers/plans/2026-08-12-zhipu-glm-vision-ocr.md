@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 `glm-4.6v-flash` 和 `glm-4v-flash` 作为独立“智谱”提供方接入订单拍照识别、交货计划截图识别和现有配置/临时切换界面。
+**Goal:** 将 `glm-4.6v-flash`、`glm-4v-flash` 和 `glm-4.1v-thinking-flash` 作为独立“智谱”提供方接入订单拍照识别、交货计划截图识别和现有配置/临时切换界面。
 
 **Architecture:** 在现有 `AiOcrConfig` 中加入智谱专用凭据与模型字段；新增一个只负责智谱协议、MIME、响应解析及双模型回退的共享客户端。订单侧增加薄适配器并接入现有路由，交货计划侧在现有 OCR 服务文件中增加薄适配器；界面继续使用 APP 已有“横向提供方卡片 + 当前提供方字段”和拍照面板临时切换模式。
 
 **Tech Stack:** Flutter、Dart、`dart:io`、`dart:convert`、Flutter Test。
+
+**思考策略补充：** 不增加单独开关。客户端在实际请求模型为 `glm-4.1v-thinking-flash` 时发送 `thinking: enabled`，普通模型发送 `disabled`；服务层沿用魔搭的多模态图片 + 结构化提示词 + JSON 解析思路，不调用专用 OCR 接口。
 
 ---
 
@@ -64,6 +66,7 @@ test('uses built-in Zhipu vision models by default', () async {
   expect(loaded.zhipuModelPresets, [
     'glm-4.6v-flash',
     'glm-4v-flash',
+    'glm-4.1v-thinking-flash',
   ]);
   expect(loaded.usesZhipuOcr, isFalse);
   expect(loaded.hasZhipuCredential, isFalse);
@@ -123,9 +126,11 @@ Expected: 编译失败，提示 `zhipuProvider`、`zhipuApiKey`、`zhipuModel` �
 ```dart
 static const zhipuProvider = 'zhipu';
 static const defaultZhipuModel = 'glm-4.6v-flash';
+static const zhipuThinkingModel = 'glm-4.1v-thinking-flash';
 static const defaultZhipuModelPresets = [
   defaultZhipuModel,
   'glm-4v-flash',
+  zhipuThinkingModel,
 ];
 
 final String zhipuApiKey;
@@ -227,8 +232,10 @@ const ZhipuHttpResponse(
 3. HTTP 200 但 `error.code == 1305` 时回退。
 4. 空 `choices/message/content` 时回退。
 5. HTTP 401/403 直接抛出“智谱 API Key 无效或无调用权限”，只请求一次。
-6. 两个模型都失败时，异常包含两个模型和简短原因，不包含 `test-key` 或 `data:image`。
+6. 两次模型尝试都失败时，异常包含两个模型和简短原因，不包含 `test-key` 或 `data:image`。
 7. 输入 `Bearer test-key` 时注入回调收到规范化后的 `test-key`。
+8. 选择 `glm-4.1v-thinking-flash` 时自动发送 `thinking: enabled`。
+9. 思考模型回退到普通模型时，下一次请求自动发送 `thinking: disabled`。
 
 - [ ] **Step 3: 运行客户端测试确认 RED**
 
@@ -300,12 +307,16 @@ Future<ZhipuVisionResult> recognize(
       ],
     },
   ],
-  'thinking': {'type': 'disabled'},
+  'thinking': {
+    'type': currentModel == AiOcrConfig.zhipuThinkingModel
+        ? 'enabled'
+        : 'disabled',
+  },
   'stream': false,
 }
 ```
 
-模型尝试顺序由当前模型加两个内置模型去重后截取两项。HTTP 429、状态码 5xx、错误码 1305、过载/暂不可用文字、空响应结构可回退；401/403 和其他 4xx 直接抛出。默认 HTTP 实现用 `HttpClient` 发送 JSON 与 `Authorization: Bearer $apiKey`。
+模型尝试顺序由当前模型加三个内置模型去重后截取两项。每次请求按实际模型自动决定思考状态。HTTP 429、状态码 5xx、错误码 1305、过载/暂不可用文字、空响应结构可回退；401/403 和其他 4xx 直接抛出。默认 HTTP 实现用 `HttpClient` 发送 JSON 与 `Authorization: Bearer $apiKey`。
 
 图片 MIME 通过文件签名识别 PNG、JPEG、WebP，未知格式回退 `image/jpeg`。内容只清理包裹整个返回值的 ````json`/``` 围栏。
 
@@ -555,6 +566,7 @@ await tester.pumpAndSettle();
 expect(find.byKey(const Key('zhipuApiKeyField')), findsOneWidget);
 expect(find.text('glm-4.6v-flash'), findsWidgets);
 expect(find.text('glm-4v-flash'), findsWidgets);
+expect(find.text('glm-4.1v-thinking-flash'), findsWidgets);
 ```
 
 输入 `zhipu-key`，选择 `glm-4v-flash`，点“保存并启用 智谱”，断言 store 中 provider、Key、model 均已保存。
@@ -649,7 +661,11 @@ expect(find.text('智谱'), findsOneWidget);
 ```dart
 zhipuApiKey: 'zhipu-key',
 zhipuModel: 'glm-4.6v-flash',
-zhipuModelPresets: const ['glm-4.6v-flash', 'glm-4v-flash'],
+zhipuModelPresets: const [
+  'glm-4.6v-flash',
+  'glm-4v-flash',
+  'glm-4.1v-thinking-flash',
+],
 ```
 
 打开面板后点“智谱”，打开模型菜单选择 `glm-4v-flash`，再点“相册识别”；断言内存 store：

@@ -87,7 +87,9 @@ class ZhipuVisionClient {
             ],
           },
         ],
-        'thinking': {'type': 'disabled'},
+        'thinking': {
+          'type': _usesThinking(currentModel) ? 'enabled' : 'disabled',
+        },
         'stream': false,
       };
 
@@ -254,6 +256,10 @@ List<String> _modelAttempts(String primary) {
       .toSet()
       .take(2)
       .toList();
+}
+
+bool _usesThinking(String model) {
+  return model.trim().toLowerCase() == AiOcrConfig.zhipuThinkingModel;
 }
 
 String _normalizeApiKey(String raw) {
