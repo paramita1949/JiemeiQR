@@ -125,7 +125,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final bytes = await image.readAsBytes();
     final base64Image = base64Encode(bytes);
     final uri = Uri.parse(_completionUrl);
-    final primaryPrompt = _promptByPreset(promptPreset);
+    final primaryPrompt = waybillOcrPromptForPreset(promptPreset);
     const fallbackPrompt = _ocrPromptGeneral;
     final promptAttempts = <String>[
       primaryPrompt,
@@ -364,7 +364,7 @@ List<String> _modelAttempts(String primary, List<String> presets) {
   return values.take(2).toList();
 }
 
-String _promptByPreset(String preset) {
+String waybillOcrPromptForPreset(String preset) {
   if (preset == AiOcrConfig.ocrPromptPresetGeneral) {
     return _ocrPromptGeneral;
   }
