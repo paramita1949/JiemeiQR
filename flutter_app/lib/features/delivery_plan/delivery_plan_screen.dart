@@ -109,6 +109,7 @@ class _DeliveryPlanScreenState extends State<DeliveryPlanScreen> {
       geminiModel: plan.geminiModel,
       modelscopeModel: plan.modelscopeModel,
       paddleOcrModel: plan.paddleOcrModel,
+      zhipuModel: plan.zhipuModel,
     );
     await _aiConfigStore.save(nextConfig);
     if (!mounted) {
@@ -293,6 +294,7 @@ class _DeliveryPlanCapturePlan {
     required this.geminiModel,
     required this.modelscopeModel,
     required this.paddleOcrModel,
+    required this.zhipuModel,
   });
 
   final ImageSource source;
@@ -300,6 +302,7 @@ class _DeliveryPlanCapturePlan {
   final String geminiModel;
   final String modelscopeModel;
   final String paddleOcrModel;
+  final String zhipuModel;
 }
 
 class _DeliveryPlanCaptureSheet extends StatefulWidget {
@@ -317,6 +320,7 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
   late String _geminiModel;
   late String _modelscopeModel;
   late String _paddleOcrModel;
+  late String _zhipuModel;
 
   @override
   void initState() {
@@ -325,6 +329,7 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
     _geminiModel = widget.initialConfig.geminiModel;
     _modelscopeModel = widget.initialConfig.modelscopeModel;
     _paddleOcrModel = widget.initialConfig.paddleOcrModel;
+    _zhipuModel = widget.initialConfig.zhipuModel;
   }
 
   @override
@@ -395,12 +400,24 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
                       () => _provider = AiOcrConfig.paddleOcrProvider,
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  _compactChoice(
+                    label: '智谱',
+                    selected: _provider == AiOcrConfig.zhipuProvider,
+                    enabled: widget.initialConfig.hasZhipuCredential,
+                    onTap: () => setState(
+                      () => _provider = AiOcrConfig.zhipuProvider,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: PopupMenuButton<String>(
                       tooltip: '切换具体模型',
                       onSelected: (value) => setState(() {
-                        if (_provider == AiOcrConfig.modelscopeProvider) {
+                        if (_provider == AiOcrConfig.zhipuProvider) {
+                          _zhipuModel = value;
+                        } else if (_provider ==
+                            AiOcrConfig.modelscopeProvider) {
                           _modelscopeModel = value;
                         } else if (_provider == AiOcrConfig.paddleOcrProvider) {
                           _paddleOcrModel = value;
@@ -534,6 +551,9 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
   }
 
   String _activeModel() {
+    if (_provider == AiOcrConfig.zhipuProvider) {
+      return _zhipuModel;
+    }
     if (_provider == AiOcrConfig.modelscopeProvider) {
       return _modelscopeModel;
     }
@@ -544,11 +564,16 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
   }
 
   List<String> _activeModelPresets() {
-    final presets = _provider == AiOcrConfig.modelscopeProvider
-        ? widget.initialConfig.modelScopeModelPresets
-        : _provider == AiOcrConfig.paddleOcrProvider
-            ? widget.initialConfig.paddleOcrModelPresets
-            : widget.initialConfig.geminiModelPresets;
+    final List<String> presets;
+    if (_provider == AiOcrConfig.zhipuProvider) {
+      presets = widget.initialConfig.zhipuModelPresets;
+    } else if (_provider == AiOcrConfig.modelscopeProvider) {
+      presets = widget.initialConfig.modelScopeModelPresets;
+    } else if (_provider == AiOcrConfig.paddleOcrProvider) {
+      presets = widget.initialConfig.paddleOcrModelPresets;
+    } else {
+      presets = widget.initialConfig.geminiModelPresets;
+    }
     return <String>{
       if (_activeModel().trim().isNotEmpty) _activeModel().trim(),
       ...presets.where((item) => item.trim().isNotEmpty),
@@ -572,6 +597,7 @@ class _DeliveryPlanCaptureSheetState extends State<_DeliveryPlanCaptureSheet> {
         geminiModel: _geminiModel,
         modelscopeModel: _modelscopeModel,
         paddleOcrModel: _paddleOcrModel,
+        zhipuModel: _zhipuModel,
       ),
     );
   }
