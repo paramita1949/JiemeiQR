@@ -6,7 +6,6 @@ import 'package:qrscan_flutter/features/orders/ocr/modelscope_waybill_ocr_servic
 import 'package:qrscan_flutter/features/orders/ocr/paddle_ocr_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/waybill_photo_ocr_service.dart';
-import 'package:qrscan_flutter/features/orders/ocr/zhipu_waybill_ocr_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef OcrServiceFactory = WaybillPhotoOcrService Function(
@@ -20,15 +19,12 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     OcrServiceFactory? geminiServiceFactory,
     OcrServiceFactory? modelScopeServiceFactory,
     OcrServiceFactory? paddleOcrServiceFactory,
-    OcrServiceFactory? zhipuServiceFactory,
   })  : _geminiServiceFactory =
             geminiServiceFactory ?? _defaultGeminiServiceFactory,
         _modelScopeServiceFactory =
             modelScopeServiceFactory ?? _defaultModelScopeServiceFactory,
         _paddleOcrServiceFactory =
-            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory,
-        _zhipuServiceFactory =
-            zhipuServiceFactory ?? _defaultZhipuServiceFactory;
+            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory;
 
   static WaybillPhotoOcrService _defaultGeminiServiceFactory(
     FileAiConfigStore configStore,
@@ -51,18 +47,10 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     return PaddleOcrWaybillOcrService(configStore: configStore);
   }
 
-  static WaybillPhotoOcrService _defaultZhipuServiceFactory(
-    FileAiConfigStore configStore,
-    AiOcrConfig config,
-  ) {
-    return ZhipuWaybillOcrService(configStore: configStore);
-  }
-
   final FileAiConfigStore configStore;
   final OcrServiceFactory _geminiServiceFactory;
   final OcrServiceFactory _modelScopeServiceFactory;
   final OcrServiceFactory _paddleOcrServiceFactory;
-  final OcrServiceFactory _zhipuServiceFactory;
 
   @override
   Future<WaybillOcrDraft> recognize(
@@ -71,31 +59,20 @@ class ConfiguredWaybillOcrService implements WaybillPhotoOcrService {
     WaybillOcrProgressCallback? onProgress,
   }) async {
     final config = await configStore.load();
-    final provider = config.usesZhipuOcr
-        ? 'zhipu'
-        : config.usesPaddleOcr
-            ? 'paddleocr'
-            : config.usesModelScopeOcr
-                ? 'modelscope'
-                : 'gemini';
-    final model = config.usesZhipuOcr
-        ? config.zhipuModel
-        : config.usesPaddleOcr
-            ? config.paddleOcrModel
-            : config.usesModelScopeOcr
-                ? config.modelscopeModel
-                : config.geminiModel;
+    final provider = config.usesPaddleOcr
+        ? 'paddleocr'
+        : config.usesModelScopeOcr
+            ? 'modelscope'
+            : 'gemini';
+    final model = config.usesPaddleOcr
+        ? config.paddleOcrModel
+        : config.usesModelScopeOcr
+            ? config.modelscopeModel
+            : config.geminiModel;
     DebugEventLog.add(
       'AI_OCR',
       'route provider=$provider model=$model promptPreset=${config.ocrPromptPreset}',
     );
-    if (config.usesZhipuOcr) {
-      return _zhipuServiceFactory(configStore, config).recognize(
-        image,
-        merchantHistoryNames: merchantHistoryNames,
-        onProgress: onProgress,
-      );
-    }
     if (config.usesPaddleOcr) {
       return _paddleOcrServiceFactory(configStore, config).recognize(
         image,

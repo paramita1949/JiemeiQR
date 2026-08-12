@@ -25,12 +25,9 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
   final _modelscopeModelController = TextEditingController();
   final _paddleOcrTokenController = TextEditingController();
   final _paddleOcrModelController = TextEditingController();
-  final _zhipuApiKeyController = TextEditingController();
-  final _zhipuModelController = TextEditingController();
   List<String> _geminiModelPresets = [];
   List<String> _modelScopeModelPresets = [];
   List<String> _paddleOcrModelPresets = [];
-  List<String> _zhipuModelPresets = [];
   late Future<void> _loadFuture;
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -48,8 +45,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController,
       _paddleOcrTokenController,
       _paddleOcrModelController,
-      _zhipuApiKeyController,
-      _zhipuModelController,
     ]) {
       controller.addListener(_scheduleAutoSave);
     }
@@ -68,8 +63,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     _modelscopeModelController.dispose();
     _paddleOcrTokenController.dispose();
     _paddleOcrModelController.dispose();
-    _zhipuApiKeyController.dispose();
-    _zhipuModelController.dispose();
     super.dispose();
   }
 
@@ -86,17 +79,13 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       _modelscopeModelController.text = config.modelscopeModel;
       _paddleOcrTokenController.text = config.paddleOcrToken;
       _paddleOcrModelController.text = config.paddleOcrModel;
-      _zhipuApiKeyController.text = config.zhipuApiKey;
-      _zhipuModelController.text = config.zhipuModel;
       _geminiModelPresets = [...config.geminiModelPresets];
       _modelScopeModelPresets = [...config.modelScopeModelPresets];
       _paddleOcrModelPresets = [...config.paddleOcrModelPresets];
-      _zhipuModelPresets = [...config.zhipuModelPresets];
       _ocrPromptPreset = config.ocrPromptPreset;
       if (_provider != AiOcrConfig.defaultProvider &&
           _provider != AiOcrConfig.modelscopeProvider &&
-          _provider != AiOcrConfig.paddleOcrProvider &&
-          _provider != AiOcrConfig.zhipuProvider) {
+          _provider != AiOcrConfig.paddleOcrProvider) {
         _provider = AiOcrConfig.defaultProvider;
       }
       _autoSaveReady = true;
@@ -157,65 +146,44 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                   _SectionShell(
                     title: '默认使用',
                     subtitle: '',
-                    child: SingleChildScrollView(
+                    child: Row(
                       key: const Key('providerHorizontalList'),
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 88,
-                            child: _ProviderCard(
-                              key: const Key('providerCard-gemini'),
-                              meta: _providerMeta(AiOcrConfig.defaultProvider),
-                              selected:
-                                  _provider == AiOcrConfig.defaultProvider,
-                              onTap: () => _selectProvider(
-                                AiOcrConfig.defaultProvider,
-                              ),
+                      children: [
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-gemini'),
+                            meta: _providerMeta(AiOcrConfig.defaultProvider),
+                            selected: _provider == AiOcrConfig.defaultProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.defaultProvider,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 88,
-                            child: _ProviderCard(
-                              key: const Key('providerCard-modelscope'),
-                              meta:
-                                  _providerMeta(AiOcrConfig.modelscopeProvider),
-                              selected:
-                                  _provider == AiOcrConfig.modelscopeProvider,
-                              onTap: () => _selectProvider(
-                                AiOcrConfig.modelscopeProvider,
-                              ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-modelscope'),
+                            meta: _providerMeta(AiOcrConfig.modelscopeProvider),
+                            selected:
+                                _provider == AiOcrConfig.modelscopeProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.modelscopeProvider,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 88,
-                            child: _ProviderCard(
-                              key: const Key('providerCard-paddleocr'),
-                              meta:
-                                  _providerMeta(AiOcrConfig.paddleOcrProvider),
-                              selected:
-                                  _provider == AiOcrConfig.paddleOcrProvider,
-                              onTap: () => _selectProvider(
-                                AiOcrConfig.paddleOcrProvider,
-                              ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ProviderCard(
+                            key: const Key('providerCard-paddleocr'),
+                            meta: _providerMeta(AiOcrConfig.paddleOcrProvider),
+                            selected:
+                                _provider == AiOcrConfig.paddleOcrProvider,
+                            onTap: () => _selectProvider(
+                              AiOcrConfig.paddleOcrProvider,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 88,
-                            child: _ProviderCard(
-                              key: const Key('providerCard-zhipu'),
-                              meta: _providerMeta(AiOcrConfig.zhipuProvider),
-                              selected: _provider == AiOcrConfig.zhipuProvider,
-                              onTap: () => _selectProvider(
-                                AiOcrConfig.zhipuProvider,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -279,10 +247,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       return _paddleOcrTokenController.text.trim().isNotEmpty &&
           _paddleOcrModelController.text.trim().isNotEmpty;
     }
-    if (_provider == AiOcrConfig.zhipuProvider) {
-      return _zhipuApiKeyController.text.trim().isNotEmpty &&
-          _zhipuModelController.text.trim().isNotEmpty;
-    }
     return _apiKeyController.text.trim().isNotEmpty &&
         _modelController.text.trim().isNotEmpty;
   }
@@ -316,22 +280,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
             _addModelPreset(AiOcrConfig.paddleOcrProvider, model),
         onRemovePreset: (model) => _deleteModelPreset(
           AiOcrConfig.paddleOcrProvider,
-          model,
-        ),
-      );
-    }
-    if (_provider == AiOcrConfig.zhipuProvider) {
-      return _ZhipuFields(
-        key: const ValueKey('zhipuFields'),
-        apiKeyController: _zhipuApiKeyController,
-        modelController: _zhipuModelController,
-        presets: _zhipuModelPresets,
-        onApplyPreset: (model) =>
-            _applyModelPreset(_zhipuModelController, model),
-        onAddPreset: (model) =>
-            _addModelPreset(AiOcrConfig.zhipuProvider, model),
-        onRemovePreset: (model) => _deleteModelPreset(
-          AiOcrConfig.zhipuProvider,
           model,
         ),
       );
@@ -402,12 +350,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
           ? null
           : '请填写飞桨OCR Token 和模型';
     }
-    if (_provider == AiOcrConfig.zhipuProvider) {
-      return _zhipuApiKeyController.text.trim().isNotEmpty &&
-              _zhipuModelController.text.trim().isNotEmpty
-          ? null
-          : '请填写智谱 API Key 和模型';
-    }
     return _apiKeyController.text.trim().isNotEmpty &&
             _modelController.text.trim().isNotEmpty
         ? null
@@ -433,13 +375,10 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
       paddleOcrModel: _paddleOcrModelController.text.trim(),
       openRouterApiKey: '',
       openRouterModel: AiOcrConfig.defaultOpenRouterModel,
-      zhipuApiKey: _zhipuApiKeyController.text.trim(),
-      zhipuModel: _zhipuModelController.text.trim(),
       geminiModelPresets: _geminiModelPresets,
       modelScopeModelPresets: _modelScopeModelPresets,
       paddleOcrModelPresets: _paddleOcrModelPresets,
       openRouterModelPresets: AiOcrConfig.defaultOpenRouterModelPresets,
-      zhipuModelPresets: _zhipuModelPresets,
       ocrPromptPreset: _ocrPromptPreset,
     );
   }
@@ -493,9 +432,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     if (provider == AiOcrConfig.paddleOcrProvider) {
       return _paddleOcrModelPresets;
     }
-    if (provider == AiOcrConfig.zhipuProvider) {
-      return _zhipuModelPresets;
-    }
     return _geminiModelPresets;
   }
 
@@ -505,9 +441,6 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
     }
     if (provider == AiOcrConfig.paddleOcrProvider) {
       return _paddleOcrModelController;
-    }
-    if (provider == AiOcrConfig.zhipuProvider) {
-      return _zhipuModelController;
     }
     return _modelController;
   }
@@ -544,15 +477,6 @@ _ProviderMeta _providerMeta(String provider) {
       formHint: '填写飞桨OCR Token 和模型，模型可自定义新增或删除。',
       icon: Icons.document_scanner_outlined,
       color: Color(0xFF0891B2),
-    );
-  }
-  if (provider == AiOcrConfig.zhipuProvider) {
-    return const _ProviderMeta(
-      provider: AiOcrConfig.zhipuProvider,
-      name: '智谱',
-      formHint: '填写智谱 API Key 和视觉模型。',
-      icon: Icons.visibility_outlined,
-      color: Color(0xFF7C3AED),
     );
   }
   return const _ProviderMeta(
@@ -918,49 +842,6 @@ class _PaddleOcrFields extends StatelessWidget {
         const SizedBox(height: 8),
         _ModelPresetEditor(
           providerName: '飞桨OCR',
-          selectedModel: modelController.text.trim(),
-          presets: presets,
-          onApplyPreset: onApplyPreset,
-          onAddPreset: onAddPreset,
-          onRemovePreset: onRemovePreset,
-        ),
-      ],
-    );
-  }
-}
-
-class _ZhipuFields extends StatelessWidget {
-  const _ZhipuFields({
-    super.key,
-    required this.apiKeyController,
-    required this.modelController,
-    required this.presets,
-    required this.onApplyPreset,
-    required this.onAddPreset,
-    required this.onRemovePreset,
-  });
-
-  final TextEditingController apiKeyController;
-  final TextEditingController modelController;
-  final List<String> presets;
-  final ValueChanged<String> onApplyPreset;
-  final ValueChanged<String> onAddPreset;
-  final ValueChanged<String> onRemovePreset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ConfigField(
-          key: const Key('zhipuApiKeyField'),
-          controller: apiKeyController,
-          label: '智谱 API Key',
-          icon: Icons.key_outlined,
-          obscureText: true,
-        ),
-        const SizedBox(height: 8),
-        _ModelPresetEditor(
-          providerName: '智谱',
           selectedModel: modelController.text.trim(),
           presets: presets,
           onApplyPreset: onApplyPreset,

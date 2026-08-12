@@ -6,7 +6,6 @@ import 'package:path/path.dart' as p;
 import 'package:qrscan_flutter/features/delivery_plan/delivery_plan_ocr_models.dart';
 import 'package:qrscan_flutter/features/orders/ocr/ai_config_store.dart';
 import 'package:qrscan_flutter/features/orders/ocr/paddle_ocr_request_options.dart';
-import 'package:qrscan_flutter/features/orders/ocr/zhipu_vision_client.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 typedef DeliveryPlanOcrProgressCallback = void Function(String message);
@@ -53,15 +52,12 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
     DeliveryPlanOcrServiceFactory? geminiServiceFactory,
     DeliveryPlanOcrServiceFactory? modelScopeServiceFactory,
     DeliveryPlanOcrServiceFactory? paddleOcrServiceFactory,
-    DeliveryPlanOcrServiceFactory? zhipuServiceFactory,
   })  : _geminiServiceFactory =
             geminiServiceFactory ?? _defaultGeminiServiceFactory,
         _modelScopeServiceFactory =
             modelScopeServiceFactory ?? _defaultModelScopeServiceFactory,
         _paddleOcrServiceFactory =
-            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory,
-        _zhipuServiceFactory =
-            zhipuServiceFactory ?? _defaultZhipuServiceFactory;
+            paddleOcrServiceFactory ?? _defaultPaddleOcrServiceFactory;
 
   static DeliveryPlanPhotoOcrService _defaultGeminiServiceFactory(
     FileAiConfigStore configStore,
@@ -81,17 +77,10 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
     return PaddleDeliveryPlanOcrService(configStore: configStore);
   }
 
-  static DeliveryPlanPhotoOcrService _defaultZhipuServiceFactory(
-    FileAiConfigStore configStore,
-  ) {
-    return ZhipuDeliveryPlanOcrService(configStore: configStore);
-  }
-
   final FileAiConfigStore configStore;
   final DeliveryPlanOcrServiceFactory _geminiServiceFactory;
   final DeliveryPlanOcrServiceFactory _modelScopeServiceFactory;
   final DeliveryPlanOcrServiceFactory _paddleOcrServiceFactory;
-  final DeliveryPlanOcrServiceFactory _zhipuServiceFactory;
 
   @override
   Future<DeliveryPlanOcrDraft> recognize(
@@ -103,10 +92,6 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
       'DELIVERY_PLAN_OCR',
       'route provider=${config.provider}',
     );
-    if (config.usesZhipuOcr) {
-      return _zhipuServiceFactory(configStore)
-          .recognize(image, onProgress: onProgress);
-    }
     if (config.usesPaddleOcr) {
       return _paddleOcrServiceFactory(configStore)
           .recognize(image, onProgress: onProgress);
@@ -124,64 +109,6 @@ class ConfiguredDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
       }
       return _modelScopeServiceFactory(configStore)
           .recognize(image, onProgress: onProgress);
-    }
-  }
-}
-
-class ZhipuDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
-  ZhipuDeliveryPlanOcrService({
-    String? apiKey,
-    String? model,
-    FileAiConfigStore? configStore,
-    ZhipuHttpPost? httpPost,
-  })  : apiKey = apiKey ?? const String.fromEnvironment('ZHIPU_API_KEY'),
-        model = model ?? const String.fromEnvironment('ZHIPU_MODEL'),
-        _configStore = configStore ?? const FileAiConfigStore(),
-        _httpPost = httpPost;
-
-  final String apiKey;
-  final String model;
-  final FileAiConfigStore _configStore;
-  final ZhipuHttpPost? _httpPost;
-
-  @override
-  Future<DeliveryPlanOcrDraft> recognize(
-    File image, {
-    DeliveryPlanOcrProgressCallback? onProgress,
-  }) async {
-    onProgress?.call('正在上传交货计划截图...');
-    final config = await _configStore.load();
-    final effectiveApiKey =
-        apiKey.trim().isNotEmpty ? apiKey.trim() : config.zhipuApiKey.trim();
-    final effectiveModel = model.trim().isNotEmpty
-        ? model.trim()
-        : config.zhipuModel.trim().isNotEmpty
-            ? config.zhipuModel.trim()
-            : AiOcrConfig.defaultZhipuModel;
-    if (effectiveApiKey.isEmpty) {
-      throw const DeliveryPlanOcrException('缺少智谱 API Key');
-    }
-
-    try {
-      final result = await ZhipuVisionClient(
-        apiKey: effectiveApiKey,
-        model: effectiveModel,
-        httpPost: _httpPost,
-      ).recognize(
-        image,
-        prompt: _deliveryPlanPrompt,
-      );
-      onProgress?.call('正在整理交货计划识别结果...');
-      final draft = _parseDraftPayload(result.content);
-      DebugEventLog.add(
-        'DELIVERY_PLAN_OCR',
-        'success provider=zhipu model=${result.model}',
-      );
-      return draft;
-    } on ZhipuVisionException catch (error) {
-      throw DeliveryPlanOcrException(error.message);
-    } on FormatException {
-      throw const DeliveryPlanOcrException('智谱返回的 OCR JSON 格式无效');
     }
   }
 }
