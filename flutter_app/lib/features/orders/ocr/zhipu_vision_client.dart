@@ -63,6 +63,11 @@ class ZhipuVisionClient {
     if (_apiKey.isEmpty) {
       throw const ZhipuVisionException('缺少智谱 API Key');
     }
+    if (!_isHeaderSafeApiKey(_apiKey)) {
+      throw const ZhipuVisionException(
+        '智谱 API Key 格式异常，请重新复制并粘贴完整 Key',
+      );
+    }
 
     final imageBytes = await image.readAsBytes();
     final dataUrl =
@@ -101,6 +106,11 @@ class ZhipuVisionClient {
         errors.add('$currentModel: ${error.message}');
       } on ZhipuVisionException {
         rethrow;
+      } on FormatException catch (error) {
+        final reason = _safeReason(error.message);
+        throw ZhipuVisionException(
+          reason.isEmpty ? '智谱请求或响应格式异常' : '智谱请求或响应格式异常：$reason',
+        );
       } catch (error) {
         errors.add('$currentModel: 网络请求失败（${error.runtimeType}）');
       }
@@ -263,11 +273,20 @@ bool _usesThinking(String model) {
 }
 
 String _normalizeApiKey(String raw) {
-  final value = raw.trim();
+  final value = raw
+      .replaceAll(
+        RegExp('[\u200B-\u200D\u2060\uFEFF]'),
+        '',
+      )
+      .trim();
   if (value.toLowerCase().startsWith('bearer ')) {
     return value.substring(7).trim();
   }
   return value;
+}
+
+bool _isHeaderSafeApiKey(String value) {
+  return value.runes.every((rune) => rune >= 0x21 && rune <= 0x7e);
 }
 
 String _imageMimeType(List<int> bytes) {
