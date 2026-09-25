@@ -5,7 +5,6 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
-import 'package:qrscan_flutter/data/attendance_workday_policy.dart';
 
 class AttendanceDao {
   AttendanceDao(
@@ -128,17 +127,8 @@ class AttendanceDao {
     }
     if (existing.checkOutAt != null) return;
 
-    final end = _mergeDayTime(day, rule.workEndTime);
-
     final updated = existing.copyWith(
       checkOutAt: Value(ts),
-      isLate: existing.checkInAt != null &&
-          existing.checkInAt!.isAfter(
-            _mergeDayTime(day, rule.workStartTime).add(
-              Duration(minutes: rule.lateGraceMinutes),
-            ),
-          ),
-      isEarlyLeave: ts.isBefore(end),
       updatedAt: ts,
     );
     await _saveNormalizedRecord(updated, rule: rule);
@@ -271,7 +261,6 @@ class AttendanceDao {
   }
 
   Future<List<AttendanceRecord>> recordsByMonth(DateTime month) async {
-    final rule = await getRule();
     final from = DateTime(month.year, month.month, 1);
     final to = DateTime(month.year, month.month + 1, 1);
     final rows = await (_db.select(_db.attendanceRecords)
@@ -281,7 +270,7 @@ class AttendanceDao {
               t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
-    return rows.map((row) => _deriveRecordForRule(row, rule, rows)).toList();
+    return rows;
   }
 
   Future<List<DateTime>> recordedMonths() async {
@@ -298,9 +287,8 @@ class AttendanceDao {
   }
 
   Future<MonthAttendanceStats> monthStats(DateTime month) async {
-    final rule = await getRule();
     final rows = await recordsByMonth(month);
-    final totalWorkdays = _countWorkdaysInMonth(month, rule.weekendType);
+    final totalWorkdays = rows.length;
     var present = 0;
     var late = 0;
     var absent = 0;
@@ -650,13 +638,6 @@ class AttendanceDao {
     });
   }
 
-  DateTime _mergeDayTime(DateTime day, String hhmm) {
-    final parts = hhmm.split(':');
-    final hour = int.tryParse(parts.first) ?? 8;
-    final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
-    return DateTime(day.year, day.month, day.day, hour, minute);
-  }
-
   Future<Directory> _attendanceBackupDir() async {
     final docs = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(docs.path, 'attendance_backups'));
@@ -671,217 +652,18 @@ class AttendanceDao {
     return '${ts.year}${two(ts.month)}${two(ts.day)}-${two(ts.hour)}${two(ts.minute)}${two(ts.second)}';
   }
 
-  int _countWorkdaysInMonth(DateTime month, String weekendType) {
-    final first = DateTime(month.year, month.month, 1);
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    var count = 0;
-    final singleWeekendPairs = <String>{};
-    for (var i = 0; i < daysInMonth; i++) {
-      final day = first.add(Duration(days: i));
-      if (weekendType == 'single' && isAttendanceWeekend(day)) {
-        final saturday = day.weekday == DateTime.saturday
-            ? day
-            : day.subtract(const Duration(days: 1));
-        singleWeekendPairs
-            .add('${saturday.year}-${saturday.month}-${saturday.day}');
-      } else if (_isWorkday(day, weekendType)) {
-        count += 1;
-      }
-    }
-    return count + singleWeekendPairs.length;
-  }
-
-  bool _isWorkday(DateTime day, String weekendType) {
-    if (weekendType == 'single') {
-      return !isAttendanceWeekend(day);
-    }
-    return isAttendanceWeekday(day);
-  }
-
-  AttendanceRecord _deriveRecordForRule(
-    AttendanceRecord row,
-    AttendanceRule rule,
-    List<AttendanceRecord> rows,
-  ) {
-    final day = DateTime(row.day.year, row.day.month, row.day.day);
-    final workStartBase = _mergeDayTime(day, rule.workStartTime);
-    final workStart = workStartBase.add(
-      Duration(minutes: rule.lateGraceMinutes),
-    );
-    final workEnd = _mergeDayTime(day, rule.workEndTime);
-
-    final checkIn = row.checkInAt;
-    final checkOut = row.checkOutAt;
-    final isWorkdayByRule = _isWorkdayForRecord(day, rule, rows);
-    final effectiveHoliday = row.isHoliday;
-    final hasCheckIn = checkIn != null;
-    final hasCheckOut = checkOut != null;
-    final exception = (hasCheckIn ^ hasCheckOut) ||
-        (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
-    final needsPatch =
-        exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
-    final patched = row.patched || (row.needsPatch && !needsPatch);
-    final late = row.isLeave || effectiveHoliday || !isWorkdayByRule
-        ? false
-        : (checkIn != null ? checkIn.isAfter(workStart) : false);
-    final early = (effectiveHoliday || !isWorkdayByRule)
-        ? false
-        : (checkOut != null ? checkOut.isBefore(workEnd) : false);
-    final leaveMinutes = row.isLeave &&
-            !effectiveHoliday &&
-            checkIn != null &&
-            checkIn.isAfter(workStartBase)
-        ? checkIn.difference(workStartBase).inMinutes
-        : 0;
-    final rawMinutes = (effectiveHoliday || !isWorkdayByRule)
-        ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
-            ? checkOut.difference(checkIn).inMinutes
-            : 0
-        : checkOut != null && checkOut.isAfter(workEnd)
-            ? checkOut.difference(workEnd).inMinutes
-            : 0;
-    final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
-
-    return row.copyWith(
-      isLate: late,
-      isEarlyLeave: early,
-      isException: exception,
-      needsPatch: needsPatch,
-      overtimeMinutesRaw: rawMinutes,
-      leaveMinutes: leaveMinutes,
-      overtimeHoursRounded: roundedHours,
-      isWorkday: isWorkdayByRule,
-      isAbsent: effectiveHoliday ? false : row.isAbsent,
-      isLeave: effectiveHoliday ? false : row.isLeave,
-      isHoliday: effectiveHoliday,
-      patched: patched,
-    );
-  }
-
-  bool _isWorkdayForRecord(
-    DateTime day,
-    AttendanceRule rule,
-    List<AttendanceRecord> rows,
-  ) {
-    if (rule.weekendType != 'single') {
-      return _isWorkday(day, rule.weekendType);
-    }
-    if (!isAttendanceWeekend(day)) {
-      return true;
-    }
-
-    final current = _rowForDay(rows, day);
-    final otherDay = day.weekday == DateTime.saturday
-        ? day.add(const Duration(days: 1))
-        : day.subtract(const Duration(days: 1));
-    final other = _rowForDay(rows, otherDay);
-    final currentWorked = current == null || _hasAttendanceSignal(current);
-    final otherWorked = other != null && _hasAttendanceSignal(other);
-    if (!otherWorked) {
-      return currentWorked;
-    }
-    final currentFullDay =
-        current != null && _isCompletedWeekendWorkday(current, rule);
-    final otherFullDay = _isCompletedWeekendWorkday(other, rule);
-    if (currentFullDay != otherFullDay) {
-      return currentFullDay;
-    }
-    return day.weekday == DateTime.saturday;
-  }
-
-  AttendanceRecord? _rowForDay(List<AttendanceRecord> rows, DateTime day) {
-    final normalized = DateTime(day.year, day.month, day.day);
-    for (final row in rows) {
-      final rowDay = DateTime(row.day.year, row.day.month, row.day.day);
-      if (rowDay == normalized) return row;
-    }
-    return null;
-  }
-
-  bool _hasAttendanceSignal(AttendanceRecord row) {
-    return row.checkInAt != null ||
-        row.checkOutAt != null ||
-        row.isAbsent ||
-        row.isLeave ||
-        row.isHoliday;
-  }
-
-  bool _isCompletedWeekendWorkday(AttendanceRecord row, AttendanceRule rule) {
-    if (row.isHoliday) {
-      return false;
-    }
-    final checkIn = row.checkInAt;
-    final checkOut = row.checkOutAt;
-    if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)) {
-      return false;
-    }
-    final day = DateTime(row.day.year, row.day.month, row.day.day);
-    final workEnd = _mergeDayTime(day, rule.workEndTime);
-    return !checkOut.isBefore(workEnd);
-  }
-
   Future<void> _saveNormalizedRecord(
     AttendanceRecord row, {
     required AttendanceRule rule,
   }) async {
-    final day = DateTime(row.day.year, row.day.month, row.day.day);
-    final workStartBase = _mergeDayTime(day, rule.workStartTime);
-    final workStart = workStartBase.add(
-      Duration(minutes: rule.lateGraceMinutes),
-    );
-    final workEnd = _mergeDayTime(day, rule.workEndTime);
-
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
-    final pairRows = <AttendanceRecord>[row];
-    if (rule.weekendType == 'single' && isAttendanceWeekend(day)) {
-      final otherDay = day.weekday == DateTime.saturday
-          ? day.add(const Duration(days: 1))
-          : day.subtract(const Duration(days: 1));
-      final other = await (_db.select(_db.attendanceRecords)
-            ..where(
-              (t) =>
-                  t.accountKey.equals(accountKey) &
-                  t.day.equals(DateTime(
-                    otherDay.year,
-                    otherDay.month,
-                    otherDay.day,
-                  )),
-            ))
-          .getSingleOrNull();
-      if (other != null) {
-        pairRows.add(other);
-      }
-    }
-    final isWorkdayByRule = _isWorkdayForRecord(day, rule, pairRows);
-    final effectiveHoliday = row.isHoliday;
     final hasCheckIn = checkIn != null;
     final hasCheckOut = checkOut != null;
     final exception = (hasCheckIn ^ hasCheckOut) ||
         (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
-    final needsPatch =
-        exception || (row.isAbsent && !row.isLeave && !effectiveHoliday);
+    final needsPatch = exception;
     final patched = row.patched || (row.needsPatch && !needsPatch);
-    final late = row.isLeave || effectiveHoliday || !isWorkdayByRule
-        ? false
-        : (checkIn != null ? checkIn.isAfter(workStart) : false);
-    final early = (effectiveHoliday || !isWorkdayByRule)
-        ? false
-        : (checkOut != null ? checkOut.isBefore(workEnd) : false);
-    final leaveMinutes = row.isLeave &&
-            !effectiveHoliday &&
-            checkIn != null &&
-            checkIn.isAfter(workStartBase)
-        ? checkIn.difference(workStartBase).inMinutes
-        : 0;
-    final rawMinutes = (effectiveHoliday || !isWorkdayByRule)
-        ? checkIn != null && checkOut != null && checkOut.isAfter(checkIn)
-            ? checkOut.difference(checkIn).inMinutes
-            : 0
-        : checkOut != null && checkOut.isAfter(workEnd)
-            ? checkOut.difference(workEnd).inMinutes
-            : 0;
-    final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
     final workedMinutes = _calculateWorkedMinutes(checkIn, checkOut);
     final payableMinutes = _calculatePayableMinutes(workedMinutes);
     final payableAmount = _calculatePayableAmount(
@@ -894,20 +676,20 @@ class AttendanceDao {
       AttendanceRecordsCompanion(
         checkInAt: Value(checkIn),
         checkOutAt: Value(checkOut),
-        isLate: Value(late),
-        isEarlyLeave: Value(early),
+        isLate: const Value(false),
+        isEarlyLeave: const Value(false),
         isException: Value(exception),
         needsPatch: Value(needsPatch),
-        overtimeMinutesRaw: Value(rawMinutes),
-        leaveMinutes: Value(leaveMinutes),
-        overtimeHoursRounded: Value(roundedHours),
+        overtimeMinutesRaw: const Value(0),
+        leaveMinutes: const Value(0),
+        overtimeHoursRounded: const Value(0),
         workedMinutes: Value(workedMinutes),
         payableMinutes: Value(payableMinutes),
         payableAmount: Value(payableAmount),
-        isWorkday: Value(isWorkdayByRule),
-        isAbsent: Value(effectiveHoliday ? false : row.isAbsent),
-        isLeave: Value(effectiveHoliday ? false : row.isLeave),
-        isHoliday: Value(effectiveHoliday),
+        isWorkday: const Value(true),
+        isAbsent: const Value(false),
+        isLeave: const Value(false),
+        isHoliday: const Value(false),
         patched: Value(patched),
         source: Value(row.source),
         note: Value(row.note),

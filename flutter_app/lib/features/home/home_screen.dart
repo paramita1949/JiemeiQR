@@ -9,7 +9,6 @@ import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_account_resolver.dart';
-import 'package:qrscan_flutter/features/attendance/attendance_precheckin_guard_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
 import 'package:qrscan_flutter/features/calendar/outbound_calendar_screen.dart';
@@ -75,7 +74,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _loadingStats = true;
   bool _handlingIntentImport = false;
   bool _notiHintShownInSession = false;
-  Timer? _precheckinGuardTimer;
   Timer? _cloudAutoBackupTimer;
   bool _runningCloudAutoBackup = false;
 
@@ -90,9 +88,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     unawaited(_consumePendingImportIntent());
     unawaited(_runCloudAutoBackupCheck());
     unawaited(_runAttendanceReminderCheck());
-    unawaited(_runPrecheckinGuard(forForeground: true));
     unawaited(_ensureNotificationPermissionHint());
-    _startPrecheckinGuardTimer();
     _startCloudAutoBackupTimer();
   }
 
@@ -117,7 +113,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _precheckinGuardTimer?.cancel();
     _cloudAutoBackupTimer?.cancel();
     if (_ownsDatabase) {
       _database.close();
@@ -133,14 +128,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(_consumePendingImportIntent());
       unawaited(_runCloudAutoBackupCheck());
       unawaited(_runAttendanceReminderCheck());
-      unawaited(_runPrecheckinGuard(forForeground: true));
       unawaited(_ensureNotificationPermissionHint());
-      _startPrecheckinGuardTimer();
       _startCloudAutoBackupTimer();
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      unawaited(_runPrecheckinGuard(forForeground: false));
-      _precheckinGuardTimer?.cancel();
     }
   }
 
@@ -402,68 +391,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _startPrecheckinGuardTimer() {
-    _precheckinGuardTimer?.cancel();
-    _precheckinGuardTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      unawaited(_runPrecheckinGuard(forForeground: true));
-    });
-  }
-
-  Future<void> _runPrecheckinGuard({required bool forForeground}) async {
-    try {
-      final accountKey = await const AttendanceAccountResolver().resolve();
-      final decision = await AttendancePrecheckinGuardService.evaluate(
-        database: _database,
-        accountKey: accountKey,
-      );
-      if (!decision.shouldRemind) return;
-
-      if (forForeground) {
-        if (!AttendancePrecheckinGuardService.shouldShowDialog(
-            decision.dayKey)) {
-          return;
-        }
-        if (!mounted) return;
-        DebugEventLog.add('PRECHECKIN', 'show foreground dialog');
-        await showDialog<void>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('上班临近提醒'),
-            content: const Text('距离上班时间不足3分钟，且你还未签到。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('知道了'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  Navigator.of(context).pop();
-                  await pushAndRefresh(
-                    context,
-                    route: MaterialPageRoute(
-                      builder: (_) => AttendanceScreen(database: database),
-                    ),
-                    onRefresh: () => unawaited(_refreshStats()),
-                  );
-                },
-                child: const Text('去签到'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        if (!AttendancePrecheckinGuardService.shouldSendNotification(
-            decision.dayKey)) {
-          return;
-        }
-        DebugEventLog.add('PRECHECKIN', 'show lockscreen notification');
-        await AttendanceGeofenceReminderService.showPrecheckinNotification();
-      }
-    } catch (e) {
-      DebugEventLog.add('PRECHECKIN', 'guard failed: $e');
-    }
-  }
-
   Future<void> _ensureNotificationPermissionHint() async {
     if (!mounted || _notiHintShownInSession) return;
     try {
@@ -477,7 +404,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('开启通知权限'),
-          content: const Text('未开启通知权限，自动签到反馈与上班临近提醒将无法正常弹出。'),
+          content: const Text('未开启通知权限，地理围栏自动签到反馈将无法正常弹出。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),

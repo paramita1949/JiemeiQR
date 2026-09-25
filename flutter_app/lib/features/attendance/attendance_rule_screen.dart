@@ -31,8 +31,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   final _cloudBackupService = CloudBackupService(api: SupabaseCloudBackupApi());
   bool _loading = true;
   bool _cloudBusy = false;
-  final _startController = TextEditingController();
-  final _endController = TextEditingController();
   final _wageController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
@@ -68,8 +66,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   @override
   void dispose() {
-    _startController.dispose();
-    _endController.dispose();
     _wageController.dispose();
     _latController.dispose();
     _lngController.dispose();
@@ -79,8 +75,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   Future<void> _load() async {
     final rule = await _dao.getRule();
-    _startController.text = rule.workStartTime;
-    _endController.text = rule.workEndTime;
     _wageController.text = rule.hourlyWage.toStringAsFixed(2);
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
@@ -115,8 +109,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   Future<void> _save() async {
     await _dao.saveRule(
       AttendanceRulesCompanion(
-        workStartTime: Value(_startController.text.trim()),
-        workEndTime: Value(_endController.text.trim()),
         hourlyWage: Value(double.tryParse(_wageController.text.trim()) ?? 0),
         officeLat: Value(double.tryParse(_latController.text.trim())),
         officeLng: Value(double.tryParse(_lngController.text.trim())),
@@ -434,8 +426,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   Widget _workRuleCard() {
     return _settingsCard(
-      title: '班次规则',
-      icon: Icons.schedule_rounded,
+      title: '计薪规则',
+      icon: Icons.payments_outlined,
       trailing: const Text(
         '按实际工时计薪',
         style: TextStyle(
@@ -446,8 +438,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       ),
       child: Column(
         children: [
-          _rowField('上班时间', _startController),
-          _rowField('下班时间', _endController),
           _rowField(
             '时薪（元/小时）',
             _wageController,
@@ -457,7 +447,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '每满30分钟计薪，不足30分钟的部分舍去；按签到到签退的实际总时长计算。',
+              '只按签到到签退的实际总时长计算；每满30分钟计薪，不足部分舍去。',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
