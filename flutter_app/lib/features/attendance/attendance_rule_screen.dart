@@ -33,14 +33,13 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _cloudBusy = false;
   final _startController = TextEditingController();
   final _endController = TextEditingController();
-  final _lateController = TextEditingController();
+  final _wageController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   final _autoCheckinPopupTextController = TextEditingController();
 
   bool _geofenceEnabled = false;
   bool _showBackupRecords = false;
-  String _weekendType = 'double';
   String _providerSummary = _defaultProviderSummary;
   List<AttendanceBackupSnapshot> _backups = const [];
   GeofenceDailyState? _todayGeofenceState;
@@ -71,7 +70,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   void dispose() {
     _startController.dispose();
     _endController.dispose();
-    _lateController.dispose();
+    _wageController.dispose();
     _latController.dispose();
     _lngController.dispose();
     _autoCheckinPopupTextController.dispose();
@@ -82,12 +81,11 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     final rule = await _dao.getRule();
     _startController.text = rule.workStartTime;
     _endController.text = rule.workEndTime;
-    _lateController.text = '${rule.lateGraceMinutes}';
+    _wageController.text = rule.hourlyWage.toStringAsFixed(2);
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
     _autoCheckinPopupTextController.text = rule.autoCheckinPopupText ?? '';
     _geofenceEnabled = rule.geofenceEnabled;
-    _weekendType = rule.weekendType;
 
     if (!mounted) return;
     setState(() => _loading = false);
@@ -119,8 +117,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       AttendanceRulesCompanion(
         workStartTime: Value(_startController.text.trim()),
         workEndTime: Value(_endController.text.trim()),
-        lateGraceMinutes: Value(int.tryParse(_lateController.text.trim()) ?? 0),
-        weekendType: Value(_weekendType),
+        hourlyWage: Value(double.tryParse(_wageController.text.trim()) ?? 0),
         officeLat: Value(double.tryParse(_latController.text.trim())),
         officeLng: Value(double.tryParse(_lngController.text.trim())),
         officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
@@ -349,6 +346,38 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     }
   }
 
+  Future<void> _clearAttendance() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空签到记录？'),
+        content: const Text(
+          '只删除当前账号的签到记录、补卡记录和围栏签到状态。\n\n'
+          '不会删除其他业务数据、计薪规则，也不会影响其他账号。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _dao.clearCurrentAccountAttendance();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('当前账号签到记录已清空')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFFF5F7FB);
@@ -383,6 +412,21 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             onPressed: _save,
             child: const Text('保存设置'),
           ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            key: const Key('clearAttendanceButton'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB91C1C),
+              side: const BorderSide(color: Color(0xFFFCA5A5)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: _clearAttendance,
+            icon: const Icon(Icons.delete_sweep_outlined),
+            label: const Text('清空当前账号签到记录'),
+          ),
         ],
       ),
     );
@@ -392,9 +436,9 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     return _settingsCard(
       title: '班次规则',
       icon: Icons.schedule_rounded,
-      trailing: Text(
-        _weekendType == 'double' ? '双休' : '单休',
-        style: const TextStyle(
+      trailing: const Text(
+        '按实际工时计薪',
+        style: TextStyle(
           color: Color(0xFF475569),
           fontSize: 13,
           fontWeight: FontWeight.w800,
@@ -405,28 +449,16 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           _rowField('上班时间', _startController),
           _rowField('下班时间', _endController),
           _rowField(
-            '迟到宽限(分钟)',
-            _lateController,
-            keyboardType: TextInputType.number,
+            '时薪（元/小时）',
+            _wageController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
-          const SizedBox(height: 2),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<String>(
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              segments: const [
-                ButtonSegment(value: 'single', label: Text('单休')),
-                ButtonSegment(value: 'double', label: Text('双休')),
-              ],
-              selected: {_weekendType},
-              onSelectionChanged: (v) => setState(() => _weekendType = v.first),
+          const SizedBox(height: 6),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '每满30分钟计薪，不足30分钟的部分舍去；按签到到签退的实际总时长计算。',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
         ],

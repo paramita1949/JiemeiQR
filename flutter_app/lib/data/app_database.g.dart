@@ -2556,6 +2556,14 @@ class $AttendanceRulesTable extends AttendanceRules
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('17:00'));
+  static const VerificationMeta _hourlyWageMeta =
+      const VerificationMeta('hourlyWage');
+  @override
+  late final GeneratedColumn<double> hourlyWage = GeneratedColumn<double>(
+      'hourly_wage', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(28.85));
   static const VerificationMeta _lateGraceMinutesMeta =
       const VerificationMeta('lateGraceMinutes');
   @override
@@ -2650,6 +2658,7 @@ class $AttendanceRulesTable extends AttendanceRules
         accountKey,
         workStartTime,
         workEndTime,
+        hourlyWage,
         lateGraceMinutes,
         weekendType,
         overtimeRoundingMinutes,
@@ -2692,6 +2701,12 @@ class $AttendanceRulesTable extends AttendanceRules
           _workEndTimeMeta,
           workEndTime.isAcceptableOrUnknown(
               data['work_end_time']!, _workEndTimeMeta));
+    }
+    if (data.containsKey('hourly_wage')) {
+      context.handle(
+          _hourlyWageMeta,
+          hourlyWage.isAcceptableOrUnknown(
+              data['hourly_wage']!, _hourlyWageMeta));
     }
     if (data.containsKey('late_grace_minutes')) {
       context.handle(
@@ -2772,6 +2787,8 @@ class $AttendanceRulesTable extends AttendanceRules
           DriftSqlType.string, data['${effectivePrefix}work_start_time'])!,
       workEndTime: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}work_end_time'])!,
+      hourlyWage: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}hourly_wage'])!,
       lateGraceMinutes: attachedDatabase.typeMapping.read(
           DriftSqlType.int, data['${effectivePrefix}late_grace_minutes'])!,
       weekendType: attachedDatabase.typeMapping
@@ -2812,6 +2829,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   final String accountKey;
   final String workStartTime;
   final String workEndTime;
+  final double hourlyWage;
   final int lateGraceMinutes;
   final String weekendType;
   final int overtimeRoundingMinutes;
@@ -2828,6 +2846,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       required this.accountKey,
       required this.workStartTime,
       required this.workEndTime,
+      required this.hourlyWage,
       required this.lateGraceMinutes,
       required this.weekendType,
       required this.overtimeRoundingMinutes,
@@ -2846,6 +2865,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
     map['account_key'] = Variable<String>(accountKey);
     map['work_start_time'] = Variable<String>(workStartTime);
     map['work_end_time'] = Variable<String>(workEndTime);
+    map['hourly_wage'] = Variable<double>(hourlyWage);
     map['late_grace_minutes'] = Variable<int>(lateGraceMinutes);
     map['weekend_type'] = Variable<String>(weekendType);
     map['overtime_rounding_minutes'] = Variable<int>(overtimeRoundingMinutes);
@@ -2872,6 +2892,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       accountKey: Value(accountKey),
       workStartTime: Value(workStartTime),
       workEndTime: Value(workEndTime),
+      hourlyWage: Value(hourlyWage),
       lateGraceMinutes: Value(lateGraceMinutes),
       weekendType: Value(weekendType),
       overtimeRoundingMinutes: Value(overtimeRoundingMinutes),
@@ -2900,6 +2921,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       accountKey: serializer.fromJson<String>(json['accountKey']),
       workStartTime: serializer.fromJson<String>(json['workStartTime']),
       workEndTime: serializer.fromJson<String>(json['workEndTime']),
+      hourlyWage: serializer.fromJson<double>(json['hourlyWage']),
       lateGraceMinutes: serializer.fromJson<int>(json['lateGraceMinutes']),
       weekendType: serializer.fromJson<String>(json['weekendType']),
       overtimeRoundingMinutes:
@@ -2925,6 +2947,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       'accountKey': serializer.toJson<String>(accountKey),
       'workStartTime': serializer.toJson<String>(workStartTime),
       'workEndTime': serializer.toJson<String>(workEndTime),
+      'hourlyWage': serializer.toJson<double>(hourlyWage),
       'lateGraceMinutes': serializer.toJson<int>(lateGraceMinutes),
       'weekendType': serializer.toJson<String>(weekendType),
       'overtimeRoundingMinutes':
@@ -2946,6 +2969,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           String? accountKey,
           String? workStartTime,
           String? workEndTime,
+          double? hourlyWage,
           int? lateGraceMinutes,
           String? weekendType,
           int? overtimeRoundingMinutes,
@@ -2962,6 +2986,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
         accountKey: accountKey ?? this.accountKey,
         workStartTime: workStartTime ?? this.workStartTime,
         workEndTime: workEndTime ?? this.workEndTime,
+        hourlyWage: hourlyWage ?? this.hourlyWage,
         lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
         weekendType: weekendType ?? this.weekendType,
         overtimeRoundingMinutes:
@@ -2989,6 +3014,8 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           : this.workStartTime,
       workEndTime:
           data.workEndTime.present ? data.workEndTime.value : this.workEndTime,
+      hourlyWage:
+          data.hourlyWage.present ? data.hourlyWage.value : this.hourlyWage,
       lateGraceMinutes: data.lateGraceMinutes.present
           ? data.lateGraceMinutes.value
           : this.lateGraceMinutes,
@@ -3025,6 +3052,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           ..write('accountKey: $accountKey, ')
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
+          ..write('hourlyWage: $hourlyWage, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
           ..write('weekendType: $weekendType, ')
           ..write('overtimeRoundingMinutes: $overtimeRoundingMinutes, ')
@@ -3046,6 +3074,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       accountKey,
       workStartTime,
       workEndTime,
+      hourlyWage,
       lateGraceMinutes,
       weekendType,
       overtimeRoundingMinutes,
@@ -3065,6 +3094,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           other.accountKey == this.accountKey &&
           other.workStartTime == this.workStartTime &&
           other.workEndTime == this.workEndTime &&
+          other.hourlyWage == this.hourlyWage &&
           other.lateGraceMinutes == this.lateGraceMinutes &&
           other.weekendType == this.weekendType &&
           other.overtimeRoundingMinutes == this.overtimeRoundingMinutes &&
@@ -3083,6 +3113,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   final Value<String> accountKey;
   final Value<String> workStartTime;
   final Value<String> workEndTime;
+  final Value<double> hourlyWage;
   final Value<int> lateGraceMinutes;
   final Value<String> weekendType;
   final Value<int> overtimeRoundingMinutes;
@@ -3099,6 +3130,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.accountKey = const Value.absent(),
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
+    this.hourlyWage = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
     this.weekendType = const Value.absent(),
     this.overtimeRoundingMinutes = const Value.absent(),
@@ -3116,6 +3148,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.accountKey = const Value.absent(),
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
+    this.hourlyWage = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
     this.weekendType = const Value.absent(),
     this.overtimeRoundingMinutes = const Value.absent(),
@@ -3133,6 +3166,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     Expression<String>? accountKey,
     Expression<String>? workStartTime,
     Expression<String>? workEndTime,
+    Expression<double>? hourlyWage,
     Expression<int>? lateGraceMinutes,
     Expression<String>? weekendType,
     Expression<int>? overtimeRoundingMinutes,
@@ -3150,6 +3184,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       if (accountKey != null) 'account_key': accountKey,
       if (workStartTime != null) 'work_start_time': workStartTime,
       if (workEndTime != null) 'work_end_time': workEndTime,
+      if (hourlyWage != null) 'hourly_wage': hourlyWage,
       if (lateGraceMinutes != null) 'late_grace_minutes': lateGraceMinutes,
       if (weekendType != null) 'weekend_type': weekendType,
       if (overtimeRoundingMinutes != null)
@@ -3174,6 +3209,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       Value<String>? accountKey,
       Value<String>? workStartTime,
       Value<String>? workEndTime,
+      Value<double>? hourlyWage,
       Value<int>? lateGraceMinutes,
       Value<String>? weekendType,
       Value<int>? overtimeRoundingMinutes,
@@ -3190,6 +3226,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       accountKey: accountKey ?? this.accountKey,
       workStartTime: workStartTime ?? this.workStartTime,
       workEndTime: workEndTime ?? this.workEndTime,
+      hourlyWage: hourlyWage ?? this.hourlyWage,
       lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
       weekendType: weekendType ?? this.weekendType,
       overtimeRoundingMinutes:
@@ -3221,6 +3258,9 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     }
     if (workEndTime.present) {
       map['work_end_time'] = Variable<String>(workEndTime.value);
+    }
+    if (hourlyWage.present) {
+      map['hourly_wage'] = Variable<double>(hourlyWage.value);
     }
     if (lateGraceMinutes.present) {
       map['late_grace_minutes'] = Variable<int>(lateGraceMinutes.value);
@@ -3269,6 +3309,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
           ..write('accountKey: $accountKey, ')
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
+          ..write('hourlyWage: $hourlyWage, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
           ..write('weekendType: $weekendType, ')
           ..write('overtimeRoundingMinutes: $overtimeRoundingMinutes, ')
@@ -3438,6 +3479,30 @@ class $AttendanceRecordsTable extends AttendanceRecords
           type: DriftSqlType.double,
           requiredDuringInsert: false,
           defaultValue: const Constant(0.0));
+  static const VerificationMeta _workedMinutesMeta =
+      const VerificationMeta('workedMinutes');
+  @override
+  late final GeneratedColumn<int> workedMinutes = GeneratedColumn<int>(
+      'worked_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _payableMinutesMeta =
+      const VerificationMeta('payableMinutes');
+  @override
+  late final GeneratedColumn<int> payableMinutes = GeneratedColumn<int>(
+      'payable_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _payableAmountMeta =
+      const VerificationMeta('payableAmount');
+  @override
+  late final GeneratedColumn<double> payableAmount = GeneratedColumn<double>(
+      'payable_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0.0));
   static const VerificationMeta _sourceMeta = const VerificationMeta('source');
   @override
   late final GeneratedColumn<String> source = GeneratedColumn<String>(
@@ -3485,6 +3550,9 @@ class $AttendanceRecordsTable extends AttendanceRecords
         overtimeMinutesRaw,
         leaveMinutes,
         overtimeHoursRounded,
+        workedMinutes,
+        payableMinutes,
+        payableAmount,
         source,
         note,
         createdAt,
@@ -3587,6 +3655,24 @@ class $AttendanceRecordsTable extends AttendanceRecords
           overtimeHoursRounded.isAcceptableOrUnknown(
               data['overtime_hours_rounded']!, _overtimeHoursRoundedMeta));
     }
+    if (data.containsKey('worked_minutes')) {
+      context.handle(
+          _workedMinutesMeta,
+          workedMinutes.isAcceptableOrUnknown(
+              data['worked_minutes']!, _workedMinutesMeta));
+    }
+    if (data.containsKey('payable_minutes')) {
+      context.handle(
+          _payableMinutesMeta,
+          payableMinutes.isAcceptableOrUnknown(
+              data['payable_minutes']!, _payableMinutesMeta));
+    }
+    if (data.containsKey('payable_amount')) {
+      context.handle(
+          _payableAmountMeta,
+          payableAmount.isAcceptableOrUnknown(
+              data['payable_amount']!, _payableAmountMeta));
+    }
     if (data.containsKey('source')) {
       context.handle(_sourceMeta,
           source.isAcceptableOrUnknown(data['source']!, _sourceMeta));
@@ -3647,6 +3733,12 @@ class $AttendanceRecordsTable extends AttendanceRecords
       overtimeHoursRounded: attachedDatabase.typeMapping.read(
           DriftSqlType.double,
           data['${effectivePrefix}overtime_hours_rounded'])!,
+      workedMinutes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}worked_minutes'])!,
+      payableMinutes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}payable_minutes'])!,
+      payableAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}payable_amount'])!,
       source: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}source'])!,
       note: attachedDatabase.typeMapping
@@ -3683,6 +3775,9 @@ class AttendanceRecord extends DataClass
   final int overtimeMinutesRaw;
   final int leaveMinutes;
   final double overtimeHoursRounded;
+  final int workedMinutes;
+  final int payableMinutes;
+  final double payableAmount;
   final String source;
   final String? note;
   final DateTime createdAt;
@@ -3705,6 +3800,9 @@ class AttendanceRecord extends DataClass
       required this.overtimeMinutesRaw,
       required this.leaveMinutes,
       required this.overtimeHoursRounded,
+      required this.workedMinutes,
+      required this.payableMinutes,
+      required this.payableAmount,
       required this.source,
       this.note,
       required this.createdAt,
@@ -3733,6 +3831,9 @@ class AttendanceRecord extends DataClass
     map['overtime_minutes_raw'] = Variable<int>(overtimeMinutesRaw);
     map['leave_minutes'] = Variable<int>(leaveMinutes);
     map['overtime_hours_rounded'] = Variable<double>(overtimeHoursRounded);
+    map['worked_minutes'] = Variable<int>(workedMinutes);
+    map['payable_minutes'] = Variable<int>(payableMinutes);
+    map['payable_amount'] = Variable<double>(payableAmount);
     map['source'] = Variable<String>(source);
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
@@ -3765,6 +3866,9 @@ class AttendanceRecord extends DataClass
       overtimeMinutesRaw: Value(overtimeMinutesRaw),
       leaveMinutes: Value(leaveMinutes),
       overtimeHoursRounded: Value(overtimeHoursRounded),
+      workedMinutes: Value(workedMinutes),
+      payableMinutes: Value(payableMinutes),
+      payableAmount: Value(payableAmount),
       source: Value(source),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       createdAt: Value(createdAt),
@@ -3794,6 +3898,9 @@ class AttendanceRecord extends DataClass
       leaveMinutes: serializer.fromJson<int>(json['leaveMinutes']),
       overtimeHoursRounded:
           serializer.fromJson<double>(json['overtimeHoursRounded']),
+      workedMinutes: serializer.fromJson<int>(json['workedMinutes']),
+      payableMinutes: serializer.fromJson<int>(json['payableMinutes']),
+      payableAmount: serializer.fromJson<double>(json['payableAmount']),
       source: serializer.fromJson<String>(json['source']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -3821,6 +3928,9 @@ class AttendanceRecord extends DataClass
       'overtimeMinutesRaw': serializer.toJson<int>(overtimeMinutesRaw),
       'leaveMinutes': serializer.toJson<int>(leaveMinutes),
       'overtimeHoursRounded': serializer.toJson<double>(overtimeHoursRounded),
+      'workedMinutes': serializer.toJson<int>(workedMinutes),
+      'payableMinutes': serializer.toJson<int>(payableMinutes),
+      'payableAmount': serializer.toJson<double>(payableAmount),
       'source': serializer.toJson<String>(source),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -3846,6 +3956,9 @@ class AttendanceRecord extends DataClass
           int? overtimeMinutesRaw,
           int? leaveMinutes,
           double? overtimeHoursRounded,
+          int? workedMinutes,
+          int? payableMinutes,
+          double? payableAmount,
           String? source,
           Value<String?> note = const Value.absent(),
           DateTime? createdAt,
@@ -3868,6 +3981,9 @@ class AttendanceRecord extends DataClass
         overtimeMinutesRaw: overtimeMinutesRaw ?? this.overtimeMinutesRaw,
         leaveMinutes: leaveMinutes ?? this.leaveMinutes,
         overtimeHoursRounded: overtimeHoursRounded ?? this.overtimeHoursRounded,
+        workedMinutes: workedMinutes ?? this.workedMinutes,
+        payableMinutes: payableMinutes ?? this.payableMinutes,
+        payableAmount: payableAmount ?? this.payableAmount,
         source: source ?? this.source,
         note: note.present ? note.value : this.note,
         createdAt: createdAt ?? this.createdAt,
@@ -3904,6 +4020,15 @@ class AttendanceRecord extends DataClass
       overtimeHoursRounded: data.overtimeHoursRounded.present
           ? data.overtimeHoursRounded.value
           : this.overtimeHoursRounded,
+      workedMinutes: data.workedMinutes.present
+          ? data.workedMinutes.value
+          : this.workedMinutes,
+      payableMinutes: data.payableMinutes.present
+          ? data.payableMinutes.value
+          : this.payableMinutes,
+      payableAmount: data.payableAmount.present
+          ? data.payableAmount.value
+          : this.payableAmount,
       source: data.source.present ? data.source.value : this.source,
       note: data.note.present ? data.note.value : this.note,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -3931,6 +4056,9 @@ class AttendanceRecord extends DataClass
           ..write('overtimeMinutesRaw: $overtimeMinutesRaw, ')
           ..write('leaveMinutes: $leaveMinutes, ')
           ..write('overtimeHoursRounded: $overtimeHoursRounded, ')
+          ..write('workedMinutes: $workedMinutes, ')
+          ..write('payableMinutes: $payableMinutes, ')
+          ..write('payableAmount: $payableAmount, ')
           ..write('source: $source, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
@@ -3958,6 +4086,9 @@ class AttendanceRecord extends DataClass
         overtimeMinutesRaw,
         leaveMinutes,
         overtimeHoursRounded,
+        workedMinutes,
+        payableMinutes,
+        payableAmount,
         source,
         note,
         createdAt,
@@ -3984,6 +4115,9 @@ class AttendanceRecord extends DataClass
           other.overtimeMinutesRaw == this.overtimeMinutesRaw &&
           other.leaveMinutes == this.leaveMinutes &&
           other.overtimeHoursRounded == this.overtimeHoursRounded &&
+          other.workedMinutes == this.workedMinutes &&
+          other.payableMinutes == this.payableMinutes &&
+          other.payableAmount == this.payableAmount &&
           other.source == this.source &&
           other.note == this.note &&
           other.createdAt == this.createdAt &&
@@ -4008,6 +4142,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
   final Value<int> overtimeMinutesRaw;
   final Value<int> leaveMinutes;
   final Value<double> overtimeHoursRounded;
+  final Value<int> workedMinutes;
+  final Value<int> payableMinutes;
+  final Value<double> payableAmount;
   final Value<String> source;
   final Value<String?> note;
   final Value<DateTime> createdAt;
@@ -4030,6 +4167,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     this.overtimeMinutesRaw = const Value.absent(),
     this.leaveMinutes = const Value.absent(),
     this.overtimeHoursRounded = const Value.absent(),
+    this.workedMinutes = const Value.absent(),
+    this.payableMinutes = const Value.absent(),
+    this.payableAmount = const Value.absent(),
     this.source = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -4053,6 +4193,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     this.overtimeMinutesRaw = const Value.absent(),
     this.leaveMinutes = const Value.absent(),
     this.overtimeHoursRounded = const Value.absent(),
+    this.workedMinutes = const Value.absent(),
+    this.payableMinutes = const Value.absent(),
+    this.payableAmount = const Value.absent(),
     this.source = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -4076,6 +4219,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
     Expression<int>? overtimeMinutesRaw,
     Expression<int>? leaveMinutes,
     Expression<double>? overtimeHoursRounded,
+    Expression<int>? workedMinutes,
+    Expression<int>? payableMinutes,
+    Expression<double>? payableAmount,
     Expression<String>? source,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
@@ -4101,6 +4247,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       if (leaveMinutes != null) 'leave_minutes': leaveMinutes,
       if (overtimeHoursRounded != null)
         'overtime_hours_rounded': overtimeHoursRounded,
+      if (workedMinutes != null) 'worked_minutes': workedMinutes,
+      if (payableMinutes != null) 'payable_minutes': payableMinutes,
+      if (payableAmount != null) 'payable_amount': payableAmount,
       if (source != null) 'source': source,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
@@ -4126,6 +4275,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       Value<int>? overtimeMinutesRaw,
       Value<int>? leaveMinutes,
       Value<double>? overtimeHoursRounded,
+      Value<int>? workedMinutes,
+      Value<int>? payableMinutes,
+      Value<double>? payableAmount,
       Value<String>? source,
       Value<String?>? note,
       Value<DateTime>? createdAt,
@@ -4148,6 +4300,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       overtimeMinutesRaw: overtimeMinutesRaw ?? this.overtimeMinutesRaw,
       leaveMinutes: leaveMinutes ?? this.leaveMinutes,
       overtimeHoursRounded: overtimeHoursRounded ?? this.overtimeHoursRounded,
+      workedMinutes: workedMinutes ?? this.workedMinutes,
+      payableMinutes: payableMinutes ?? this.payableMinutes,
+      payableAmount: payableAmount ?? this.payableAmount,
       source: source ?? this.source,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
@@ -4210,6 +4365,15 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
       map['overtime_hours_rounded'] =
           Variable<double>(overtimeHoursRounded.value);
     }
+    if (workedMinutes.present) {
+      map['worked_minutes'] = Variable<int>(workedMinutes.value);
+    }
+    if (payableMinutes.present) {
+      map['payable_minutes'] = Variable<int>(payableMinutes.value);
+    }
+    if (payableAmount.present) {
+      map['payable_amount'] = Variable<double>(payableAmount.value);
+    }
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
@@ -4245,6 +4409,9 @@ class AttendanceRecordsCompanion extends UpdateCompanion<AttendanceRecord> {
           ..write('overtimeMinutesRaw: $overtimeMinutesRaw, ')
           ..write('leaveMinutes: $leaveMinutes, ')
           ..write('overtimeHoursRounded: $overtimeHoursRounded, ')
+          ..write('workedMinutes: $workedMinutes, ')
+          ..write('payableMinutes: $payableMinutes, ')
+          ..write('payableAmount: $payableAmount, ')
           ..write('source: $source, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
@@ -9804,6 +9971,7 @@ typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
   Value<String> accountKey,
   Value<String> workStartTime,
   Value<String> workEndTime,
+  Value<double> hourlyWage,
   Value<int> lateGraceMinutes,
   Value<String> weekendType,
   Value<int> overtimeRoundingMinutes,
@@ -9822,6 +9990,7 @@ typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
   Value<String> accountKey,
   Value<String> workStartTime,
   Value<String> workEndTime,
+  Value<double> hourlyWage,
   Value<int> lateGraceMinutes,
   Value<String> weekendType,
   Value<int> overtimeRoundingMinutes,
@@ -9855,6 +10024,9 @@ class $$AttendanceRulesTableFilterComposer
 
   ColumnFilters<String> get workEndTime => $composableBuilder(
       column: $table.workEndTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get hourlyWage => $composableBuilder(
+      column: $table.hourlyWage, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get lateGraceMinutes => $composableBuilder(
       column: $table.lateGraceMinutes,
@@ -9919,6 +10091,9 @@ class $$AttendanceRulesTableOrderingComposer
   ColumnOrderings<String> get workEndTime => $composableBuilder(
       column: $table.workEndTime, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<double> get hourlyWage => $composableBuilder(
+      column: $table.hourlyWage, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get lateGraceMinutes => $composableBuilder(
       column: $table.lateGraceMinutes,
       builder: (column) => ColumnOrderings(column));
@@ -9980,6 +10155,9 @@ class $$AttendanceRulesTableAnnotationComposer
 
   GeneratedColumn<String> get workEndTime => $composableBuilder(
       column: $table.workEndTime, builder: (column) => column);
+
+  GeneratedColumn<double> get hourlyWage => $composableBuilder(
+      column: $table.hourlyWage, builder: (column) => column);
 
   GeneratedColumn<int> get lateGraceMinutes => $composableBuilder(
       column: $table.lateGraceMinutes, builder: (column) => column);
@@ -10046,6 +10224,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<String> accountKey = const Value.absent(),
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
+            Value<double> hourlyWage = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
             Value<String> weekendType = const Value.absent(),
             Value<int> overtimeRoundingMinutes = const Value.absent(),
@@ -10063,6 +10242,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             accountKey: accountKey,
             workStartTime: workStartTime,
             workEndTime: workEndTime,
+            hourlyWage: hourlyWage,
             lateGraceMinutes: lateGraceMinutes,
             weekendType: weekendType,
             overtimeRoundingMinutes: overtimeRoundingMinutes,
@@ -10080,6 +10260,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<String> accountKey = const Value.absent(),
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
+            Value<double> hourlyWage = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
             Value<String> weekendType = const Value.absent(),
             Value<int> overtimeRoundingMinutes = const Value.absent(),
@@ -10097,6 +10278,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             accountKey: accountKey,
             workStartTime: workStartTime,
             workEndTime: workEndTime,
+            hourlyWage: hourlyWage,
             lateGraceMinutes: lateGraceMinutes,
             weekendType: weekendType,
             overtimeRoundingMinutes: overtimeRoundingMinutes,
@@ -10150,6 +10332,9 @@ typedef $$AttendanceRecordsTableCreateCompanionBuilder
   Value<int> overtimeMinutesRaw,
   Value<int> leaveMinutes,
   Value<double> overtimeHoursRounded,
+  Value<int> workedMinutes,
+  Value<int> payableMinutes,
+  Value<double> payableAmount,
   Value<String> source,
   Value<String?> note,
   Value<DateTime> createdAt,
@@ -10174,6 +10359,9 @@ typedef $$AttendanceRecordsTableUpdateCompanionBuilder
   Value<int> overtimeMinutesRaw,
   Value<int> leaveMinutes,
   Value<double> overtimeHoursRounded,
+  Value<int> workedMinutes,
+  Value<int> payableMinutes,
+  Value<double> payableAmount,
   Value<String> source,
   Value<String?> note,
   Value<DateTime> createdAt,
@@ -10241,6 +10429,16 @@ class $$AttendanceRecordsTableFilterComposer
   ColumnFilters<double> get overtimeHoursRounded => $composableBuilder(
       column: $table.overtimeHoursRounded,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get workedMinutes => $composableBuilder(
+      column: $table.workedMinutes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get payableMinutes => $composableBuilder(
+      column: $table.payableMinutes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get payableAmount => $composableBuilder(
+      column: $table.payableAmount, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get source => $composableBuilder(
       column: $table.source, builder: (column) => ColumnFilters(column));
@@ -10319,6 +10517,18 @@ class $$AttendanceRecordsTableOrderingComposer
       column: $table.overtimeHoursRounded,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get workedMinutes => $composableBuilder(
+      column: $table.workedMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get payableMinutes => $composableBuilder(
+      column: $table.payableMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get payableAmount => $composableBuilder(
+      column: $table.payableAmount,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get source => $composableBuilder(
       column: $table.source, builder: (column) => ColumnOrderings(column));
 
@@ -10392,6 +10602,15 @@ class $$AttendanceRecordsTableAnnotationComposer
   GeneratedColumn<double> get overtimeHoursRounded => $composableBuilder(
       column: $table.overtimeHoursRounded, builder: (column) => column);
 
+  GeneratedColumn<int> get workedMinutes => $composableBuilder(
+      column: $table.workedMinutes, builder: (column) => column);
+
+  GeneratedColumn<int> get payableMinutes => $composableBuilder(
+      column: $table.payableMinutes, builder: (column) => column);
+
+  GeneratedColumn<double> get payableAmount => $composableBuilder(
+      column: $table.payableAmount, builder: (column) => column);
+
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
@@ -10450,6 +10669,9 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             Value<int> overtimeMinutesRaw = const Value.absent(),
             Value<int> leaveMinutes = const Value.absent(),
             Value<double> overtimeHoursRounded = const Value.absent(),
+            Value<int> workedMinutes = const Value.absent(),
+            Value<int> payableMinutes = const Value.absent(),
+            Value<double> payableAmount = const Value.absent(),
             Value<String> source = const Value.absent(),
             Value<String?> note = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
@@ -10473,6 +10695,9 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             overtimeMinutesRaw: overtimeMinutesRaw,
             leaveMinutes: leaveMinutes,
             overtimeHoursRounded: overtimeHoursRounded,
+            workedMinutes: workedMinutes,
+            payableMinutes: payableMinutes,
+            payableAmount: payableAmount,
             source: source,
             note: note,
             createdAt: createdAt,
@@ -10496,6 +10721,9 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             Value<int> overtimeMinutesRaw = const Value.absent(),
             Value<int> leaveMinutes = const Value.absent(),
             Value<double> overtimeHoursRounded = const Value.absent(),
+            Value<int> workedMinutes = const Value.absent(),
+            Value<int> payableMinutes = const Value.absent(),
+            Value<double> payableAmount = const Value.absent(),
             Value<String> source = const Value.absent(),
             Value<String?> note = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
@@ -10519,6 +10747,9 @@ class $$AttendanceRecordsTableTableManager extends RootTableManager<
             overtimeMinutesRaw: overtimeMinutesRaw,
             leaveMinutes: leaveMinutes,
             overtimeHoursRounded: overtimeHoursRounded,
+            workedMinutes: workedMinutes,
+            payableMinutes: payableMinutes,
+            payableAmount: payableAmount,
             source: source,
             note: note,
             createdAt: createdAt,

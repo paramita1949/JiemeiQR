@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -187,6 +187,33 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(
                 attendanceRules,
                 attendanceRules.autoCheckinPopupText,
+              );
+            }
+          }
+          if (from < 24) {
+            if (await _hasTable('attendance_rules') &&
+                !await _hasColumn('attendance_rules', 'hourly_wage')) {
+              await m.addColumn(attendanceRules, attendanceRules.hourlyWage);
+            }
+            if (await _hasTable('attendance_records') &&
+                !await _hasColumn('attendance_records', 'worked_minutes')) {
+              await m.addColumn(
+                attendanceRecords,
+                attendanceRecords.workedMinutes,
+              );
+            }
+            if (await _hasTable('attendance_records') &&
+                !await _hasColumn('attendance_records', 'payable_minutes')) {
+              await m.addColumn(
+                attendanceRecords,
+                attendanceRecords.payableMinutes,
+              );
+            }
+            if (await _hasTable('attendance_records') &&
+                !await _hasColumn('attendance_records', 'payable_amount')) {
+              await m.addColumn(
+                attendanceRecords,
+                attendanceRecords.payableAmount,
               );
             }
           }

@@ -16,6 +16,8 @@ class AttendanceDao {
   final AppDatabase _db;
   final String accountKey;
 
+  static const int _payrollBlockMinutes = 30;
+
   static String _normalizeAccountKey(String value) {
     final trimmed = value.trim().toLowerCase();
     return trimmed.isEmpty ? 'local' : trimmed;
@@ -87,6 +89,21 @@ class AttendanceDao {
     );
   }
 
+  /// 清理当前账号的签到记录及签到附属状态，不删除计薪规则或其他业务数据。
+  Future<void> clearCurrentAccountAttendance() async {
+    await _db.transaction(() async {
+      await (_db.delete(_db.geofenceDailyStates)
+            ..where((t) => t.accountKey.equals(accountKey)))
+          .go();
+      await (_db.delete(_db.patchRequests)
+            ..where((t) => t.accountKey.equals(accountKey)))
+          .go();
+      await (_db.delete(_db.attendanceRecords)
+            ..where((t) => t.accountKey.equals(accountKey)))
+          .go();
+    });
+  }
+
   Future<void> checkInOrOut({DateTime? now}) async {
     final ts = now ?? DateTime.now();
     final day = DateTime(ts.year, ts.month, ts.day);
@@ -112,13 +129,9 @@ class AttendanceDao {
     if (existing.checkOutAt != null) return;
 
     final end = _mergeDayTime(day, rule.workEndTime);
-    final rawMinutes = ts.isAfter(end) ? ts.difference(end).inMinutes : 0;
-    final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
 
     final updated = existing.copyWith(
       checkOutAt: Value(ts),
-      overtimeMinutesRaw: rawMinutes,
-      overtimeHoursRounded: roundedHours,
       isLate: existing.checkInAt != null &&
           existing.checkInAt!.isAfter(
             _mergeDayTime(day, rule.workStartTime).add(
@@ -296,6 +309,10 @@ class AttendanceDao {
     var patched = 0;
     var overtime = 0.0;
     var leaveMinutes = 0;
+    var workedMinutes = 0;
+    var payableMinutes = 0;
+    var payableAmount = 0.0;
+    var payableRecordCount = 0;
     for (final row in rows) {
       if (row.checkInAt != null || row.checkOutAt != null) present += 1;
       if (row.isLate) late += 1;
@@ -305,6 +322,10 @@ class AttendanceDao {
       if (row.patched) patched += 1;
       overtime += row.overtimeHoursRounded;
       leaveMinutes += row.leaveMinutes;
+      workedMinutes += row.workedMinutes;
+      payableMinutes += row.payableMinutes;
+      payableAmount += row.payableAmount;
+      if (row.payableMinutes > 0) payableRecordCount += 1;
     }
     final hasRecords = rows.isNotEmpty;
     final fullAttendance = hasRecords &&
@@ -324,6 +345,10 @@ class AttendanceDao {
       fullAttendance: fullAttendance,
       hasRecords: hasRecords,
       workdayCount: totalWorkdays,
+      workedMinutes: workedMinutes,
+      payableMinutes: payableMinutes,
+      payableAmount: payableAmount,
+      payableRecordCount: payableRecordCount,
     );
   }
 
@@ -342,7 +367,7 @@ class AttendanceDao {
         .get();
     return jsonEncode({
       'type': 'attendance-backup',
-      'version': 3,
+      'version': 4,
       'schemaVersion': _db.schemaVersion,
       'accountKey': accountKey,
       'exportedAt': DateTime.now().toIso8601String(),
@@ -488,13 +513,16 @@ class AttendanceDao {
       }
 
       for (final raw in rules) {
-        final row = AttendanceRule.fromJson(raw as Map<String, dynamic>);
+        final rawMap = Map<String, dynamic>.from(raw as Map<String, dynamic>);
+        rawMap.putIfAbsent('hourlyWage', () => 28.85);
+        final row = AttendanceRule.fromJson(rawMap);
         if (overwrite) {
           await _db.into(_db.attendanceRules).insert(
                 AttendanceRulesCompanion.insert(
                   accountKey: Value(accountKey),
                   workStartTime: Value(row.workStartTime),
                   workEndTime: Value(row.workEndTime),
+                  hourlyWage: Value(row.hourlyWage),
                   lateGraceMinutes: Value(row.lateGraceMinutes),
                   weekendType: Value(row.weekendType),
                   overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -519,6 +547,7 @@ class AttendanceDao {
                     accountKey: Value(accountKey),
                     workStartTime: Value(row.workStartTime),
                     workEndTime: Value(row.workEndTime),
+                    hourlyWage: Value(row.hourlyWage),
                     lateGraceMinutes: Value(row.lateGraceMinutes),
                     weekendType: Value(row.weekendType),
                     overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -539,6 +568,9 @@ class AttendanceDao {
       for (final raw in records) {
         final rawMap = Map<String, dynamic>.from(raw as Map<String, dynamic>);
         rawMap.putIfAbsent('isHoliday', () => false);
+        rawMap.putIfAbsent('workedMinutes', () => 0);
+        rawMap.putIfAbsent('payableMinutes', () => 0);
+        rawMap.putIfAbsent('payableAmount', () => 0.0);
         final row = AttendanceRecord.fromJson(rawMap);
         final sameDay = await (_db.select(_db.attendanceRecords)
               ..where((t) =>
@@ -563,6 +595,9 @@ class AttendanceDao {
                   overtimeMinutesRaw: Value(row.overtimeMinutesRaw),
                   leaveMinutes: Value(row.leaveMinutes),
                   overtimeHoursRounded: Value(row.overtimeHoursRounded),
+                  workedMinutes: Value(row.workedMinutes),
+                  payableMinutes: Value(row.payableMinutes),
+                  payableAmount: Value(row.payableAmount),
                   source: Value(row.source),
                   note: Value(row.note),
                   createdAt: Value(row.createdAt),
@@ -847,6 +882,12 @@ class AttendanceDao {
             ? checkOut.difference(workEnd).inMinutes
             : 0;
     final roundedHours = (rawMinutes ~/ rule.overtimeRoundingMinutes) * 0.5;
+    final workedMinutes = _calculateWorkedMinutes(checkIn, checkOut);
+    final payableMinutes = _calculatePayableMinutes(workedMinutes);
+    final payableAmount = _calculatePayableAmount(
+      payableMinutes,
+      rule.hourlyWage,
+    );
 
     await (_db.update(_db.attendanceRecords)..where((t) => t.id.equals(row.id)))
         .write(
@@ -860,6 +901,9 @@ class AttendanceDao {
         overtimeMinutesRaw: Value(rawMinutes),
         leaveMinutes: Value(leaveMinutes),
         overtimeHoursRounded: Value(roundedHours),
+        workedMinutes: Value(workedMinutes),
+        payableMinutes: Value(payableMinutes),
+        payableAmount: Value(payableAmount),
         isWorkday: Value(isWorkdayByRule),
         isAbsent: Value(effectiveHoliday ? false : row.isAbsent),
         isLeave: Value(effectiveHoliday ? false : row.isLeave),
@@ -870,6 +914,25 @@ class AttendanceDao {
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut) {
+    if (checkIn == null || checkOut == null || checkOut.isBefore(checkIn)) {
+      return 0;
+    }
+    return checkOut.difference(checkIn).inMinutes;
+  }
+
+  int _calculatePayableMinutes(int workedMinutes) {
+    if (workedMinutes <= 0) return 0;
+    return workedMinutes - workedMinutes % _payrollBlockMinutes;
+  }
+
+  double _calculatePayableAmount(int payableMinutes, double hourlyWage) {
+    if (payableMinutes <= 0 || !hourlyWage.isFinite || hourlyWage < 0) {
+      return 0;
+    }
+    return payableMinutes / 60 * hourlyWage;
   }
 }
 
@@ -886,6 +949,10 @@ class MonthAttendanceStats {
     required this.fullAttendance,
     required this.hasRecords,
     required this.workdayCount,
+    required this.workedMinutes,
+    required this.payableMinutes,
+    required this.payableAmount,
+    required this.payableRecordCount,
   });
 
   final int presentDays;
@@ -899,6 +966,10 @@ class MonthAttendanceStats {
   final bool fullAttendance;
   final bool hasRecords;
   final int workdayCount;
+  final int workedMinutes;
+  final int payableMinutes;
+  final double payableAmount;
+  final int payableRecordCount;
 }
 
 class GeofenceDecision {

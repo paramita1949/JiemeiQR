@@ -125,67 +125,16 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
               const SizedBox(height: 12),
               _Overview(stats: _stats, month: _month),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  _miniMetric(
-                    '加班',
-                    _stats == null
-                        ? '--'
-                        : '${_stats!.overtimeHours.toStringAsFixed(1)}h',
-                  ),
-                  const SizedBox(width: 8),
-                  _miniMetric(
-                    '请假时长',
-                    _stats == null
-                        ? '--'
-                        : _leaveDuration(_stats!.leaveMinutes),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
               _TableCard(
-                title: '上下班明细',
-                headers: const ['日期', '上班/下班', '状态'],
+                title: '签到明细',
+                headers: const ['日期', '上班/下班', '实际工时', '计薪金额'],
                 collapseWhenMoreThan: 5,
-                rows: _rows.map((r) {
-                  final hasBoth = r.checkInAt != null && r.checkOutAt != null;
-                  final status = (!r.isWorkday && hasBoth)
-                      ? '休息日'
-                      : r.isHoliday
-                          ? '假期'
-                          : r.isLeave
-                              ? '请假'
-                              : r.isAbsent
-                                  ? '请假'
-                                  : r.isLate
-                                      ? '迟到'
-                                      : ((r.checkInAt != null) ^
-                                              (r.checkOutAt != null))
-                                          ? '未完成'
-                                          : (r.checkInAt != null &&
-                                                  r.checkOutAt != null
-                                              ? '正常'
-                                              : '无记录');
-                  return [
-                    _md(r.day),
-                    '${r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!)} / ${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
-                    status,
-                  ];
-                }).toList(),
-                loading: _loading,
-              ),
-              const SizedBox(height: 12),
-              _TableCard(
-                title: '加班明细',
-                headers: const ['日期', '时间段', '小时'],
                 rows: _rows
-                    .where((r) => r.overtimeHoursRounded > 0)
                     .map((r) => [
                           _md(r.day),
-                          (!r.isWorkday || r.isHoliday)
-                              ? '${r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!)}-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}'
-                              : '17:00-${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
-                          r.overtimeHoursRounded.toStringAsFixed(1),
+                          '${r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!)} / ${r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!)}',
+                          _formatHours(r.workedMinutes),
+                          '¥${r.payableAmount.toStringAsFixed(2)}',
                         ])
                     .toList(),
                 loading: _loading,
@@ -243,38 +192,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     );
   }
 
-  Widget _miniMetric(String title, String value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-            const SizedBox(height: 4),
-            Text(value,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 28)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _leaveDuration(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    if (h == 0) return '$m分钟';
-    if (m == 0) return '$h小时';
-    return '$h小时$m分';
-  }
-
   bool _containsMonth(List<DateTime> months, DateTime month) {
     for (final m in months) {
       if (m.year == month.year && m.month == month.month) return true;
@@ -329,11 +246,30 @@ class _Overview extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _OverviewMetric(label: '出勤', value: s?.presentDays),
+              _OverviewMetric(
+                label: '实际工时',
+                value: s == null ? null : _formatHours(s.workedMinutes),
+              ),
               const SizedBox(width: 10),
-              _OverviewMetric(label: '请假', value: s?.leaveDays),
+              _OverviewMetric(
+                label: '可计薪工时',
+                value: s == null ? null : _formatHours(s.payableMinutes),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _OverviewMetric(
+                label: '累计工资',
+                value:
+                    s == null ? null : '¥${s.payableAmount.toStringAsFixed(2)}',
+              ),
               const SizedBox(width: 10),
-              _OverviewMetric(label: '迟到', value: s?.lateCount),
+              _OverviewMetric(
+                label: '计薪记录数',
+                value: s == null ? null : '${s.payableRecordCount}',
+              ),
             ],
           ),
         ],
@@ -349,7 +285,7 @@ class _OverviewMetric extends StatelessWidget {
   });
 
   final String label;
-  final int? value;
+  final String? value;
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +316,7 @@ class _OverviewMetric extends StatelessWidget {
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
-                value == null ? '--' : value.toString(),
+                value ?? '--',
                 maxLines: 1,
                 style: const TextStyle(
                   color: Colors.white,
@@ -594,3 +530,5 @@ String _weekLabel(DateTime day) {
 
 String _hhmm(DateTime ts) =>
     '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+
+String _formatHours(int minutes) => '${(minutes / 60).toStringAsFixed(1)}h';

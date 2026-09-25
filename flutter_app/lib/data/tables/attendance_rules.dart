@@ -6,6 +6,7 @@ class AttendanceRules extends Table {
   TextColumn get accountKey => text().withDefault(const Constant('local'))();
   TextColumn get workStartTime => text().withDefault(const Constant('08:00'))();
   TextColumn get workEndTime => text().withDefault(const Constant('17:00'))();
+  RealColumn get hourlyWage => real().withDefault(const Constant(28.85))();
   IntColumn get lateGraceMinutes => integer().withDefault(const Constant(0))();
   TextColumn get weekendType => text().withDefault(const Constant('double'))();
   IntColumn get overtimeRoundingMinutes =>

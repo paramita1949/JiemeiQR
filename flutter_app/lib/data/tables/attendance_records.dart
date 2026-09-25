@@ -23,6 +23,9 @@ class AttendanceRecords extends Table {
   IntColumn get leaveMinutes => integer().withDefault(const Constant(0))();
   RealColumn get overtimeHoursRounded =>
       real().withDefault(const Constant(0.0))();
+  IntColumn get workedMinutes => integer().withDefault(const Constant(0))();
+  IntColumn get payableMinutes => integer().withDefault(const Constant(0))();
+  RealColumn get payableAmount => real().withDefault(const Constant(0.0))();
 
   TextColumn get source => text().withDefault(const Constant('manual'))();
   TextColumn get note => text().nullable()();

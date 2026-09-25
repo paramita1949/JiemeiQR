@@ -9,8 +9,6 @@ import 'package:qrscan_flutter/features/attendance/attendance_record_edit_screen
 import 'package:qrscan_flutter/features/attendance/attendance_rule_screen.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_stats_screen.dart';
 
-enum _StatusFilter { all, late, absent, holiday }
-
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({
     super.key,
@@ -32,7 +30,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   MonthAttendanceStats? _stats;
   List<AttendanceRecord> _rows = const [];
   bool _loading = true;
-  _StatusFilter _filter = _StatusFilter.all;
   DateTime _lastRefreshDay = DateTime.now();
   bool _crossDayRefreshQueued = false;
 
@@ -143,19 +140,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
     if (changed == true) {
       await _reload();
-    }
-  }
-
-  List<AttendanceRecord> get _filteredRows {
-    switch (_filter) {
-      case _StatusFilter.all:
-        return _rows;
-      case _StatusFilter.late:
-        return _rows.where((r) => r.isLate).toList();
-      case _StatusFilter.absent:
-        return _rows.where((r) => r.isAbsent).toList();
-      case _StatusFilter.holiday:
-        return _rows.where((r) => r.isHoliday).toList();
     }
   }
 
@@ -270,16 +254,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        _filterChip('全部', _StatusFilter.all),
-                        _filterChip('迟到', _StatusFilter.late),
-                        _filterChip('请假', _StatusFilter.absent),
-                        _filterChip('假期', _StatusFilter.holiday),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
                     if (_loading)
                       const Center(
                         child: Padding(
@@ -287,10 +261,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           child: CircularProgressIndicator(),
                         ),
                       )
-                    else if (_filteredRows.isEmpty)
+                    else if (_rows.isEmpty)
                       const _EmptyState(text: '暂无记录')
                     else
-                      ..._filteredRows.map(
+                      ..._rows.map(
                         (r) => _DetailCard(
                           row: r,
                           onTap: () => _openEdit(r),
@@ -304,48 +278,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _filterChip(String text, _StatusFilter filter) {
-    final selected = _filter == filter;
-    Color bg;
-    Color fg;
-    if (selected) {
-      bg = const Color(0xFF1D4ED8);
-      fg = Colors.white;
-    } else {
-      switch (filter) {
-        case _StatusFilter.late:
-          bg = const Color(0xFFEDE9FE);
-          fg = const Color(0xFF4338CA);
-          break;
-        case _StatusFilter.absent:
-          bg = const Color(0xFFFEF3C7);
-          fg = const Color(0xFF92400E);
-          break;
-        case _StatusFilter.holiday:
-          bg = const Color(0xFFE0ECFF);
-          fg = const Color(0xFF1D4ED8);
-          break;
-        case _StatusFilter.all:
-          bg = const Color(0xFFE2E8F0);
-          fg = const Color(0xFF334155);
-          break;
-      }
-    }
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => setState(() => _filter = filter),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(text,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -520,19 +452,19 @@ class _MonthSummaryCard extends StatelessWidget {
       child: Row(
         children: [
           _SummaryMetric(
-            label: monthLabel,
-            value: s == null ? '--' : '${s.presentDays}天',
+            label: '实际工时',
+            value: s == null ? '--' : _formatHours(s.workedMinutes),
             color: const Color(0xFF1D4ED8),
           ),
           _SummaryMetric(
-            label: '迟到',
-            value: s == null ? '--' : '${s.lateCount}',
-            color: const Color(0xFF7C3AED),
+            label: '可计薪工时',
+            value: s == null ? '--' : _formatHours(s.payableMinutes),
+            color: const Color(0xFF0F766E),
           ),
           _SummaryMetric(
-            label: '加班',
-            value: s == null ? '--' : '${s.overtimeHours.toStringAsFixed(1)}h',
-            color: const Color(0xFF0F766E),
+            label: '累计工资',
+            value: s == null ? '--' : '¥${s.payableAmount.toStringAsFixed(2)}',
+            color: const Color(0xFF7C3AED),
           ),
         ],
       ),
@@ -603,28 +535,6 @@ class _DetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = _status(row);
-    final isLate = status == '迟到';
-    final isAbsent = status == '请假';
-    final isHoliday = row.isHoliday;
-    final isPending = status == '未完成' || status == '待下班';
-    final bg = isAbsent
-        ? const Color(0xFFFEF2F2)
-        : isHoliday
-            ? const Color(0xFFEFF6FF)
-            : isLate
-                ? const Color(0xFFFFF7ED)
-                : const Color(0xFFF8FAFC);
-    final fg = isAbsent
-        ? const Color(0xFF991B1B)
-        : isHoliday
-            ? const Color(0xFF1D4ED8)
-            : isLate
-                ? const Color(0xFF9A3412)
-                : const Color(0xFF334155);
-    final overtimeText = row.overtimeHoursRounded > 0
-        ? '+${row.overtimeHoursRounded.toStringAsFixed(1)}h'
-        : '';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -632,74 +542,68 @@ class _DetailCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: bg,
+          color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                '${_md(row.day)}  ${_timeRange(row)}',
-                style: TextStyle(
-                    color: fg, fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-            ),
-            if (overtimeText.isNotEmpty)
-              Text(overtimeText,
-                  style: const TextStyle(
-                      color: Color(0xFF1D4ED8),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16)),
-            if (overtimeText.isEmpty)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isAbsent
-                      ? const Color(0xFFDC2626)
-                      : isLate
-                          ? const Color(0xFFF59E0B)
-                          : isPending
-                              ? const Color(0xFF3B82F6)
-                              : const Color(0xFF94A3B8),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(status,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _md(row.day),
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14)),
-              ),
+                      color: Color(0xFF0F172A),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Text(
+                  '¥${row.payableAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Color(0xFF1D4ED8),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '上班 ${row.checkInAt == null ? '--:--' : _hhmm(row.checkInAt!)}',
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '下班 ${row.checkOutAt == null ? '--:--' : _hhmm(row.checkOutAt!)}',
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  '实际 ${_formatHours(row.workedMinutes)}',
+                  style: const TextStyle(
+                    color: Color(0xFF0F766E),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
-  }
-
-  String _status(AttendanceRecord r) {
-    final now = DateTime.now();
-    final isToday = r.day.year == now.year &&
-        r.day.month == now.month &&
-        r.day.day == now.day;
-    final hasCheckIn = r.checkInAt != null;
-    final hasCheckOut = r.checkOutAt != null;
-    if (r.isLeave) return '请假';
-    if (r.isAbsent) return '请假';
-    if (r.isLate) return '迟到';
-    if (isToday && hasCheckIn && !hasCheckOut) return '待下班';
-    if (hasCheckIn ^ hasCheckOut) return '未完成';
-    if (hasCheckIn && hasCheckOut && r.checkOutAt!.isBefore(r.checkInAt!)) {
-      return '异常';
-    }
-    if (hasCheckIn && hasCheckOut) return '正常';
-    if (r.isException) return '异常';
-    return '无记录';
-  }
-
-  String _timeRange(AttendanceRecord r) {
-    final a = r.checkInAt == null ? '--:--' : _hhmm(r.checkInAt!);
-    final b = r.checkOutAt == null ? '--:--' : _hhmm(r.checkOutAt!);
-    return '$a / $b';
   }
 }
 
@@ -726,3 +630,5 @@ String _weekLabel(DateTime day) {
 
 String _hhmm(DateTime ts) =>
     '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+
+String _formatHours(int minutes) => '${(minutes / 60).toStringAsFixed(1)}h';
