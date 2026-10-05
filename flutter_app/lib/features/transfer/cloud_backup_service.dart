@@ -147,9 +147,9 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
     HttpClient? httpClient,
   }) : _httpClient = httpClient;
 
-  static const defaultProjectUrl = 'https://zqszqeawedogbuydwfdv.supabase.co';
+  static const defaultProjectUrl = 'https://qplkpotfchqkxoknkixz.supabase.co';
   static const defaultPublishableKey =
-      'sb_publishable_t8bFXn5R3E4MCaMegvxEhw_3YW7ZOtV';
+      'sb_publishable_XAheNNwtD-84-QR6h7CVEA_QkoogYG0';
   static const defaultBucketName = 'qrscan-backups';
   static const defaultObjectPath = 'latest/jiemei-backup.jiemei';
   static const accountManagerFunction = 'qrscan-account-admin';
