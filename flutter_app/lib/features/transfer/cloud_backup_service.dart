@@ -399,30 +399,60 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
     Map<String, String> query = const {},
     Map<String, String> headers = const {},
     Map<String, Object?>? body,
+    bool retryable = false,
   }) async {
-    final client = _httpClient ?? HttpClient();
-    try {
-      final request = await client.openUrl(method, _uri(path, query));
-      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      headers.forEach(request.headers.set);
-      if (body != null) {
-        request.write(jsonEncode(body));
-      }
-      final response = await request.close();
-      final text = await response.transform(utf8.decoder).join();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw CloudBackupRequestException(
-          statusCode: response.statusCode,
-          message: text,
-        );
-      }
-      final decoded = jsonDecode(text);
-      return decoded is Map<String, Object?> ? decoded : <String, Object?>{};
-    } finally {
-      if (_httpClient == null) {
-        client.close(force: true);
+    final attempts = retryable ? 3 : 1;
+    Object? lastError;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      final client = _httpClient ?? HttpClient();
+      client.connectionTimeout = const Duration(seconds: 20);
+      client.idleTimeout = const Duration(seconds: 20);
+      try {
+        final request = await client.openUrl(method, _uri(path, query));
+        request.persistentConnection = false;
+        request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+        headers.forEach(request.headers.set);
+        if (body != null) {
+          request.write(jsonEncode(body));
+        }
+        final response = await request.close();
+        final text = await response.transform(utf8.decoder).join();
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw CloudBackupRequestException(
+            statusCode: response.statusCode,
+            message: text,
+          );
+        }
+        final decoded = jsonDecode(text);
+        return decoded is Map<String, Object?> ? decoded : <String, Object?>{};
+      } on SocketException catch (error) {
+        lastError = error;
+        if (attempt >= attempts) {
+          throw CloudBackupRequestException(
+            statusCode: 0,
+            message: error.toString(),
+          );
+        }
+        await Future<void>.delayed(Duration(milliseconds: attempt * 350));
+      } on HandshakeException catch (error) {
+        lastError = error;
+        if (attempt >= attempts) {
+          throw CloudBackupRequestException(
+            statusCode: 0,
+            message: error.toString(),
+          );
+        }
+        await Future<void>.delayed(Duration(milliseconds: attempt * 350));
+      } finally {
+        if (_httpClient == null) {
+          client.close(force: true);
+        }
       }
     }
+    throw CloudBackupRequestException(
+      statusCode: 0,
+      message: lastError?.toString() ?? 'Unknown network error',
+    );
   }
 
   Future<List<Object?>> _sendJsonList({
@@ -469,6 +499,7 @@ class SupabaseCloudBackupApi implements CloudBackupApi {
         'apikey': publishableKey,
       },
       body: body,
+      retryable: body['action'] == 'list',
     );
   }
 
@@ -872,6 +903,9 @@ class CloudBackupRequestException implements Exception {
 
   String get debugMessage {
     final normalized = _compactMessage(message);
+    if (statusCode == 0) {
+      return '云端连接失败，请检查网络后重试';
+    }
     if (_looksLikeInvalidLogin(normalized)) {
       return '账号或密码错误，请重新输入';
     }

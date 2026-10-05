@@ -1488,7 +1488,7 @@ class _CloudAccountManagerDialogState
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorText = '$error');
+        setState(() => _errorText = '云端连接失败，请检查网络后重试');
       }
     } finally {
       if (mounted) {
@@ -1511,7 +1511,7 @@ class _CloudAccountManagerDialogState
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorText = '$error');
+        setState(() => _errorText = '云端连接失败，请检查网络后重试');
       }
     } finally {
       if (mounted) {
