@@ -32,6 +32,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _loading = true;
   bool _cloudBusy = false;
   final _wageController = TextEditingController();
+  final _restMinutesController = TextEditingController();
+  String? _restMinutesError;
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   final _autoCheckinPopupTextController = TextEditingController();
@@ -67,6 +69,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   @override
   void dispose() {
     _wageController.dispose();
+    _restMinutesController.dispose();
     _latController.dispose();
     _lngController.dispose();
     _autoCheckinPopupTextController.dispose();
@@ -75,7 +78,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   Future<void> _load() async {
     final rule = await _dao.getRule();
+    if (!mounted) return;
     _wageController.text = rule.hourlyWage.toStringAsFixed(2);
+    _restMinutesController.text = rule.restMinutes.toString();
+    _restMinutesError = null;
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
     _autoCheckinPopupTextController.text = rule.autoCheckinPopupText ?? '';
@@ -107,9 +113,21 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   }
 
   Future<void> _save() async {
+    final restMinutes = int.tryParse(_restMinutesController.text.trim());
+    if (restMinutes == null ||
+        restMinutes < 0 ||
+        restMinutes > Duration.minutesPerDay) {
+      setState(() => _restMinutesError = '请输入0到1440的整数分钟');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('休息时间无效，请输入0到1440的整数分钟')),
+      );
+      return;
+    }
+    setState(() => _restMinutesError = null);
     await _dao.saveRule(
       AttendanceRulesCompanion(
         hourlyWage: Value(double.tryParse(_wageController.text.trim()) ?? 0),
+        restMinutes: Value(restMinutes),
         officeLat: Value(double.tryParse(_latController.text.trim())),
         officeLng: Value(double.tryParse(_lngController.text.trim())),
         officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
@@ -298,6 +316,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         accountKey: widget.accountKey,
       );
       await _dao.importAttendanceJson(jsonText, overwrite: true);
+      await _load();
       if (!mounted) return;
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
@@ -443,11 +462,18 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             _wageController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
+          _rowField(
+            '每日休息时间（分钟）',
+            _restMinutesController,
+            key: const Key('restMinutesField'),
+            keyboardType: TextInputType.number,
+            errorText: _restMinutesError,
+          ),
           const SizedBox(height: 6),
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '普通日按签到到签退时长扣除1小时休息，最低为0；标记假期不扣休息。每满30分钟计薪，不足部分舍去。',
+              '填0不扣休息；填60每天扣1小时，可自定义分钟数。普通日按设置扣除，最低为0；标记假期不扣。每满30分钟计薪，不足部分舍去。保存后已有记录也按新休息时间重算。',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
@@ -806,6 +832,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     TextEditingController controller, {
     Key? key,
     TextInputType? keyboardType,
+    String? errorText,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -815,6 +842,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
+          errorText: errorText,
           isDense: true,
           filled: true,
           fillColor: const Color(0xFFF7F9FE),

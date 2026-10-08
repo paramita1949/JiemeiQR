@@ -16,7 +16,6 @@ class AttendanceDao {
   final String accountKey;
 
   static const int _payrollBlockMinutes = 30;
-  static const int _dailyRestMinutes = 60;
 
   static String _normalizeAccountKey(String value) {
     final trimmed = value.trim().toLowerCase();
@@ -80,6 +79,9 @@ class AttendanceDao {
   }
 
   Future<void> saveRule(AttendanceRulesCompanion companion) async {
+    if (companion.restMinutes.present) {
+      _validateRestMinutes(companion.restMinutes.value);
+    }
     final rule = await getRule();
     await (_db.update(_db.attendanceRules)
           ..where(
@@ -506,7 +508,9 @@ class AttendanceDao {
       for (final raw in rules) {
         final rawMap = Map<String, dynamic>.from(raw as Map<String, dynamic>);
         rawMap.putIfAbsent('hourlyWage', () => 28.85);
+        rawMap.putIfAbsent('restMinutes', () => 60);
         final row = AttendanceRule.fromJson(rawMap);
+        _validateRestMinutes(row.restMinutes);
         if (overwrite) {
           await _db.into(_db.attendanceRules).insert(
                 AttendanceRulesCompanion.insert(
@@ -514,6 +518,7 @@ class AttendanceDao {
                   workStartTime: Value(row.workStartTime),
                   workEndTime: Value(row.workEndTime),
                   hourlyWage: Value(row.hourlyWage),
+                  restMinutes: Value(row.restMinutes),
                   lateGraceMinutes: Value(row.lateGraceMinutes),
                   weekendType: Value(row.weekendType),
                   overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -539,6 +544,7 @@ class AttendanceDao {
                     workStartTime: Value(row.workStartTime),
                     workEndTime: Value(row.workEndTime),
                     hourlyWage: Value(row.hourlyWage),
+                    restMinutes: Value(row.restMinutes),
                     lateGraceMinutes: Value(row.lateGraceMinutes),
                     weekendType: Value(row.weekendType),
                     overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -676,6 +682,7 @@ class AttendanceDao {
       checkIn,
       checkOut,
       isHoliday: row.isHoliday,
+      restMinutes: rule.restMinutes,
     );
     final payableMinutes = _calculatePayableMinutes(workedMinutes);
     final payableAmount = _calculatePayableAmount(
@@ -715,13 +722,15 @@ class AttendanceDao {
     List<AttendanceRecord> rows,
   ) async {
     final refreshed = <AttendanceRecord>[];
-    AttendanceRule? rule;
+    if (rows.isEmpty) return rows;
+    final rule = await getRule();
     await _db.transaction(() async {
       for (final row in rows) {
         final worked = _calculateWorkedMinutes(
           row.checkInAt,
           row.checkOutAt,
           isHoliday: row.isHoliday,
+          restMinutes: rule.restMinutes,
         );
         final payable = _calculatePayableMinutes(worked);
         if (worked == row.workedMinutes && payable == row.payableMinutes) {
@@ -731,7 +740,7 @@ class AttendanceDao {
         // 已计薪记录沿用当时的时薪，不能用现在的规则覆盖历史工资单价。
         final wage = row.payableMinutes > 0
             ? row.payableAmount * 60 / row.payableMinutes
-            : (rule ??= await getRule()).hourlyWage;
+            : rule.hourlyWage;
         final amount = payable == row.payableMinutes
             ? row.payableAmount
             : _calculatePayableAmount(payable, wage);
@@ -754,14 +763,20 @@ class AttendanceDao {
   }
 
   int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut,
-      {required bool isHoliday}) {
+      {required bool isHoliday, required int restMinutes}) {
     if (checkIn == null || checkOut == null || checkOut.isBefore(checkIn)) {
       return 0;
     }
     final elapsed = checkOut.difference(checkIn).inMinutes;
     // 仅手动标记的假期不扣休息；普通日净工时最低为零。
     if (isHoliday) return elapsed;
-    return elapsed > _dailyRestMinutes ? elapsed - _dailyRestMinutes : 0;
+    return elapsed > restMinutes ? elapsed - restMinutes : 0;
+  }
+
+  void _validateRestMinutes(int minutes) {
+    if (minutes < 0 || minutes > Duration.minutesPerDay) {
+      throw ArgumentError.value(minutes, 'restMinutes', '休息时间须为0到1440分钟');
+    }
   }
 
   int _calculatePayableMinutes(int workedMinutes) {

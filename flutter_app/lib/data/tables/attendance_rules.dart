@@ -7,6 +7,8 @@ class AttendanceRules extends Table {
   TextColumn get workStartTime => text().withDefault(const Constant('08:00'))();
   TextColumn get workEndTime => text().withDefault(const Constant('17:00'))();
   RealColumn get hourlyWage => real().withDefault(const Constant(28.85))();
+  /// 每日休息分钟数；0 表示不扣休息，初始值沿用原规则。
+  IntColumn get restMinutes => integer().withDefault(const Constant(60))();
   IntColumn get lateGraceMinutes => integer().withDefault(const Constant(0))();
   TextColumn get weekendType => text().withDefault(const Constant('double'))();
   IntColumn get overtimeRoundingMinutes =>
