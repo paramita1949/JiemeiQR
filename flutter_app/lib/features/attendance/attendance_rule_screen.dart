@@ -447,7 +447,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '只按签到到签退的实际总时长计算；每满30分钟计薪，不足部分舍去。',
+              '普通日按签到到签退时长扣除1小时休息，最低为0；标记假期不扣休息。每满30分钟计薪，不足部分舍去。',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),

@@ -16,6 +16,7 @@ class AttendanceDao {
   final String accountKey;
 
   static const int _payrollBlockMinutes = 30;
+  static const int _dailyRestMinutes = 60;
 
   static String _normalizeAccountKey(String value) {
     final trimmed = value.trim().toLowerCase();
@@ -270,7 +271,7 @@ class AttendanceDao {
               t.day.isSmallerThanValue(to))
           ..orderBy([(t) => OrderingTerm.desc(t.day)]))
         .get();
-    return rows;
+    return _refreshCalculatedHours(rows);
   }
 
   Future<List<DateTime>> recordedMonths() async {
@@ -344,9 +345,11 @@ class AttendanceDao {
     final rules = await (_db.select(_db.attendanceRules)
           ..where((t) => t.accountKey.equals(accountKey)))
         .get();
-    final records = await (_db.select(_db.attendanceRecords)
-          ..where((t) => t.accountKey.equals(accountKey)))
-        .get();
+    final records = await _refreshCalculatedHours(
+      await (_db.select(_db.attendanceRecords)
+            ..where((t) => t.accountKey.equals(accountKey)))
+          .get(),
+    );
     final requests = await (_db.select(_db.patchRequests)
           ..where((t) => t.accountKey.equals(accountKey)))
         .get();
@@ -635,6 +638,11 @@ class AttendanceDao {
               );
         }
       }
+      await _refreshCalculatedHours(
+        await (_db.select(_db.attendanceRecords)
+              ..where((t) => t.accountKey.equals(accountKey)))
+            .get(),
+      );
     });
   }
 
@@ -664,7 +672,11 @@ class AttendanceDao {
         (checkIn != null && checkOut != null && checkOut.isBefore(checkIn));
     final needsPatch = exception;
     final patched = row.patched || (row.needsPatch && !needsPatch);
-    final workedMinutes = _calculateWorkedMinutes(checkIn, checkOut);
+    final workedMinutes = _calculateWorkedMinutes(
+      checkIn,
+      checkOut,
+      isHoliday: row.isHoliday,
+    );
     final payableMinutes = _calculatePayableMinutes(workedMinutes);
     final payableAmount = _calculatePayableAmount(
       payableMinutes,
@@ -689,7 +701,7 @@ class AttendanceDao {
         isWorkday: const Value(true),
         isAbsent: const Value(false),
         isLeave: const Value(false),
-        isHoliday: const Value(false),
+        isHoliday: Value(row.isHoliday),
         patched: Value(patched),
         source: Value(row.source),
         note: Value(row.note),
@@ -698,11 +710,58 @@ class AttendanceDao {
     );
   }
 
-  int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut) {
+  /// 旧记录和旧备份从原始时间重算，只更新派生工时，避免重复扣休息。
+  Future<List<AttendanceRecord>> _refreshCalculatedHours(
+    List<AttendanceRecord> rows,
+  ) async {
+    final refreshed = <AttendanceRecord>[];
+    AttendanceRule? rule;
+    await _db.transaction(() async {
+      for (final row in rows) {
+        final worked = _calculateWorkedMinutes(
+          row.checkInAt,
+          row.checkOutAt,
+          isHoliday: row.isHoliday,
+        );
+        final payable = _calculatePayableMinutes(worked);
+        if (worked == row.workedMinutes && payable == row.payableMinutes) {
+          refreshed.add(row);
+          continue;
+        }
+        // 已计薪记录沿用当时的时薪，不能用现在的规则覆盖历史工资单价。
+        final wage = row.payableMinutes > 0
+            ? row.payableAmount * 60 / row.payableMinutes
+            : (rule ??= await getRule()).hourlyWage;
+        final amount = payable == row.payableMinutes
+            ? row.payableAmount
+            : _calculatePayableAmount(payable, wage);
+        await (_db.update(_db.attendanceRecords)
+              ..where(
+                  (t) => t.id.equals(row.id) & t.accountKey.equals(accountKey)))
+            .write(AttendanceRecordsCompanion(
+          workedMinutes: Value(worked),
+          payableMinutes: Value(payable),
+          payableAmount: Value(amount),
+        ));
+        refreshed.add(row.copyWith(
+          workedMinutes: worked,
+          payableMinutes: payable,
+          payableAmount: amount,
+        ));
+      }
+    });
+    return refreshed;
+  }
+
+  int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut,
+      {required bool isHoliday}) {
     if (checkIn == null || checkOut == null || checkOut.isBefore(checkIn)) {
       return 0;
     }
-    return checkOut.difference(checkIn).inMinutes;
+    final elapsed = checkOut.difference(checkIn).inMinutes;
+    // 仅手动标记的假期不扣休息；普通日净工时最低为零。
+    if (isHoliday) return elapsed;
+    return elapsed > _dailyRestMinutes ? elapsed - _dailyRestMinutes : 0;
   }
 
   int _calculatePayableMinutes(int workedMinutes) {

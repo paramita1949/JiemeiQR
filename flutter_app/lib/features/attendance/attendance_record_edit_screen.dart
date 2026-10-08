@@ -124,7 +124,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
           ),
           SwitchListTile(
             title: const Text('假期'),
-            subtitle: const Text('标记后按假期加班日计算'),
+            subtitle: const Text('标记后按完整签到时长计算，不扣1小时休息'),
             value: _holiday,
             onChanged: (v) => setState(() {
               _holiday = v;
@@ -148,7 +148,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
             const Padding(
               padding: EdgeInsets.only(top: 4, bottom: 12),
               child: Text(
-                '保存后将按上班到下班的实际时长计算加班。',
+                '假期不扣休息时间；仍按每满30分钟计薪，不足部分舍去。',
                 style: TextStyle(color: Color(0xFF475569)),
               ),
             ),
