@@ -13,10 +13,12 @@ class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({
     super.key,
     required this.database,
+    this.accountKey,
     this.initialImportPath,
   });
 
   final AppDatabase database;
+  final String? accountKey;
   final String? initialImportPath;
 
   @override
@@ -41,7 +43,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _loadAccountAndStart() async {
-    final accountKey = await const AttendanceAccountResolver().resolve();
+    final accountKey =
+        widget.accountKey ?? await const AttendanceAccountResolver().resolve();
     if (!mounted) return;
     _accountKey = accountKey;
     _dao = AttendanceDao(widget.database, accountKey: accountKey);
@@ -452,12 +455,7 @@ class _MonthSummaryCard extends StatelessWidget {
       child: Row(
         children: [
           _SummaryMetric(
-            label: '实际工时',
-            value: s == null ? '--' : _formatHours(s.workedMinutes),
-            color: const Color(0xFF1D4ED8),
-          ),
-          _SummaryMetric(
-            label: '可计薪工时',
+            label: '计薪工时',
             value: s == null ? '--' : _formatHours(s.payableMinutes),
             color: const Color(0xFF0F766E),
           ),
@@ -507,14 +505,17 @@ class _SummaryMetric extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 3),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF0F172A),
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ],
