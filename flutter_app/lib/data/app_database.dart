@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -221,6 +221,12 @@ class AppDatabase extends _$AppDatabase {
             if (await _hasTable('attendance_rules') &&
                 !await _hasColumn('attendance_rules', 'rest_minutes')) {
               await m.addColumn(attendanceRules, attendanceRules.restMinutes);
+            }
+          }
+          if (from < 26) {
+            if (await _hasTable('attendance_rules') &&
+                !await _hasColumn('attendance_rules', 'rest_start_time')) {
+              await m.addColumn(attendanceRules, attendanceRules.restStartTime);
             }
           }
         },

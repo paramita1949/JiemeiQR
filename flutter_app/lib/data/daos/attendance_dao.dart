@@ -79,6 +79,9 @@ class AttendanceDao {
   }
 
   Future<void> saveRule(AttendanceRulesCompanion companion) async {
+    if (companion.restStartTime.present) {
+      _parseRestStartMinutes(companion.restStartTime.value);
+    }
     if (companion.restMinutes.present) {
       _validateRestMinutes(companion.restMinutes.value);
     }
@@ -509,8 +512,10 @@ class AttendanceDao {
         final rawMap = Map<String, dynamic>.from(raw as Map<String, dynamic>);
         rawMap.putIfAbsent('hourlyWage', () => 28.85);
         rawMap.putIfAbsent('restMinutes', () => 60);
+        rawMap.putIfAbsent('restStartTime', () => '11:30');
         final row = AttendanceRule.fromJson(rawMap);
         _validateRestMinutes(row.restMinutes);
+        _parseRestStartMinutes(row.restStartTime);
         if (overwrite) {
           await _db.into(_db.attendanceRules).insert(
                 AttendanceRulesCompanion.insert(
@@ -519,6 +524,7 @@ class AttendanceDao {
                   workEndTime: Value(row.workEndTime),
                   hourlyWage: Value(row.hourlyWage),
                   restMinutes: Value(row.restMinutes),
+                  restStartTime: Value(row.restStartTime),
                   lateGraceMinutes: Value(row.lateGraceMinutes),
                   weekendType: Value(row.weekendType),
                   overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -545,6 +551,7 @@ class AttendanceDao {
                     workEndTime: Value(row.workEndTime),
                     hourlyWage: Value(row.hourlyWage),
                     restMinutes: Value(row.restMinutes),
+                    restStartTime: Value(row.restStartTime),
                     lateGraceMinutes: Value(row.lateGraceMinutes),
                     weekendType: Value(row.weekendType),
                     overtimeRoundingMinutes: Value(row.overtimeRoundingMinutes),
@@ -683,6 +690,7 @@ class AttendanceDao {
       checkOut,
       isHoliday: row.isHoliday,
       restMinutes: rule.restMinutes,
+      restStartTime: rule.restStartTime,
     );
     final payableMinutes = _calculatePayableMinutes(workedMinutes);
     final payableAmount = _calculatePayableAmount(
@@ -731,6 +739,7 @@ class AttendanceDao {
           row.checkOutAt,
           isHoliday: row.isHoliday,
           restMinutes: rule.restMinutes,
+          restStartTime: rule.restStartTime,
         );
         final payable = _calculatePayableMinutes(worked);
         if (worked == row.workedMinutes && payable == row.payableMinutes) {
@@ -763,14 +772,38 @@ class AttendanceDao {
   }
 
   int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut,
-      {required bool isHoliday, required int restMinutes}) {
+      {required bool isHoliday,
+      required int restMinutes,
+      required String restStartTime}) {
     if (checkIn == null || checkOut == null || checkOut.isBefore(checkIn)) {
       return 0;
     }
     final elapsed = checkOut.difference(checkIn).inMinutes;
-    // 仅手动标记的假期不扣休息；普通日净工时最低为零。
-    if (isHoliday) return elapsed;
-    return elapsed > restMinutes ? elapsed - restMinutes : 0;
+    if (isHoliday || restMinutes == 0) return elapsed;
+    final startMinutes = _parseRestStartMinutes(restStartTime);
+    var overlap = Duration.zero;
+    // 从前一天开始，兼容旧设置中最长24小时、可能跨夜的休息时段。
+    // 按日历日构造边界，避免跨夜班误扣没有经历的午休。
+    var day = DateTime(checkIn.year, checkIn.month, checkIn.day - 1);
+    while (!day.isAfter(checkOut)) {
+      final restStart = DateTime(
+          day.year, day.month, day.day, startMinutes ~/ 60, startMinutes % 60);
+      final restEnd = restStart.add(Duration(minutes: restMinutes));
+      final from = checkIn.isAfter(restStart) ? checkIn : restStart;
+      final to = checkOut.isBefore(restEnd) ? checkOut : restEnd;
+      if (to.isAfter(from)) overlap += to.difference(from);
+      day = DateTime(day.year, day.month, day.day + 1);
+    }
+    final worked = checkOut.difference(checkIn) - overlap;
+    return worked.inMinutes < 0 ? 0 : worked.inMinutes;
+  }
+
+  int _parseRestStartMinutes(String time) {
+    if (!RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(time)) {
+      throw ArgumentError.value(time, 'restStartTime', '午休开始时间须为HH:mm');
+    }
+    final parts = time.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 
   void _validateRestMinutes(int minutes) {

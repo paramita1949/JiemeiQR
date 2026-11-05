@@ -32,8 +32,10 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _loading = true;
   bool _cloudBusy = false;
   final _wageController = TextEditingController();
-  final _restMinutesController = TextEditingController();
-  String? _restMinutesError;
+  bool _restEnabled = true;
+  TimeOfDay _restStart = const TimeOfDay(hour: 11, minute: 30);
+  TimeOfDay _restEnd = const TimeOfDay(hour: 12, minute: 30);
+  String? _restTimeError;
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   final _autoCheckinPopupTextController = TextEditingController();
@@ -69,7 +71,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   @override
   void dispose() {
     _wageController.dispose();
-    _restMinutesController.dispose();
     _latController.dispose();
     _lngController.dispose();
     _autoCheckinPopupTextController.dispose();
@@ -80,8 +81,15 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     final rule = await _dao.getRule();
     if (!mounted) return;
     _wageController.text = rule.hourlyWage.toStringAsFixed(2);
-    _restMinutesController.text = rule.restMinutes.toString();
-    _restMinutesError = null;
+    final parts = rule.restStartTime.split(':');
+    final startMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    _restEnabled = rule.restMinutes > 0;
+    _restStart = TimeOfDay(hour: startMinutes ~/ 60, minute: startMinutes % 60);
+    final endMinutes =
+        (startMinutes + (rule.restMinutes > 0 ? rule.restMinutes : 60)) %
+            Duration.minutesPerDay;
+    _restEnd = TimeOfDay(hour: endMinutes ~/ 60, minute: endMinutes % 60);
+    _restTimeError = null;
     _latController.text = rule.officeLat?.toString() ?? '';
     _lngController.text = rule.officeLng?.toString() ?? '';
     _autoCheckinPopupTextController.text = rule.autoCheckinPopupText ?? '';
@@ -113,21 +121,24 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   }
 
   Future<void> _save() async {
-    final restMinutes = int.tryParse(_restMinutesController.text.trim());
-    if (restMinutes == null ||
-        restMinutes < 0 ||
-        restMinutes > Duration.minutesPerDay) {
-      setState(() => _restMinutesError = '请输入0到1440的整数分钟');
+    final restMinutes = _restEnabled
+        ? _restEnd.hour * 60 +
+            _restEnd.minute -
+            (_restStart.hour * 60 + _restStart.minute)
+        : 0;
+    if (_restEnabled && restMinutes <= 0) {
+      setState(() => _restTimeError = '午休结束时间须晚于开始时间');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('休息时间无效，请输入0到1440的整数分钟')),
+        const SnackBar(content: Text('午休结束时间须晚于开始时间')),
       );
       return;
     }
-    setState(() => _restMinutesError = null);
+    setState(() => _restTimeError = null);
     await _dao.saveRule(
       AttendanceRulesCompanion(
         hourlyWage: Value(double.tryParse(_wageController.text.trim()) ?? 0),
         restMinutes: Value(restMinutes),
+        restStartTime: Value(_formatRestTime(_restStart)),
         officeLat: Value(double.tryParse(_latController.text.trim())),
         officeLng: Value(double.tryParse(_lngController.text.trim())),
         officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
@@ -462,22 +473,87 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             _wageController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
-          _rowField(
-            '每日休息时间（分钟）',
-            _restMinutesController,
-            key: const Key('restMinutesField'),
-            keyboardType: TextInputType.number,
-            errorText: _restMinutesError,
+          SwitchListTile.adaptive(
+            key: const Key('restEnabledSwitch'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('扣除午休'),
+            activeThumbColor: const Color(0xFF1D4ED8),
+            value: _restEnabled,
+            onChanged: (value) => setState(() {
+              _restEnabled = value;
+              _restTimeError = null;
+            }),
           ),
+          if (_restEnabled) ...[
+            _restTimeButton('午休开始', _restStart, true),
+            const SizedBox(height: 8),
+            _restTimeButton('午休结束', _restEnd, false),
+          ],
+          if (_restTimeError != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_restTimeError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
           const SizedBox(height: 6),
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '填0不扣休息；填60每天扣1小时，可自定义分钟数。普通日按设置扣除，最低为0；标记假期不扣。每满30分钟计薪，不足部分舍去。保存后已有记录也按新休息时间重算。',
+              '只扣打卡时段内重叠的午休，未经过午休不扣除；假期不扣。每满30分钟计薪，不足部分舍去。保存后已有记录按新午休时段重算。',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  String _formatRestTime(TimeOfDay value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+  Widget _restTimeButton(String label, TimeOfDay value, bool isStart) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        key: Key(isStart ? 'restStartTimeButton' : 'restEndTimeButton'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF2563EB),
+          side: const BorderSide(color: Color(0xFFD5DEFF)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () async {
+          final selected = await showTimePicker(
+            context: context,
+            initialTime: value,
+            helpText: label,
+            builder: (context, child) => MediaQuery(
+              data:
+                  MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+              child: child!,
+            ),
+          );
+          if (selected == null || !mounted) return;
+          setState(() {
+            if (isStart) {
+              _restStart = selected;
+            } else {
+              _restEnd = selected;
+            }
+            _restTimeError = null;
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Text(label),
+              const Spacer(),
+              Text(_formatRestTime(value)),
+              const SizedBox(width: 8),
+              const Icon(Icons.schedule, size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }

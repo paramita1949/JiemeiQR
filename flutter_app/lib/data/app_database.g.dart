@@ -2564,6 +2564,14 @@ class $AttendanceRulesTable extends AttendanceRules
       type: DriftSqlType.double,
       requiredDuringInsert: false,
       defaultValue: const Constant(28.85));
+  static const VerificationMeta _restStartTimeMeta =
+      const VerificationMeta('restStartTime');
+  @override
+  late final GeneratedColumn<String> restStartTime = GeneratedColumn<String>(
+      'rest_start_time', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('11:30'));
   static const VerificationMeta _restMinutesMeta =
       const VerificationMeta('restMinutes');
   @override
@@ -2667,6 +2675,7 @@ class $AttendanceRulesTable extends AttendanceRules
         workStartTime,
         workEndTime,
         hourlyWage,
+        restStartTime,
         restMinutes,
         lateGraceMinutes,
         weekendType,
@@ -2716,6 +2725,12 @@ class $AttendanceRulesTable extends AttendanceRules
           _hourlyWageMeta,
           hourlyWage.isAcceptableOrUnknown(
               data['hourly_wage']!, _hourlyWageMeta));
+    }
+    if (data.containsKey('rest_start_time')) {
+      context.handle(
+          _restStartTimeMeta,
+          restStartTime.isAcceptableOrUnknown(
+              data['rest_start_time']!, _restStartTimeMeta));
     }
     if (data.containsKey('rest_minutes')) {
       context.handle(
@@ -2804,6 +2819,8 @@ class $AttendanceRulesTable extends AttendanceRules
           .read(DriftSqlType.string, data['${effectivePrefix}work_end_time'])!,
       hourlyWage: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}hourly_wage'])!,
+      restStartTime: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}rest_start_time'])!,
       restMinutes: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}rest_minutes'])!,
       lateGraceMinutes: attachedDatabase.typeMapping.read(
@@ -2848,7 +2865,10 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
   final String workEndTime;
   final double hourlyWage;
 
-  /// 每日休息分钟数；0 表示不扣休息，初始值沿用原规则。
+  /// 午休开始时间；旧规则和旧备份默认使用11:30。
+  final String restStartTime;
+
+  /// 午休时段长度；0 表示不扣休息，保留旧规则的分钟数。
   final int restMinutes;
   final int lateGraceMinutes;
   final String weekendType;
@@ -2867,6 +2887,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       required this.workStartTime,
       required this.workEndTime,
       required this.hourlyWage,
+      required this.restStartTime,
       required this.restMinutes,
       required this.lateGraceMinutes,
       required this.weekendType,
@@ -2887,6 +2908,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
     map['work_start_time'] = Variable<String>(workStartTime);
     map['work_end_time'] = Variable<String>(workEndTime);
     map['hourly_wage'] = Variable<double>(hourlyWage);
+    map['rest_start_time'] = Variable<String>(restStartTime);
     map['rest_minutes'] = Variable<int>(restMinutes);
     map['late_grace_minutes'] = Variable<int>(lateGraceMinutes);
     map['weekend_type'] = Variable<String>(weekendType);
@@ -2915,6 +2937,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       workStartTime: Value(workStartTime),
       workEndTime: Value(workEndTime),
       hourlyWage: Value(hourlyWage),
+      restStartTime: Value(restStartTime),
       restMinutes: Value(restMinutes),
       lateGraceMinutes: Value(lateGraceMinutes),
       weekendType: Value(weekendType),
@@ -2945,6 +2968,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       workStartTime: serializer.fromJson<String>(json['workStartTime']),
       workEndTime: serializer.fromJson<String>(json['workEndTime']),
       hourlyWage: serializer.fromJson<double>(json['hourlyWage']),
+      restStartTime: serializer.fromJson<String>(json['restStartTime']),
       restMinutes: serializer.fromJson<int>(json['restMinutes']),
       lateGraceMinutes: serializer.fromJson<int>(json['lateGraceMinutes']),
       weekendType: serializer.fromJson<String>(json['weekendType']),
@@ -2972,6 +2996,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       'workStartTime': serializer.toJson<String>(workStartTime),
       'workEndTime': serializer.toJson<String>(workEndTime),
       'hourlyWage': serializer.toJson<double>(hourlyWage),
+      'restStartTime': serializer.toJson<String>(restStartTime),
       'restMinutes': serializer.toJson<int>(restMinutes),
       'lateGraceMinutes': serializer.toJson<int>(lateGraceMinutes),
       'weekendType': serializer.toJson<String>(weekendType),
@@ -2995,6 +3020,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           String? workStartTime,
           String? workEndTime,
           double? hourlyWage,
+          String? restStartTime,
           int? restMinutes,
           int? lateGraceMinutes,
           String? weekendType,
@@ -3013,6 +3039,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
         workStartTime: workStartTime ?? this.workStartTime,
         workEndTime: workEndTime ?? this.workEndTime,
         hourlyWage: hourlyWage ?? this.hourlyWage,
+        restStartTime: restStartTime ?? this.restStartTime,
         restMinutes: restMinutes ?? this.restMinutes,
         lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
         weekendType: weekendType ?? this.weekendType,
@@ -3043,6 +3070,9 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           data.workEndTime.present ? data.workEndTime.value : this.workEndTime,
       hourlyWage:
           data.hourlyWage.present ? data.hourlyWage.value : this.hourlyWage,
+      restStartTime: data.restStartTime.present
+          ? data.restStartTime.value
+          : this.restStartTime,
       restMinutes:
           data.restMinutes.present ? data.restMinutes.value : this.restMinutes,
       lateGraceMinutes: data.lateGraceMinutes.present
@@ -3082,6 +3112,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
           ..write('hourlyWage: $hourlyWage, ')
+          ..write('restStartTime: $restStartTime, ')
           ..write('restMinutes: $restMinutes, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
           ..write('weekendType: $weekendType, ')
@@ -3105,6 +3136,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
       workStartTime,
       workEndTime,
       hourlyWage,
+      restStartTime,
       restMinutes,
       lateGraceMinutes,
       weekendType,
@@ -3126,6 +3158,7 @@ class AttendanceRule extends DataClass implements Insertable<AttendanceRule> {
           other.workStartTime == this.workStartTime &&
           other.workEndTime == this.workEndTime &&
           other.hourlyWage == this.hourlyWage &&
+          other.restStartTime == this.restStartTime &&
           other.restMinutes == this.restMinutes &&
           other.lateGraceMinutes == this.lateGraceMinutes &&
           other.weekendType == this.weekendType &&
@@ -3146,6 +3179,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
   final Value<String> workStartTime;
   final Value<String> workEndTime;
   final Value<double> hourlyWage;
+  final Value<String> restStartTime;
   final Value<int> restMinutes;
   final Value<int> lateGraceMinutes;
   final Value<String> weekendType;
@@ -3164,6 +3198,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
     this.hourlyWage = const Value.absent(),
+    this.restStartTime = const Value.absent(),
     this.restMinutes = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
     this.weekendType = const Value.absent(),
@@ -3183,6 +3218,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     this.workStartTime = const Value.absent(),
     this.workEndTime = const Value.absent(),
     this.hourlyWage = const Value.absent(),
+    this.restStartTime = const Value.absent(),
     this.restMinutes = const Value.absent(),
     this.lateGraceMinutes = const Value.absent(),
     this.weekendType = const Value.absent(),
@@ -3202,6 +3238,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     Expression<String>? workStartTime,
     Expression<String>? workEndTime,
     Expression<double>? hourlyWage,
+    Expression<String>? restStartTime,
     Expression<int>? restMinutes,
     Expression<int>? lateGraceMinutes,
     Expression<String>? weekendType,
@@ -3221,6 +3258,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       if (workStartTime != null) 'work_start_time': workStartTime,
       if (workEndTime != null) 'work_end_time': workEndTime,
       if (hourlyWage != null) 'hourly_wage': hourlyWage,
+      if (restStartTime != null) 'rest_start_time': restStartTime,
       if (restMinutes != null) 'rest_minutes': restMinutes,
       if (lateGraceMinutes != null) 'late_grace_minutes': lateGraceMinutes,
       if (weekendType != null) 'weekend_type': weekendType,
@@ -3247,6 +3285,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       Value<String>? workStartTime,
       Value<String>? workEndTime,
       Value<double>? hourlyWage,
+      Value<String>? restStartTime,
       Value<int>? restMinutes,
       Value<int>? lateGraceMinutes,
       Value<String>? weekendType,
@@ -3265,6 +3304,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
       workStartTime: workStartTime ?? this.workStartTime,
       workEndTime: workEndTime ?? this.workEndTime,
       hourlyWage: hourlyWage ?? this.hourlyWage,
+      restStartTime: restStartTime ?? this.restStartTime,
       restMinutes: restMinutes ?? this.restMinutes,
       lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
       weekendType: weekendType ?? this.weekendType,
@@ -3300,6 +3340,9 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
     }
     if (hourlyWage.present) {
       map['hourly_wage'] = Variable<double>(hourlyWage.value);
+    }
+    if (restStartTime.present) {
+      map['rest_start_time'] = Variable<String>(restStartTime.value);
     }
     if (restMinutes.present) {
       map['rest_minutes'] = Variable<int>(restMinutes.value);
@@ -3352,6 +3395,7 @@ class AttendanceRulesCompanion extends UpdateCompanion<AttendanceRule> {
           ..write('workStartTime: $workStartTime, ')
           ..write('workEndTime: $workEndTime, ')
           ..write('hourlyWage: $hourlyWage, ')
+          ..write('restStartTime: $restStartTime, ')
           ..write('restMinutes: $restMinutes, ')
           ..write('lateGraceMinutes: $lateGraceMinutes, ')
           ..write('weekendType: $weekendType, ')
@@ -10015,6 +10059,7 @@ typedef $$AttendanceRulesTableCreateCompanionBuilder = AttendanceRulesCompanion
   Value<String> workStartTime,
   Value<String> workEndTime,
   Value<double> hourlyWage,
+  Value<String> restStartTime,
   Value<int> restMinutes,
   Value<int> lateGraceMinutes,
   Value<String> weekendType,
@@ -10035,6 +10080,7 @@ typedef $$AttendanceRulesTableUpdateCompanionBuilder = AttendanceRulesCompanion
   Value<String> workStartTime,
   Value<String> workEndTime,
   Value<double> hourlyWage,
+  Value<String> restStartTime,
   Value<int> restMinutes,
   Value<int> lateGraceMinutes,
   Value<String> weekendType,
@@ -10072,6 +10118,9 @@ class $$AttendanceRulesTableFilterComposer
 
   ColumnFilters<double> get hourlyWage => $composableBuilder(
       column: $table.hourlyWage, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get restStartTime => $composableBuilder(
+      column: $table.restStartTime, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get restMinutes => $composableBuilder(
       column: $table.restMinutes, builder: (column) => ColumnFilters(column));
@@ -10142,6 +10191,10 @@ class $$AttendanceRulesTableOrderingComposer
   ColumnOrderings<double> get hourlyWage => $composableBuilder(
       column: $table.hourlyWage, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get restStartTime => $composableBuilder(
+      column: $table.restStartTime,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get restMinutes => $composableBuilder(
       column: $table.restMinutes, builder: (column) => ColumnOrderings(column));
 
@@ -10209,6 +10262,9 @@ class $$AttendanceRulesTableAnnotationComposer
 
   GeneratedColumn<double> get hourlyWage => $composableBuilder(
       column: $table.hourlyWage, builder: (column) => column);
+
+  GeneratedColumn<String> get restStartTime => $composableBuilder(
+      column: $table.restStartTime, builder: (column) => column);
 
   GeneratedColumn<int> get restMinutes => $composableBuilder(
       column: $table.restMinutes, builder: (column) => column);
@@ -10279,6 +10335,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
             Value<double> hourlyWage = const Value.absent(),
+            Value<String> restStartTime = const Value.absent(),
             Value<int> restMinutes = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
             Value<String> weekendType = const Value.absent(),
@@ -10298,6 +10355,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             workStartTime: workStartTime,
             workEndTime: workEndTime,
             hourlyWage: hourlyWage,
+            restStartTime: restStartTime,
             restMinutes: restMinutes,
             lateGraceMinutes: lateGraceMinutes,
             weekendType: weekendType,
@@ -10317,6 +10375,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             Value<String> workStartTime = const Value.absent(),
             Value<String> workEndTime = const Value.absent(),
             Value<double> hourlyWage = const Value.absent(),
+            Value<String> restStartTime = const Value.absent(),
             Value<int> restMinutes = const Value.absent(),
             Value<int> lateGraceMinutes = const Value.absent(),
             Value<String> weekendType = const Value.absent(),
@@ -10336,6 +10395,7 @@ class $$AttendanceRulesTableTableManager extends RootTableManager<
             workStartTime: workStartTime,
             workEndTime: workEndTime,
             hourlyWage: hourlyWage,
+            restStartTime: restStartTime,
             restMinutes: restMinutes,
             lateGraceMinutes: lateGraceMinutes,
             weekendType: weekendType,
