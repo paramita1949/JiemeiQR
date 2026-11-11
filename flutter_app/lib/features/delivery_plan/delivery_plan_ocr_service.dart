@@ -182,19 +182,20 @@ class ModelScopeDeliveryPlanOcrService implements DeliveryPlanPhotoOcrService {
     File image, {
     DeliveryPlanOcrProgressCallback? onProgress,
   }) async {
-    onProgress?.call('正在上传交货计划截图...');
     final config = await _configStore.load();
     final effectiveApiKey = apiKey.trim().isNotEmpty
         ? apiKey.trim()
         : config.modelscopeToken.trim();
     final effectiveModel = model.trim().isNotEmpty
         ? model.trim()
-        : config.modelscopeModel.trim().isNotEmpty
-            ? config.modelscopeModel.trim()
-            : AiOcrConfig.defaultModelScopeModel;
+        : config.modelscopeModel.trim();
     if (effectiveApiKey.isEmpty) {
       throw const DeliveryPlanOcrException('缺少魔搭 API KEY');
     }
+    if (effectiveModel.isEmpty) {
+      throw const DeliveryPlanOcrException('请先在AI配置中添加并选择魔搭模型');
+    }
+    onProgress?.call('正在上传交货计划截图...');
     final bytes = await image.readAsBytes();
     final mimeType = _imageMimeType(bytes);
     final body = {

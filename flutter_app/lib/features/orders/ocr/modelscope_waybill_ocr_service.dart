@@ -89,9 +89,7 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final normalizedApiKey = _normalizeApiKey(effectiveApiKey);
     final effectiveModel = model.trim().isNotEmpty
         ? model.trim()
-        : config.modelscopeModel.trim().isNotEmpty
-            ? config.modelscopeModel.trim()
-            : AiOcrConfig.defaultModelScopeModel;
+        : config.modelscopeModel.trim();
     final modelAttempts = _modelAttempts(
       effectiveModel,
       config.modelScopeModelPresets,
@@ -99,6 +97,9 @@ class ModelScopeWaybillOcrService implements WaybillPhotoOcrService {
     final promptPreset = config.ocrPromptPreset;
     if (normalizedApiKey.isEmpty) {
       throw const ModelScopeWaybillOcrException('缺少魔搭 API KEY');
+    }
+    if (effectiveModel.isEmpty) {
+      throw const ModelScopeWaybillOcrException('请先在AI配置中添加并选择魔搭模型');
     }
 
     final prepared = await _imagePreparer.prepare(image);
@@ -358,9 +359,6 @@ List<String> _modelAttempts(String primary, List<String> presets) {
     primary.trim(),
     ...presets.map((item) => item.trim()),
   ].where((item) => item.isNotEmpty).toSet().toList();
-  if (values.isEmpty) {
-    return [AiOcrConfig.defaultModelScopeModel];
-  }
   return values.take(2).toList();
 }
 

@@ -119,7 +119,14 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
-            label: Text(_saving ? '保存中' : '保存并启用 ${selectedMeta.name}'),
+            label: Text(
+              _saving
+                  ? '保存中'
+                  : _provider == AiOcrConfig.modelscopeProvider &&
+                          !_isSelectedProviderConfigured
+                      ? '保存魔搭配置'
+                      : '保存并启用 ${selectedMeta.name}',
+            ),
           ),
         ),
       ),
@@ -339,10 +346,8 @@ class _AiConfigScreenState extends State<AiConfigScreen> {
 
   String? _selectedConfigError() {
     if (_provider == AiOcrConfig.modelscopeProvider) {
-      return _modelscopeTokenController.text.trim().isNotEmpty &&
-              _modelscopeModelController.text.trim().isNotEmpty
-          ? null
-          : '请填写魔搭 API KEY 和模型';
+      // 允许保存空模型配置；实际识别时再校验密钥和模型。
+      return null;
     }
     if (_provider == AiOcrConfig.paddleOcrProvider) {
       return _paddleOcrTokenController.text.trim().isNotEmpty &&
@@ -958,9 +963,6 @@ class _ModelPresetEditorState extends State<_ModelPresetEditor> {
     List<String> models,
     String selected,
   ) async {
-    if (models.isEmpty) {
-      return;
-    }
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -1086,7 +1088,7 @@ class _ModelPresetEditorState extends State<_ModelPresetEditor> {
           onChanged: (value) => draftValue = value,
           onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
           decoration: const InputDecoration(
-            hintText: '输入模型标识，例如 Qwen/Qwen3.5-397B-A17B',
+            hintText: '输入模型标识（Model ID）',
           ),
         ),
         actions: [

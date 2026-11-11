@@ -40,7 +40,7 @@ class AiOcrConfig {
   static const openRouterProvider = 'openrouter';
   static const defaultTencentRegion = 'ap-guangzhou';
   static const defaultAliyunEndpoint = 'ocr-api.cn-hangzhou.aliyuncs.com';
-  static const defaultModelScopeModel = 'Qwen/Qwen3.5-397B-A17B';
+  static const defaultModelScopeModel = '';
   static const defaultPaddleOcrModel = 'PaddleOCR-VL-1.6';
   static const defaultOpenRouterModel = 'tencent/hy3-preview:free';
   static const ocrPromptPresetGeneral = 'general';
@@ -49,9 +49,7 @@ class AiOcrConfig {
   static const defaultGeminiModelPresets = [
     defaultModel,
   ];
-  static const defaultModelScopeModelPresets = [
-    defaultModelScopeModel,
-  ];
+  static const defaultModelScopeModelPresets = <String>[];
   static const defaultPaddleOcrModelPresets = [
     defaultPaddleOcrModel,
   ];
@@ -179,7 +177,6 @@ class AiOcrConfig {
       modelScopeModelPresets: _decodePresetList(
         json['modelScopeModelPresets'],
         fallback: defaultModelScopeModelPresets,
-        ensureIncludes: defaultModelScopeModelPresets,
         excludeModels: _removedModelScopeModels,
       ),
       paddleOcrModelPresets: _decodePresetList(
