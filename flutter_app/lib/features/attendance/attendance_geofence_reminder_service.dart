@@ -3,14 +3,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_checkout_reminder_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
 
 class AttendanceGeofenceReminderService {
   AttendanceGeofenceReminderService._();
 
   static final FlutterLocalNotificationsPlugin _notifications =
-      FlutterLocalNotificationsPlugin();
-  static bool _initialized = false;
+      AttendanceCheckoutReminderService.notificationClient;
 
   static Future<GeofenceDecision?> checkAndMaybeNotify({
     required AppDatabase database,
@@ -108,11 +108,7 @@ class AttendanceGeofenceReminderService {
   }
 
   static Future<void> _initNotification() async {
-    if (_initialized) return;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
-    await _notifications.initialize(settings);
-    _initialized = true;
+    await AttendanceCheckoutReminderService.initializeNotifications();
   }
 
   static Future<void> showDebugNotification() async {

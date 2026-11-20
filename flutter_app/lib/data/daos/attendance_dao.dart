@@ -143,7 +143,46 @@ class AttendanceDao {
       checkOutAt: Value(ts),
       updatedAt: ts,
     );
-    await _saveNormalizedRecord(updated, rule: rule);
+    await _saveNormalizedRecord(updated, rule: rule, onlyIfNotCheckedOut: true);
+  }
+
+  /// 通知只签退载荷指定的记录，不创建签到，不覆盖已有签退。
+  Future<bool> checkoutFromReminder({
+    required int recordId,
+    required DateTime expectedCheckInAt,
+    required DateTime reminderAt,
+    DateTime? now,
+  }) async {
+    final ts = now ?? DateTime.now();
+    return _db.transaction(() async {
+      final row = await (_db.select(_db.attendanceRecords)
+            ..where((t) => t.id.equals(recordId) & t.accountKey.equals(accountKey)))
+          .getSingleOrNull();
+      if (row == null || row.checkInAt != expectedCheckInAt ||
+          row.checkOutAt != null) {
+        return false;
+      }
+      final rule = await getRule();
+      final due = checkoutReminderTime(row.day, rule);
+      if (!rule.checkoutReminderEnabled || due != reminderAt ||
+          ts.isBefore(due) || !ts.isBefore(due.add(const Duration(hours: 12))) ||
+          expectedCheckInAt.isAfter(due)) {
+        return false;
+      }
+      final count = await _saveNormalizedRecord(
+        row.copyWith(checkOutAt: Value(ts)),
+        rule: rule,
+        onlyIfNotCheckedOut: true,
+      );
+      return count == 1;
+    });
+  }
+
+  static DateTime checkoutReminderTime(DateTime day, AttendanceRule rule) {
+    final start = _parseWorkTimeMinutes(rule.workStartTime, 'workStartTime');
+    final end = _parseWorkTimeMinutes(rule.workEndTime, 'workEndTime');
+    return DateTime(day.year, day.month, day.day + (end <= start ? 1 : 0),
+        end ~/ 60, end % 60);
   }
 
   Future<GeofenceDecision> handleGeofenceTransition({
@@ -681,9 +720,10 @@ class AttendanceDao {
     return '${ts.year}${two(ts.month)}${two(ts.day)}-${two(ts.hour)}${two(ts.minute)}${two(ts.second)}';
   }
 
-  Future<void> _saveNormalizedRecord(
+  Future<int> _saveNormalizedRecord(
     AttendanceRecord row, {
     required AttendanceRule rule,
+    bool onlyIfNotCheckedOut = false,
   }) async {
     final checkIn = row.checkInAt;
     final checkOut = row.checkOutAt;
@@ -707,7 +747,12 @@ class AttendanceDao {
       rule.hourlyWage,
     );
 
-    await (_db.update(_db.attendanceRecords)..where((t) => t.id.equals(row.id)))
+    return (_db.update(_db.attendanceRecords)..where((t) =>
+            t.id.equals(row.id) & t.accountKey.equals(accountKey) &
+            (onlyIfNotCheckedOut
+                ? t.checkOutAt.isNull() & (row.checkInAt == null
+                    ? t.checkInAt.isNull() : t.checkInAt.equals(row.checkInAt!))
+                : const Constant(true))))
         .write(
       AttendanceRecordsCompanion(
         checkInAt: Value(checkIn),
@@ -820,7 +865,7 @@ class AttendanceDao {
   }
 
   /// 校验上下班规则的24小时制时间，返回当天起算的分钟数。
-  int _parseWorkTimeMinutes(String time, String field) {
+  static int _parseWorkTimeMinutes(String time, String field) {
     if (!RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(time)) {
       final label = field == 'workStartTime' ? '上班时间' : '下班时间';
       throw ArgumentError.value(time, field, '$label须为HH:mm');

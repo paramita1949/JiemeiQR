@@ -8,6 +8,7 @@ import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/data/daos/stock_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_checkout_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_account_resolver.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_screen.dart';
 import 'package:qrscan_flutter/features/base_info/base_info_edit_screen.dart';
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _notiHintShownInSession = false;
   Timer? _cloudAutoBackupTimer;
   bool _runningCloudAutoBackup = false;
+  late AttendanceCheckoutReminderService _checkoutReminder;
 
   @override
   void initState() {
@@ -83,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? AppDatabase();
+    _checkoutReminder = AttendanceCheckoutReminderService(_database)..start();
     unawaited(_refreshStats());
     unawaited(_runAutoBackupCheck());
     unawaited(_consumePendingImportIntent());
@@ -96,11 +99,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.database != widget.database) {
-      if (_ownsDatabase) {
-        unawaited(_database.close());
-      }
+      final oldDatabase = _database;
+      final owned = _ownsDatabase;
+      unawaited(_checkoutReminder.dispose().then((_) async {
+        if (owned) await oldDatabase.close();
+      }));
       _ownsDatabase = widget.database == null;
       _database = widget.database ?? AppDatabase();
+      _checkoutReminder = AttendanceCheckoutReminderService(_database)..start();
       setState(() => _loadingStats = true);
       unawaited(_refreshStats());
       return;
@@ -114,9 +120,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cloudAutoBackupTimer?.cancel();
-    if (_ownsDatabase) {
-      _database.close();
-    }
+    unawaited(_checkoutReminder.dispose().then((_) async {
+      if (_ownsDatabase) await _database.close();
+    }));
     super.dispose();
   }
 
@@ -128,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(_consumePendingImportIntent());
       unawaited(_runCloudAutoBackupCheck());
       unawaited(_runAttendanceReminderCheck());
+      unawaited(_checkoutReminder.refresh());
       unawaited(_ensureNotificationPermissionHint());
       _startCloudAutoBackupTimer();
     }
@@ -352,6 +359,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _cloudAutoBackupTimer?.cancel();
     _cloudAutoBackupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       unawaited(_runCloudAutoBackupCheck());
+      unawaited(_checkoutReminder.refresh());
     });
   }
 

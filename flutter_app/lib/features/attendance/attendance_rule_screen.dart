@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
+import 'package:qrscan_flutter/features/attendance/attendance_checkout_reminder_service.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
@@ -43,6 +44,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   final _autoCheckinPopupTextController = TextEditingController();
 
   bool _geofenceEnabled = false;
+  bool _checkoutReminderEnabled = false;
   bool _showBackupRecords = false;
   String _providerSummary = _defaultProviderSummary;
   List<AttendanceBackupSnapshot> _backups = const [];
@@ -103,6 +105,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     _lngController.text = rule.officeLng?.toString() ?? '';
     _autoCheckinPopupTextController.text = rule.autoCheckinPopupText ?? '';
     _geofenceEnabled = rule.geofenceEnabled;
+    _checkoutReminderEnabled = rule.checkoutReminderEnabled;
 
     if (!mounted) return;
     setState(() => _loading = false);
@@ -155,7 +158,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
         geofenceEnabled: Value(_geofenceEnabled),
         checkinReminderEnabled: const Value(true),
-        checkoutReminderEnabled: const Value(false),
+        checkoutReminderEnabled: Value(_checkoutReminderEnabled),
         autoCheckinPopupText:
             Value(_normalizedPopupText(_autoCheckinPopupTextController.text)),
       ),
@@ -191,7 +194,6 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
         officeRadiusMeters: const Value(_defaultOfficeRadiusMeters),
         geofenceEnabled: Value(_geofenceEnabled),
         checkinReminderEnabled: const Value(true),
-        checkoutReminderEnabled: const Value(false),
         autoCheckinPopupText:
             Value(_normalizedPopupText(_autoCheckinPopupTextController.text)),
       ),
@@ -486,6 +488,30 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           _timeButton('下班时间', _workEnd,
               key: const Key('workEndTimeButton'),
               onChanged: (value) => _workEnd = value),
+          SwitchListTile.adaptive(
+            key: const Key('checkoutReminderSwitch'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('下班签到提醒'),
+            subtitle: const Text('到下班时间系统通知提醒，可在通知栏直接下班签到。需允许通知和横幅，省电模式可能延迟。'),
+            value: _checkoutReminderEnabled,
+            onChanged: (value) async {
+              if (value) {
+                try {
+                  final granted = await AttendanceCheckoutReminderService.requestNotificationPermission();
+                  if (!mounted) return;
+                  if (!granted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先在系统设置中允许通知')));
+                    return;
+                  }
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('通知权限检查失败，请检查系统设置')));
+                  return;
+                }
+              }
+              if (mounted) setState(() => _checkoutReminderEnabled = value);
+            },
+          ),
           const SizedBox(height: 12),
           _rowField(
             '时薪（元/小时）',

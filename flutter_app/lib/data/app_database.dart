@@ -47,6 +47,10 @@ part 'app_database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Notification actions own a connection: closing their isolate must not
+  /// close sqflite's single-instance connection used by the foreground app.
+  AppDatabase.forNotificationAction() : super(_openConnection(singleInstance: false));
+
   AppDatabase.forTesting(super.executor);
 
   @override
@@ -377,12 +381,12 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection({bool singleInstance = true}) {
   if (Platform.isAndroid || Platform.isIOS) {
     return LazyDatabase(
       () async => SqfliteQueryExecutor.inDatabaseFolder(
         path: 'jiemei.sqlite',
-        singleInstance: true,
+        singleInstance: singleInstance,
       ),
     );
   }
