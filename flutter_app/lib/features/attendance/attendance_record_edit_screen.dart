@@ -124,7 +124,7 @@ class _AttendanceRecordEditScreenState extends State<AttendanceRecordEditScreen>
           ),
           SwitchListTile(
             title: const Text('假期'),
-            subtitle: const Text('标记后按完整签到时长计算，不扣规则中的休息时间'),
+            subtitle: const Text('标记后不扣休息时间；早于规则上班时间仍不计时'),
             value: _holiday,
             onChanged: (v) => setState(() {
               _holiday = v;

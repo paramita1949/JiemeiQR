@@ -79,6 +79,12 @@ class AttendanceDao {
   }
 
   Future<void> saveRule(AttendanceRulesCompanion companion) async {
+    if (companion.workStartTime.present) {
+      _parseWorkTimeMinutes(companion.workStartTime.value, 'workStartTime');
+    }
+    if (companion.workEndTime.present) {
+      _parseWorkTimeMinutes(companion.workEndTime.value, 'workEndTime');
+    }
     if (companion.restStartTime.present) {
       _parseRestStartMinutes(companion.restStartTime.value);
     }
@@ -516,6 +522,8 @@ class AttendanceDao {
         final row = AttendanceRule.fromJson(rawMap);
         _validateRestMinutes(row.restMinutes);
         _parseRestStartMinutes(row.restStartTime);
+        _parseWorkTimeMinutes(row.workStartTime, 'workStartTime');
+        _parseWorkTimeMinutes(row.workEndTime, 'workEndTime');
         if (overwrite) {
           await _db.into(_db.attendanceRules).insert(
                 AttendanceRulesCompanion.insert(
@@ -691,6 +699,7 @@ class AttendanceDao {
       isHoliday: row.isHoliday,
       restMinutes: rule.restMinutes,
       restStartTime: rule.restStartTime,
+      workStartTime: rule.workStartTime,
     );
     final payableMinutes = _calculatePayableMinutes(workedMinutes);
     final payableAmount = _calculatePayableAmount(
@@ -740,6 +749,7 @@ class AttendanceDao {
           isHoliday: row.isHoliday,
           restMinutes: rule.restMinutes,
           restStartTime: rule.restStartTime,
+          workStartTime: rule.workStartTime,
         );
         final payable = _calculatePayableMinutes(worked);
         if (worked == row.workedMinutes && payable == row.payableMinutes) {
@@ -774,28 +784,49 @@ class AttendanceDao {
   int _calculateWorkedMinutes(DateTime? checkIn, DateTime? checkOut,
       {required bool isHoliday,
       required int restMinutes,
-      required String restStartTime}) {
+      required String restStartTime,
+      required String workStartTime}) {
     if (checkIn == null || checkOut == null || checkOut.isBefore(checkIn)) {
       return 0;
     }
-    final elapsed = checkOut.difference(checkIn).inMinutes;
+    final workStartMinutes =
+        _parseWorkTimeMinutes(workStartTime, 'workStartTime');
+    final ruleStart = DateTime(checkIn.year, checkIn.month, checkIn.day,
+        workStartMinutes ~/ 60, workStartMinutes % 60);
+    // 原始打卡时间保持不变，只排除首日设定上班时间之前的工时。
+    // 下班时间不截断实际签退时间，保留现有加班计薪规则。
+    final effectiveStart = checkIn.isBefore(ruleStart) ? ruleStart : checkIn;
+    if (!checkOut.isAfter(effectiveStart)) return 0;
+    final elapsed = checkOut.difference(effectiveStart).inMinutes;
     if (isHoliday || restMinutes == 0) return elapsed;
     final startMinutes = _parseRestStartMinutes(restStartTime);
     var overlap = Duration.zero;
     // 从前一天开始，兼容旧设置中最长24小时、可能跨夜的休息时段。
     // 按日历日构造边界，避免跨夜班误扣没有经历的午休。
-    var day = DateTime(checkIn.year, checkIn.month, checkIn.day - 1);
+    var day = DateTime(
+        effectiveStart.year, effectiveStart.month, effectiveStart.day - 1);
     while (!day.isAfter(checkOut)) {
       final restStart = DateTime(
           day.year, day.month, day.day, startMinutes ~/ 60, startMinutes % 60);
       final restEnd = restStart.add(Duration(minutes: restMinutes));
-      final from = checkIn.isAfter(restStart) ? checkIn : restStart;
+      final from =
+          effectiveStart.isAfter(restStart) ? effectiveStart : restStart;
       final to = checkOut.isBefore(restEnd) ? checkOut : restEnd;
       if (to.isAfter(from)) overlap += to.difference(from);
       day = DateTime(day.year, day.month, day.day + 1);
     }
-    final worked = checkOut.difference(checkIn) - overlap;
+    final worked = checkOut.difference(effectiveStart) - overlap;
     return worked.inMinutes < 0 ? 0 : worked.inMinutes;
+  }
+
+  /// 校验上下班规则的24小时制时间，返回当天起算的分钟数。
+  int _parseWorkTimeMinutes(String time, String field) {
+    if (!RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(time)) {
+      final label = field == 'workStartTime' ? '上班时间' : '下班时间';
+      throw ArgumentError.value(time, field, '$label须为HH:mm');
+    }
+    final parts = time.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 
   int _parseRestStartMinutes(String time) {

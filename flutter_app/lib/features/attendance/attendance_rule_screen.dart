@@ -32,6 +32,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   bool _loading = true;
   bool _cloudBusy = false;
   final _wageController = TextEditingController();
+  TimeOfDay _workStart = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _workEnd = const TimeOfDay(hour: 17, minute: 0);
   bool _restEnabled = true;
   TimeOfDay _restStart = const TimeOfDay(hour: 11, minute: 30);
   TimeOfDay _restEnd = const TimeOfDay(hour: 12, minute: 30);
@@ -81,6 +83,13 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     final rule = await _dao.getRule();
     if (!mounted) return;
     _wageController.text = rule.hourlyWage.toStringAsFixed(2);
+    final workStartParts = rule.workStartTime.split(':');
+    final workEndParts = rule.workEndTime.split(':');
+    _workStart = TimeOfDay(
+        hour: int.parse(workStartParts[0]),
+        minute: int.parse(workStartParts[1]));
+    _workEnd = TimeOfDay(
+        hour: int.parse(workEndParts[0]), minute: int.parse(workEndParts[1]));
     final parts = rule.restStartTime.split(':');
     final startMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     _restEnabled = rule.restMinutes > 0;
@@ -136,6 +145,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
     setState(() => _restTimeError = null);
     await _dao.saveRule(
       AttendanceRulesCompanion(
+        workStartTime: Value(_formatRestTime(_workStart)),
+        workEndTime: Value(_formatRestTime(_workEnd)),
         hourlyWage: Value(double.tryParse(_wageController.text.trim()) ?? 0),
         restMinutes: Value(restMinutes),
         restStartTime: Value(_formatRestTime(_restStart)),
@@ -468,6 +479,14 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
       ),
       child: Column(
         children: [
+          _timeButton('上班时间', _workStart,
+              key: const Key('workStartTimeButton'),
+              onChanged: (value) => _workStart = value),
+          const SizedBox(height: 8),
+          _timeButton('下班时间', _workEnd,
+              key: const Key('workEndTimeButton'),
+              onChanged: (value) => _workEnd = value),
+          const SizedBox(height: 12),
           _rowField(
             '时薪（元/小时）',
             _wageController,
@@ -485,9 +504,13 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
             }),
           ),
           if (_restEnabled) ...[
-            _restTimeButton('午休开始', _restStart, true),
+            _timeButton('午休开始', _restStart,
+                key: const Key('restStartTimeButton'),
+                onChanged: (value) => _restStart = value),
             const SizedBox(height: 8),
-            _restTimeButton('午休结束', _restEnd, false),
+            _timeButton('午休结束', _restEnd,
+                key: const Key('restEndTimeButton'),
+                onChanged: (value) => _restEnd = value),
           ],
           if (_restTimeError != null)
             Align(
@@ -499,7 +522,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '只扣打卡时段内重叠的午休，未经过午休不扣除；假期不扣。每满30分钟计薪，不足部分舍去。保存后已有记录按新午休时段重算。',
+              '早于上班时间不计时，下班后仍按实际签退计时。只扣计时时段内重叠的午休，假期不扣。每满30分钟计薪。保存后已有记录按新规则重算。',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
@@ -511,11 +534,12 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
   String _formatRestTime(TimeOfDay value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 
-  Widget _restTimeButton(String label, TimeOfDay value, bool isStart) {
+  Widget _timeButton(String label, TimeOfDay value,
+      {required Key key, required ValueChanged<TimeOfDay> onChanged}) {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton(
-        key: Key(isStart ? 'restStartTimeButton' : 'restEndTimeButton'),
+        key: key,
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFF2563EB),
           side: const BorderSide(color: Color(0xFFD5DEFF)),
@@ -534,11 +558,7 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
           );
           if (selected == null || !mounted) return;
           setState(() {
-            if (isStart) {
-              _restStart = selected;
-            } else {
-              _restEnd = selected;
-            }
+            onChanged(selected);
             _restTimeError = null;
           });
         },
