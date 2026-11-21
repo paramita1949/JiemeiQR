@@ -1,10 +1,12 @@
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
 import 'package:qrscan_flutter/data/daos/attendance_dao.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_bridge.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_checkout_reminder_service.dart';
+import 'package:qrscan_flutter/shared/utils/attendance_notification_log.dart';
 import 'package:qrscan_flutter/features/attendance/attendance_geofence_reminder_service.dart';
 import 'package:qrscan_flutter/features/transfer/cloud_backup_service.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
@@ -45,6 +47,8 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   bool _geofenceEnabled = false;
   bool _checkoutReminderEnabled = false;
+  bool _notificationTestBusy = false;
+  String? _notificationTestMessage;
   bool _showBackupRecords = false;
   String _providerSummary = _defaultProviderSummary;
   List<AttendanceBackupSnapshot> _backups = const [];
@@ -512,6 +516,25 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
               if (mounted) setState(() => _checkoutReminderEnabled = value);
             },
           ),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('testCheckoutNotificationButton'),
+                onPressed: _notificationTestBusy ? null : _testCheckoutNotification,
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: Text(_notificationTestBusy ? '正在测试…' : '测试下班通知'),
+              ),
+              TextButton(
+                key: const Key('viewCheckoutNotificationLogButton'),
+                onPressed: _viewNotificationLog,
+                child: const Text('查看通知日志'),
+              ),
+            ],
+          ),
+          if (_notificationTestMessage != null)
+            Align(alignment: Alignment.centerLeft,
+              child: Text(_notificationTestMessage!, style: const TextStyle(fontSize: 12))),
           const SizedBox(height: 12),
           _rowField(
             '时薪（元/小时）',
@@ -559,6 +582,32 @@ class _AttendanceRuleScreenState extends State<AttendanceRuleScreen> {
 
   String _formatRestTime(TimeOfDay value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _testCheckoutNotification() async {
+    setState(() { _notificationTestBusy = true; _notificationTestMessage = null; });
+    final message = await AttendanceCheckoutReminderService(widget.database)
+        .sendTestNotification();
+    if (!mounted) return;
+    setState(() { _notificationTestBusy = false; _notificationTestMessage = message; });
+  }
+
+  Future<void> _viewNotificationLog() async {
+    await AttendanceCheckoutReminderService(widget.database).captureSystemState('log_view');
+    final report = await AttendanceNotificationLog.readReport();
+    if (!mounted) return;
+    await showDialog<void>(context: context, builder: (context) => AlertDialog(
+      title: const Text('通知诊断日志'),
+      content: SizedBox(width: double.maxFinite,
+        child: SingleChildScrollView(child: SelectableText(report, style: const TextStyle(fontSize: 12)))),
+      actions: [
+        TextButton(onPressed: () async {
+          await Clipboard.setData(ClipboardData(text: report));
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('通知日志已复制')));
+        }, child: const Text('复制日志')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('关闭')),
+      ],
+    ));
+  }
 
   Widget _timeButton(String label, TimeOfDay value,
       {required Key key, required ValueChanged<TimeOfDay> onChanged}) {

@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:qrscan_flutter/data/app_database.dart';
+import 'package:qrscan_flutter/shared/utils/attendance_notification_log.dart';
 
 class AttendanceDao {
   AttendanceDao(
@@ -154,21 +155,24 @@ class AttendanceDao {
     DateTime? now,
   }) async {
     final ts = now ?? DateTime.now();
+    Future<bool> rejected(String reason) async {
+      await AttendanceNotificationLog.write('checkout_rejected', {'recordId': recordId, 'reason': reason});
+      return false;
+    }
     return _db.transaction(() async {
       final row = await (_db.select(_db.attendanceRecords)
             ..where((t) => t.id.equals(recordId) & t.accountKey.equals(accountKey)))
           .getSingleOrNull();
-      if (row == null || row.checkInAt != expectedCheckInAt ||
-          row.checkOutAt != null) {
-        return false;
-      }
+      if (row == null) return rejected('record_not_found');
+      if (row.checkInAt != expectedCheckInAt) return rejected('checkin_changed');
+      if (row.checkOutAt != null) return rejected('already_checked_out');
       final rule = await getRule();
       final due = checkoutReminderTime(row.day, rule);
-      if (!rule.checkoutReminderEnabled || due != reminderAt ||
-          ts.isBefore(due) || !ts.isBefore(due.add(const Duration(hours: 12))) ||
-          expectedCheckInAt.isAfter(due)) {
-        return false;
-      }
+      if (!rule.checkoutReminderEnabled) return rejected('reminder_disabled');
+      if (due != reminderAt) return rejected('reminder_time_changed');
+      if (ts.isBefore(due)) return rejected('before_reminder_time');
+      if (!ts.isBefore(due.add(const Duration(hours: 12)))) return rejected('reminder_expired');
+      if (expectedCheckInAt.isAfter(due)) return rejected('checkin_after_reminder');
       final count = await _saveNormalizedRecord(
         row.copyWith(checkOutAt: Value(ts)),
         rule: rule,
