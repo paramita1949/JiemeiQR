@@ -25,6 +25,7 @@ import 'package:qrscan_flutter/features/transfer/lan_transfer_screen.dart';
 import 'package:qrscan_flutter/features/update/app_update_service.dart';
 import 'package:qrscan_flutter/shared/theme/app_theme.dart';
 import 'package:qrscan_flutter/shared/utils/debug_event_log.dart';
+import 'package:qrscan_flutter/shared/utils/attendance_notification_log.dart';
 import 'package:qrscan_flutter/shared/utils/navigation_refresh.dart';
 import 'package:qrscan_flutter/shared/widgets/action_card.dart';
 import 'package:qrscan_flutter/shared/widgets/page_title.dart';
@@ -530,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         report: report,
         onCheckUpdate: _checkForUpdateFromLogPanel,
         onManageUpdateLines: _openUpdateLineManager,
+        onCaptureCheckoutLog: _checkoutReminder.captureLog,
         onCopy: (latestReport) async {
           await Clipboard.setData(ClipboardData(text: latestReport.rawText));
           if (!context.mounted) return;
@@ -1466,12 +1468,14 @@ class _DebugLogSheet extends StatefulWidget {
     required this.onCheckUpdate,
     required this.onManageUpdateLines,
     required this.onCopy,
+    required this.onCaptureCheckoutLog,
   });
 
   final _DebugLogReport report;
   final Future<_DebugLogReport> Function() onCheckUpdate;
   final Future<void> Function() onManageUpdateLines;
   final Future<void> Function(_DebugLogReport report) onCopy;
+  final Future<String> Function() onCaptureCheckoutLog;
 
   @override
   State<_DebugLogSheet> createState() => _DebugLogSheetState();
@@ -1480,6 +1484,33 @@ class _DebugLogSheet extends StatefulWidget {
 class _DebugLogSheetState extends State<_DebugLogSheet> {
   late _DebugLogReport _report = widget.report;
   bool _checkingUpdate = false;
+  bool _capturingCheckoutLog = false;
+  String? _checkoutLog;
+
+  Future<void> _captureCheckoutLog() async {
+    if (_capturingCheckoutLog) return;
+    setState(() => _capturingCheckoutLog = true);
+    String text;
+    try {
+      text = await widget.onCaptureCheckoutLog();
+    } catch (error) {
+      text = '抓取失败：${AttendanceNotificationLog.briefError('$error')}';
+    }
+    if (!mounted) return;
+    setState(() {
+      _checkoutLog = text;
+      _capturingCheckoutLog = false;
+    });
+  }
+
+  Future<void> _copyCheckoutLog() async {
+    final text = _checkoutLog;
+    if (text == null) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('下班日志已复制')));
+  }
 
   Future<void> _checkUpdate() async {
     if (_checkingUpdate) {
@@ -1502,6 +1533,10 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final report = _report;
+    final toolButtonStyle = OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      textStyle: const TextStyle(fontSize: 13),
+    );
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1525,7 +1560,7 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
               ),
               const SizedBox(height: 4),
               const Text(
-                '当前显示 AI 识别与更新检查日志；定位/打卡相关日志已暂时屏蔽。',
+                '下班提醒可单独抓取并复制简短日志；AI识别与更新日志保持原样。',
                 style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 12,
@@ -1573,36 +1608,39 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: report.readableEvents.isEmpty
-                    ? const Center(
-                        child: Text(
-                          '暂无可视化日志',
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: report.readableEvents.length,
-                        itemBuilder: (context, index) => Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: Text(
-                            report.readableEvents[index],
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                child: ListView(
+                  children: [
+                    if (_checkoutLog != null)
+                      Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: SelectableText(_checkoutLog!,
+                              key: const Key('checkoutBriefLog'),
+                              style: const TextStyle(fontSize: 12))),
+                    if (report.readableEvents.isEmpty)
+                      const Padding(
+                          padding: EdgeInsets.all(8), child: Text('暂无可视化日志')),
+                    for (final event in report.readableEvents)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10),
+                              border:
+                                  Border.all(color: const Color(0xFFE5E7EB)),
                             ),
-                          ),
-                        ),
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      ),
+                            child: Text(
+                              event,
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          )),
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -1620,23 +1658,36 @@ class _DebugLogSheetState extends State<_DebugLogSheet> {
                 ),
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
+              Wrap(spacing: 8, runSpacing: 4, children: [
+                OutlinedButton.icon(
+                  key: const Key('captureCheckoutLogButton'),
+                  style: toolButtonStyle,
+                  onPressed: _capturingCheckoutLog ? null : _captureCheckoutLog,
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: Text(_capturingCheckoutLog ? '正在抓取…' : '抓取下班日志'),
+                ),
+                TextButton.icon(
+                  key: const Key('copyCheckoutLogButton'),
+                  style: toolButtonStyle,
+                  onPressed: _capturingCheckoutLog || _checkoutLog == null
+                      ? null
+                      : _copyCheckoutLog,
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  label: const Text('复制下班日志'),
+                ),
+                OutlinedButton.icon(
+                  style: toolButtonStyle,
                   onPressed: widget.onManageUpdateLines,
-                  icon: const Icon(Icons.route_rounded),
+                  icon: const Icon(Icons.route_rounded, size: 18),
                   label: const Text('下载线路'),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
+                OutlinedButton.icon(
+                  style: toolButtonStyle,
                   onPressed: _copy,
-                  icon: const Icon(Icons.copy_all_rounded),
+                  icon: const Icon(Icons.copy_all_rounded, size: 18),
                   label: const Text('一键复制完整日志'),
                 ),
-              ),
+              ]),
             ],
           ),
         ),

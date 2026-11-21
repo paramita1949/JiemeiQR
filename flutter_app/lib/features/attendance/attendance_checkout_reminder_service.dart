@@ -18,8 +18,6 @@ import 'package:timezone/timezone.dart' as tz;
 
 const checkoutNotificationId = 20261120;
 const checkoutActionId = 'attendance_checkout_now';
-const checkoutTestActionId = 'attendance_checkout_test_ack';
-const checkoutTestNotificationId = checkoutNotificationId + 2;
 const checkoutNotificationDetails = NotificationDetails(
   android: AndroidNotificationDetails(
     'attendance_checkout_channel',
@@ -146,10 +144,6 @@ class AttendanceCheckoutReminderService {
     _lastDecision = signature;
     await AttendanceNotificationLog.write(
         'schedule_decision', {'reason': reason, ...data});
-    if (reason == 'cached_schedule_unchanged' ||
-        reason == 'keep_delivered_reminder') {
-      await captureSystemState('cached_schedule_check');
-    }
   }
 
   /// 采集实际系统权限、渠道及通知队列，不把API调用成功当作弹窗已展示。
@@ -163,7 +157,8 @@ class AttendanceCheckoutReminderService {
       try {
         result[key] = await read();
       } catch (error) {
-        result[key] = 'query_failed: $error';
+        result[key] =
+            'query_failed: ${AttendanceNotificationLog.briefError('$error')}';
       }
     }
 
@@ -207,60 +202,50 @@ class AttendanceCheckoutReminderService {
     return result;
   }
 
-  /// 立即测试相同渠道与通知动作，不改真实排期、不写签到记录。
-  Future<String> sendTestNotification() async {
-    await AttendanceNotificationLog.write(
-        'test_begin', {'notificationId': checkoutTestNotificationId});
-    if (defaultTargetPlatform != TargetPlatform.android) {
-      await AttendanceNotificationLog.write(
-          'test_skipped', {'reason': 'not_android'});
-      return '通知测试仅支持Android。';
-    }
+  /// 抓取当前排期及到点状态，不发送测试通知，也不写签到记录。
+  Future<String> captureLog() async {
+    await refresh();
+    final state = await captureSystemState('manual_capture');
+    await captureDueState(state: state);
+    return AttendanceNotificationLog.readReport();
+  }
+
+  /// 到点后观察系统队列；观测时间不等同于通知/横幅的实际弹出时间。
+  Future<void> captureDueState({Map<String, Object?>? state}) async {
+    if (_disposed || defaultTargetPlatform != TargetPlatform.android) return;
     try {
-      await initializeNotifications();
-      final before = await captureSystemState('test_before');
-      if (before['permission'] == false &&
-          !await requestNotificationPermission()) {
-        await AttendanceNotificationLog.write(
-            'test_blocked', {'reason': 'notification_permission_denied'});
-        return '通知权限未开启，请在系统设置中允许通知后重试。';
+      var encoded = _scheduled;
+      if (encoded == null) {
+        final file = await _stateFile();
+        if (await file.exists()) encoded = await file.readAsString();
       }
-      await _notifications.show(
-          checkoutTestNotificationId,
-          '下班通知测试',
-          '这是系统通知测试。按钮仅测试回调，不会下班签到。',
-          const NotificationDetails(
-              android: AndroidNotificationDetails(
-            'attendance_checkout_channel',
-            '下班签到提醒',
-            channelDescription: '到下班时间提醒，可在通知栏直接下班签到',
-            importance: Importance.max,
-            priority: Priority.high,
-            category: AndroidNotificationCategory.reminder,
-            actions: [
-              AndroidNotificationAction(checkoutTestActionId, '测试签到按钮（不签到）',
-                  showsUserInterface: false, cancelNotification: false)
-            ],
-          )),
-          payload: '{"type":"attendance_checkout_test"}');
-      await AttendanceNotificationLog.write('test_show_returned', {
-        'notificationId': checkoutTestNotificationId,
-        'meaning': 'API accepted; banner visibility not confirmed'
+      final payload = CheckoutReminderPayload.decode(encoded);
+      final now = _clock();
+      if (payload == null || now.isBefore(payload.reminderAt)) return;
+      final snapshot = state ?? await captureSystemState('due_observation');
+      final active = snapshot['active'];
+      final pending = snapshot['pending'];
+      bool contains(Object? list) =>
+          list is List &&
+          list.any(
+              (item) => item is Map && item['id'] == checkoutNotificationId);
+      final status = contains(active)
+          ? 'active'
+          : active is! List
+              ? 'query_failed'
+              : contains(pending)
+                  ? 'pending'
+                  : pending is! List
+                      ? 'query_failed'
+                      : 'not_visible';
+      await AttendanceNotificationLog.write('due_check', {
+        'due': payload.reminderAt.toIso8601String(),
+        'observedAt': now.toIso8601String(),
+        'status': status
       });
-      final after = await captureSystemState('test_after');
-      final channels = after['channels'];
-      if (channels is List &&
-          channels.any((c) =>
-              c is Map &&
-              c['importance'] is int &&
-              (c['importance'] as int) < Importance.high.value)) {
-        return '已提交测试通知，但渠道重要性较低，请在系统通知设置中开启横幅/声音。';
-      }
-      return '已提交测试通知，请检查通知栏和横幅；未出现时复制通知日志。测试不签到。';
-    } catch (error, stack) {
+    } catch (error) {
       await AttendanceNotificationLog.write(
-          'test_failed', {'error': '$error', 'stack': '$stack'});
-      return '测试通知发送失败：$error。请查看通知日志。';
+          'schedule_failed', {'error': '$error'});
     }
   }
 
@@ -283,9 +268,9 @@ class AttendanceCheckoutReminderService {
       );
       await AttendanceNotificationLog.write(
           'initialize_returned', {'initialized': initialized});
-    } catch (error, stack) {
+    } catch (error) {
       await AttendanceNotificationLog.write(
-          'initialize_failed', {'error': '$error', 'stack': '$stack'});
+          'initialize_failed', {'error': '$error'});
       _initialization = null;
       rethrow;
     }
@@ -311,27 +296,6 @@ class AttendanceCheckoutReminderService {
       'action': response.actionId,
       'responseType': response.notificationResponseType.name
     });
-    if (response.actionId == checkoutTestActionId &&
-        response.notificationResponseType ==
-            NotificationResponseType.selectedNotificationAction) {
-      await AttendanceNotificationLog.write(
-          'test_action_received', {'attendanceChanged': false});
-      try {
-        await initializeNotifications();
-        await notificationClient.show(
-            checkoutTestNotificationId + 1,
-            '测试按钮已响应',
-            '仅测试通知回调，未执行下班签到。',
-            const NotificationDetails(
-                android: AndroidNotificationDetails(
-                    'attendance_checkout_channel', '下班签到提醒',
-                    importance: Importance.max, priority: Priority.high)));
-      } catch (error, stack) {
-        await AttendanceNotificationLog.write(
-            'test_action_failed', {'error': '$error', 'stack': '$stack'});
-      }
-      return;
-    }
     if (response.actionId != checkoutActionId ||
         CheckoutReminderPayload.decode(response.payload) == null) {
       await AttendanceNotificationLog.write(
@@ -362,10 +326,11 @@ class AttendanceCheckoutReminderService {
             importance: Importance.max,
             priority: Priority.high,
           )));
-    } catch (error, stack) {
+    } catch (error) {
       await AttendanceNotificationLog.write(
-          'action_failed', {'error': '$error', 'stack': '$stack'});
-      DebugEventLog.add('CHECKOUT_ACTION', 'failed: $error');
+          'action_failed', {'error': '$error'});
+      DebugEventLog.add('CHECKOUT_ACTION',
+          'failed: ${AttendanceNotificationLog.briefError('$error')}');
       // Do not remove the action notification when a database write fails.
     } finally {
       if (database == null) await db?.close();
@@ -448,6 +413,7 @@ class AttendanceCheckoutReminderService {
                     old.reminderAt) &&
             now.isBefore(old.reminderAt.add(const Duration(hours: 12)))) {
           await _decision('keep_delivered_reminder', context);
+          await captureDueState();
           return;
         }
         await _decision(
@@ -499,10 +465,11 @@ class AttendanceCheckoutReminderService {
         _scheduled = encoded;
         await file.writeAsString(encoded!, flush: true);
         await captureSystemState('schedule_after');
-      } catch (error, stack) {
+      } catch (error) {
         await AttendanceNotificationLog.write(
-            'schedule_failed', {'error': '$error', 'stack': '$stack'});
-        DebugEventLog.add('CHECKOUT_REMINDER', 'refresh failed: $error');
+            'schedule_failed', {'error': '$error'});
+        DebugEventLog.add('CHECKOUT_REMINDER',
+            'refresh failed: ${AttendanceNotificationLog.briefError('$error')}');
       }
     });
     return _pending;
